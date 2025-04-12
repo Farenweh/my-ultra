@@ -1,0 +1,1 @@
+pkill -u $(whoami) -f 'python|pt_data_worker'

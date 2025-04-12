@@ -8,6 +8,10 @@ import os
 if not os.environ.get("OMP_NUM_THREADS"):
     os.environ["OMP_NUM_THREADS"] = "1"  # default for reduced CPU utilization during training
 
+import comet_ml # 为了获取全部日志
+import torch
+torch.set_num_threads(16) # 减少进程数避免CPU占用过高
+
 from ultralytics.models import NAS, RTDETR, SAM, YOLO, YOLOE, FastSAM, YOLOWorld
 from ultralytics.utils import ASSETS, SETTINGS
 from ultralytics.utils.checks import check_yolo as checks
