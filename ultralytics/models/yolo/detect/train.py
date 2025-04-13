@@ -49,7 +49,7 @@ class DetectionTrainer(BaseTrainer):
         >>> trainer.train()
     """
 
-    def build_dataset(self, img_path, mode="train", batch=None):
+    def build_dataset(self, img_path, mode="train", batch=None, rect=False):
         """
         Build YOLO Dataset for training or validation.
 
@@ -57,12 +57,13 @@ class DetectionTrainer(BaseTrainer):
             img_path (str): Path to the folder containing images.
             mode (str): `train` mode or `val` mode, users are able to customize different augmentations for each mode.
             batch (int, optional): Size of batches, this is for `rect`.
+            rect (bool): Whether to use rectangular padding box.
 
         Returns:
             (Dataset): YOLO dataset object configured for the specified mode.
         """
         gs = max(int(de_parallel(self.model).stride.max() if self.model else 0), 32)
-        return build_yolo_dataset(self.args, img_path, batch, self.data, mode=mode, rect=mode == "val", stride=gs)
+        return build_yolo_dataset(self.args, img_path, batch, self.data, mode=mode, rect=rect, stride=gs)
 
     def get_dataloader(self, dataset_path, batch_size=16, rank=0, mode="train"):
         """
@@ -79,7 +80,8 @@ class DetectionTrainer(BaseTrainer):
         """
         assert mode in {"train", "val"}, f"Mode must be 'train' or 'val', not {mode}."
         with torch_distributed_zero_first(rank):  # init dataset *.cache only once if DDP
-            dataset = self.build_dataset(dataset_path, mode, batch_size)
+            rect = mode == "val" and rank == -1  # 只有在单卡验证时才能启用rect
+            dataset = self.build_dataset(dataset_path, mode, batch_size, rect=rect)
         shuffle = mode == "train"
         if getattr(dataset, "rect", False) and shuffle:
             LOGGER.warning("WARNING ⚠️ 'rect=True' is incompatible with DataLoader shuffle, setting shuffle=False")
@@ -100,16 +102,10 @@ class DetectionTrainer(BaseTrainer):
         batch["img"] = batch["img"].to(self.device, non_blocking=True).float() / 255
         if self.args.multi_scale:
             imgs = batch["img"]
-            sz = (
-                random.randrange(int(self.args.imgsz * 0.5), int(self.args.imgsz * 1.5 + self.stride))
-                // self.stride
-                * self.stride
-            )  # size
+            sz = random.randrange(int(self.args.imgsz * 0.5), int(self.args.imgsz * 1.5 + self.stride)) // self.stride * self.stride  # size
             sf = sz / max(imgs.shape[2:])  # scale factor
             if sf != 1:
-                ns = [
-                    math.ceil(x * sf / self.stride) * self.stride for x in imgs.shape[2:]
-                ]  # new shape (stretched to gs-multiple)
+                ns = [math.ceil(x * sf / self.stride) * self.stride for x in imgs.shape[2:]]  # new shape (stretched to gs-multiple)
                 imgs = nn.functional.interpolate(imgs, size=ns, mode="bilinear", align_corners=False)
             batch["img"] = imgs
         return batch
@@ -145,9 +141,7 @@ class DetectionTrainer(BaseTrainer):
     def get_validator(self):
         """Return a DetectionValidator for YOLO model validation."""
         self.loss_names = "box_loss", "cls_loss", "dfl_loss"
-        return yolo.detect.DetectionValidator(
-            self.test_loader, save_dir=self.save_dir, args=copy(self.args), _callbacks=self.callbacks
-        )
+        return yolo.detect.DetectionValidator(self.test_loader, save_dir=self.save_dir, args=copy(self.args), _callbacks=self.callbacks)
 
     def label_loss_items(self, loss_items=None, prefix="train"):
         """
