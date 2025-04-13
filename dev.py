@@ -3,6 +3,7 @@ from ultralytics import YOLO
 model = YOLO("dinov2-yolo11.yaml")
 # model = YOLO("yolo11n.yaml")
 
+<<<<<<< HEAD
 model.train(
     data="coco.yaml",
     imgsz=644,
@@ -19,3 +20,6 @@ model.train(
     exist_ok=True,
     fraction=2e-3,
 )
+=======
+model.val(data="coco128.yaml", batch=32, device=[0, 1])
+>>>>>>> 9a1314c5 (修复了训练时的ddp val，但是手动初始化的仍然有问题)
