@@ -131,9 +131,7 @@ def _fetch_trainer_metadata(trainer) -> dict:
     return dict(curr_epoch=curr_epoch, curr_step=curr_step, save_assets=save_assets, final_epoch=final_epoch)
 
 
-def _scale_bounding_box_to_original_image_shape(
-    box, resized_image_shape, original_image_shape, ratio_pad
-) -> List[float]:
+def _scale_bounding_box_to_original_image_shape(box, resized_image_shape, original_image_shape, ratio_pad) -> List[float]:
     """
     YOLO resizes images during training and the label values are normalized based on this resized shape.
 
@@ -272,20 +270,12 @@ def _extract_segmentation_annotation(segmentation_raw: str, decode: Callable) ->
     return None
 
 
-def _fetch_annotations(
-    img_idx, image_path, batch, prediction_metadata_map, class_label_map, class_map
-) -> Optional[List]:
+def _fetch_annotations(img_idx, image_path, batch, prediction_metadata_map, class_label_map, class_map) -> Optional[List]:
     """Join the ground truth and prediction annotations if they exist."""
-    ground_truth_annotations = _format_ground_truth_annotations_for_detection(
-        img_idx, image_path, batch, class_label_map
-    )
-    prediction_annotations = _format_prediction_annotations(
-        image_path, prediction_metadata_map, class_label_map, class_map
-    )
+    ground_truth_annotations = _format_ground_truth_annotations_for_detection(img_idx, image_path, batch, class_label_map)
+    prediction_annotations = _format_prediction_annotations(image_path, prediction_metadata_map, class_label_map, class_map)
 
-    annotations = [
-        annotation for annotation in [ground_truth_annotations, prediction_annotations] if annotation is not None
-    ]
+    annotations = [annotation for annotation in [ground_truth_annotations, prediction_annotations] if annotation is not None]
     return [annotations] if annotations else None
 
 
@@ -303,9 +293,7 @@ def _log_confusion_matrix(experiment, trainer, curr_step, curr_epoch) -> None:
     """Log the confusion matrix to Comet experiment."""
     conf_mat = trainer.validator.confusion_matrix.matrix
     names = list(trainer.data["names"].values()) + ["background"]
-    experiment.log_confusion_matrix(
-        matrix=conf_mat, labels=names, max_categories=len(names), epoch=curr_epoch, step=curr_step
-    )
+    experiment.log_confusion_matrix(matrix=conf_mat, labels=names, max_categories=len(names), epoch=curr_epoch, step=curr_step)
 
 
 def _log_images(experiment, image_paths, curr_step, annotations=None) -> None:
@@ -416,17 +404,9 @@ def _log_plots(experiment, trainer) -> None:
     """
     plot_filenames = None
     if isinstance(trainer.validator.metrics, SegmentMetrics) and trainer.validator.metrics.task == "segment":
-        plot_filenames = [
-            trainer.save_dir / f"{prefix}{plots}.png"
-            for plots in EVALUATION_PLOT_NAMES
-            for prefix in SEGMENT_METRICS_PLOT_PREFIX
-        ]
+        plot_filenames = [trainer.save_dir / f"{prefix}{plots}.png" for plots in EVALUATION_PLOT_NAMES for prefix in SEGMENT_METRICS_PLOT_PREFIX]
     elif isinstance(trainer.validator.metrics, PoseMetrics):
-        plot_filenames = [
-            trainer.save_dir / f"{prefix}{plots}.png"
-            for plots in EVALUATION_PLOT_NAMES
-            for prefix in POSE_METRICS_PLOT_PREFIX
-        ]
+        plot_filenames = [trainer.save_dir / f"{prefix}{plots}.png" for plots in EVALUATION_PLOT_NAMES for prefix in POSE_METRICS_PLOT_PREFIX]
     elif isinstance(trainer.validator.metrics, (DetMetrics, OBBMetrics)):
         plot_filenames = [trainer.save_dir / f"{plots}.png" for plots in EVALUATION_PLOT_NAMES]
 
