@@ -158,7 +158,7 @@ class BaseValidator:
             callbacks.add_integration_callbacks(self)
             model = AutoBackend(
                 weights=model or self.args.model,
-                device=select_device(self.args.device, self.args.batch),
+                device=select_device(self.args.device, self.args.batch) if not self.args.device or RANK == -1 else torch.device(RANK),
                 dnn=self.args.dnn,
                 data=self.args.data,
                 fp16=self.args.half,
@@ -275,7 +275,7 @@ class BaseValidator:
             LOGGER.info(
                 "Speed: {:.1f}ms preprocess, {:.1f}ms inference, {:.1f}ms loss, {:.1f}ms postprocess per image".format(*tuple(self.speed.values()))
             )
-            if self.args.save_json and self.jdict:
+            if self.args.save_json and self.jdict and RANK in {-1, 0}:
                 with open(str(self.save_dir / "predictions.json"), "w", encoding="utf-8") as f:
                     LOGGER.info(f"Saving {f.name}...")
                     json.dump(self.jdict, f)
