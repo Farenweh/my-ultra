@@ -1,0 +1,14 @@
+1. 拉取
+git fetch upstream
+
+2. 变基
+git rebase upstream/main
+
+3. 解决冲突
+解决冲突
+
+4. 提交
+git commit -m "提交信息"
+
+5. 推送
+git push
