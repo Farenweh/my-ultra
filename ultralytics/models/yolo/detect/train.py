@@ -62,8 +62,7 @@ class DetectionTrainer(BaseTrainer):
         Returns:
             (Dataset): YOLO dataset object configured for the specified mode.
         """
-        gs = max(int(de_parallel(self.model).stride.max() if self.model else 0), 32)
->>>>>>> 9a1314c5 (修复了训练时的ddp val，但是手动初始化的仍然有问题)
+        gs = int(de_parallel(self.model).stride.max() if self.model else 0)
         return build_yolo_dataset(self.args, img_path, batch, self.data, mode=mode, rect=rect, stride=gs)
 
     def get_dataloader(self, dataset_path, batch_size=16, rank=0, mode="train"):
