@@ -17,6 +17,8 @@ Examples:
     >>> os.system(f"onnxslim {f} {f} && open {f}")  # pip install onnxslim
 """
 
+from .hf_backbone import DINOv2
+
 from .block import (
     C1,
     C2,
@@ -103,6 +105,7 @@ from .transformer import (
 )
 
 __all__ = (
+    "DINOv2",
     "Conv",
     "Conv2",
     "LightConv",

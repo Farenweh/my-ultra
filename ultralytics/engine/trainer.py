@@ -239,7 +239,7 @@ class BaseTrainer:
         # Freeze layers
         freeze_list = self.args.freeze if isinstance(self.args.freeze, list) else range(self.args.freeze) if isinstance(self.args.freeze, int) else []
         always_freeze_names = [".dfl"]  # always freeze these layers
-        freeze_layer_names = [f"model.{x}." for x in freeze_list] + always_freeze_names
+        freeze_layer_names = [f"model.{x}" for x in freeze_list] + always_freeze_names
         self.freeze_layer_names = freeze_layer_names
         for k, v in self.model.named_parameters():
             # v.register_hook(lambda x: torch.nan_to_num(x))  # NaN to 0 (commented for erratic training results)
@@ -267,7 +267,9 @@ class BaseTrainer:
             self.model = nn.parallel.DistributedDataParallel(self.model, device_ids=[RANK], find_unused_parameters=True)
 
         # Check imgsz
-        gs = max(int(self.model.stride.max() if hasattr(self.model, "stride") else 32), 32)  # grid size (max stride)
+        gs = int(self.model.stride.max() if hasattr(self.model, "stride") else 32)  # grid size (max stride)
+        if dist.is_initialized():
+            gs = int(self.model.module.stride.max() if hasattr(self.model.module, "stride") else 32)  # grid size (max stride)
         self.args.imgsz = check_imgsz(self.args.imgsz, stride=gs, floor=gs, max_dim=1)
         self.stride = gs  # for multiscale training
 
@@ -280,7 +282,7 @@ class BaseTrainer:
         self.train_loader = self.get_dataloader(self.trainset, batch_size=batch_size, rank=LOCAL_RANK, mode="train")
         # Note: When training DOTA dataset, double batch size could get OOM on images with >2000 objects.
         self.test_loader = self.get_dataloader(
-            self.testset, batch_size=batch_size if self.args.task == "obb" else batch_size * 2, rank=LOCAL_RANK, mode="val"
+            self.testset, batch_size=batch_size if self.args.task == "obb" else batch_size * 1, rank=LOCAL_RANK, mode="val"
         )
         self.validator = self.get_validator()
         metric_keys = self.validator.metrics.keys + self.label_loss_items(prefix="val")
@@ -496,6 +498,7 @@ class BaseTrainer:
 
     def _clear_memory(self):
         """Clear accelerator memory by calling garbage collector and emptying cache."""
+        # return
         gc.collect()
         if self.device.type == "mps":
             torch.mps.empty_cache()
