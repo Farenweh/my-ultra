@@ -57,10 +57,10 @@ class WorldTrainer(yolo.detect.DetectionTrainer):
 
         # Import and assign clip
         try:
-            import clip
+            import clip  # type: ignore
         except ImportError:
             checks.check_requirements("git+https://github.com/ultralytics/CLIP.git")
-            import clip
+            import clip  # type: ignore
         self.clip = clip
 
     def get_model(self, cfg=None, weights=None, verbose=True):
@@ -102,9 +102,7 @@ class WorldTrainer(yolo.detect.DetectionTrainer):
             (Dataset): YOLO dataset configured for training or validation.
         """
         gs = max(int(de_parallel(self.model).stride.max() if self.model else 0), 32)
-        return build_yolo_dataset(
-            self.args, img_path, batch, self.data, mode=mode, rect=mode == "val", stride=gs, multi_modal=mode == "train"
-        )
+        return build_yolo_dataset(self.args, img_path, batch, self.data, mode=mode, rect=mode == "val", stride=gs, multi_modal=mode == "train")
 
     def preprocess_batch(self, batch):
         """Preprocess a batch of images and text for YOLOWorld training."""
