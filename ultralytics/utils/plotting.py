@@ -490,7 +490,7 @@ class Annotator:
         im = Image.fromarray(np.asarray(self.im)[..., ::-1])  # Convert numpy array to PIL Image with RGB to BGR
         if IS_COLAB or IS_KAGGLE:  # can not use IS_JUPYTER as will run for all ipython environments
             try:
-                display(im)  # noqa - display() function only available in ipython environments
+                display(im)  # type: ignore # noqa - display() function only available in ipython environments
             except ImportError as e:
                 LOGGER.warning(f"Unable to display image in Jupyter notebooks: {e}")
         else:
@@ -790,9 +790,7 @@ def plot_images(
                         else:
                             mask = image_masks[j].astype(bool)
                         try:
-                            im[y : y + h, x : x + w, :][mask] = (
-                                im[y : y + h, x : x + w, :][mask] * 0.4 + np.array(color) * 0.6
-                            )
+                            im[y : y + h, x : x + w, :][mask] = im[y : y + h, x : x + w, :][mask] * 0.4 + np.array(color) * 0.6
                         except Exception:
                             pass
                 annotator.fromarray(im)

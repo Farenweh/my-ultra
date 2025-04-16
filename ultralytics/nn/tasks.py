@@ -701,10 +701,10 @@ class WorldModel(DetectionModel):
             cache_clip_model (bool): Whether to cache the CLIP model.
         """
         try:
-            import clip
+            import clip  # type: ignore
         except ImportError:
             check_requirements("git+https://github.com/ultralytics/CLIP.git")
-            import clip
+            import clip  # type: ignore
 
         if not getattr(self, "clip_model", None) and cache_clip_model:  # for backwards compatibility of models lacking clip_model attribute
             self.clip_model = clip.load("ViT-B/32")[0]

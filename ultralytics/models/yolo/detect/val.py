@@ -89,9 +89,7 @@ class DetectionValidator(BaseValidator):
         """
         val = self.data.get(self.args.split, "")  # validation path
         self.is_coco = (
-            isinstance(val, str)
-            and "coco" in val
-            and (val.endswith(f"{os.sep}val2017.txt") or val.endswith(f"{os.sep}test-dev2017.txt"))
+            isinstance(val, str) and "coco" in val and (val.endswith(f"{os.sep}val2017.txt") or val.endswith(f"{os.sep}test-dev2017.txt"))
         )  # is COCO
         self.is_lvis = isinstance(val, str) and "lvis" in val and not self.is_coco  # is LVIS
         self.class_map = converter.coco80_to_coco91_class() if self.is_coco else list(range(1, len(model.names) + 1))
@@ -166,9 +164,7 @@ class DetectionValidator(BaseValidator):
             (torch.Tensor): Prepared predictions in native space.
         """
         predn = pred.clone()
-        ops.scale_boxes(
-            pbatch["imgsz"], predn[:, :4], pbatch["ori_shape"], ratio_pad=pbatch["ratio_pad"]
-        )  # native-space pred
+        ops.scale_boxes(pbatch["imgsz"], predn[:, :4], pbatch["ori_shape"], ratio_pad=pbatch["ratio_pad"])  # native-space pred
         return predn
 
     def update_metrics(self, preds, batch):
@@ -262,15 +258,11 @@ class DetectionValidator(BaseValidator):
         # Print results per class
         if self.args.verbose and not self.training and self.nc > 1 and len(self.stats):
             for i, c in enumerate(self.metrics.ap_class_index):
-                LOGGER.info(
-                    pf % (self.names[c], self.nt_per_image[c], self.nt_per_class[c], *self.metrics.class_result(i))
-                )
+                LOGGER.info(pf % (self.names[c], self.nt_per_image[c], self.nt_per_class[c], *self.metrics.class_result(i)))
 
         if self.args.plots:
             for normalize in True, False:
-                self.confusion_matrix.plot(
-                    save_dir=self.save_dir, names=self.names.values(), normalize=normalize, on_plot=self.on_plot
-                )
+                self.confusion_matrix.plot(save_dir=self.save_dir, names=self.names.values(), normalize=normalize, on_plot=self.on_plot)
 
     def _process_batch(self, detections, gt_bboxes, gt_cls):
         """
@@ -408,9 +400,7 @@ class DetectionValidator(BaseValidator):
         if self.args.save_json and (self.is_coco or self.is_lvis) and len(self.jdict):
             pred_json = self.save_dir / "predictions.json"  # predictions
             anno_json = (
-                self.data["path"]
-                / "annotations"
-                / ("instances_val2017.json" if self.is_coco else f"lvis_v1_{self.args.split}.json")
+                self.data["path"] / "annotations" / ("instances_val2017.json" if self.is_coco else f"lvis_v1_{self.args.split}.json")
             )  # annotations
             pkg = "pycocotools" if self.is_coco else "lvis"
             LOGGER.info(f"\nEvaluating {pkg} mAP using {pred_json} and {anno_json}...")
@@ -426,7 +416,7 @@ class DetectionValidator(BaseValidator):
                     pred = anno.loadRes(str(pred_json))  # init predictions api (must pass string, not Path)
                     val = COCOeval(anno, pred, "bbox")
                 else:
-                    from lvis import LVIS, LVISEval
+                    from lvis import LVIS, LVISEval  # type: ignore
 
                     anno = LVIS(str(anno_json))  # init annotations api
                     pred = anno._load_json(str(pred_json))  # init predictions api (must pass string, not Path)

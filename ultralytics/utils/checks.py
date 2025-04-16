@@ -288,10 +288,7 @@ def check_pip_update_available():
 
             latest = check_latest_pypi_version()
             if check_version(__version__, f"<{latest}"):  # check if current version is < latest version
-                LOGGER.info(
-                    f"New https://pypi.org/project/ultralytics/{latest} available 😃 "
-                    f"Update with 'pip install -U ultralytics'"
-                )
+                LOGGER.info(f"New https://pypi.org/project/ultralytics/{latest} available 😃 " f"Update with 'pip install -U ultralytics'")
                 return True
         except Exception:
             pass
@@ -527,9 +524,7 @@ def check_file(file, suffix="", download=True, download_dir=".", hard=True):
     file = str(file).strip()  # convert to string and strip spaces
     file = check_yolov5u_filename(file)  # yolov5n -> yolov5nu
     if (
-        not file
-        or ("://" not in file and Path(file).exists())  # '://' check required in Windows Python<3.10
-        or file.lower().startswith("grpc://")
+        not file or ("://" not in file and Path(file).exists()) or file.lower().startswith("grpc://")  # '://' check required in Windows Python<3.10
     ):  # file exists or gRPC Triton images
         return file
     elif download and file.lower().startswith(("https://", "http://", "rtsp://", "rtmp://", "tcp://")):  # download
@@ -628,7 +623,7 @@ def check_yolo(verbose=True, device=""):
         total, used, free = shutil.disk_usage("/")
         s = f"({os.cpu_count()} CPUs, {ram / gib:.1f} GB RAM, {(total - free) / gib:.1f}/{total / gib:.1f} GB disk)"
         try:
-            from IPython import display
+            from IPython import display  # type: ignore
 
             display.clear_output()  # clear display if notebook
         except ImportError:
@@ -728,9 +723,7 @@ def check_amp(model):
         return False  # AMP only used on CUDA devices
     else:
         # GPUs that have issues with AMP
-        pattern = re.compile(
-            r"(nvidia|geforce|quadro|tesla).*?(1660|1650|1630|t400|t550|t600|t1000|t1200|t2000|k40m)", re.IGNORECASE
-        )
+        pattern = re.compile(r"(nvidia|geforce|quadro|tesla).*?(1660|1650|1630|t400|t550|t600|t1000|t1200|t2000|k40m)", re.IGNORECASE)
 
         gpu = torch.cuda.get_device_name(device)
         if bool(pattern.search(gpu)):
@@ -759,13 +752,10 @@ def check_amp(model):
         assert amp_allclose(YOLO("yolo11n.pt"), im)
         LOGGER.info(f"{prefix}checks passed ✅")
     except ConnectionError:
-        LOGGER.warning(
-            f"{prefix}checks skipped ⚠️. Offline and unable to download YOLO11n for AMP checks. {warning_msg}"
-        )
+        LOGGER.warning(f"{prefix}checks skipped ⚠️. Offline and unable to download YOLO11n for AMP checks. {warning_msg}")
     except (AttributeError, ModuleNotFoundError):
         LOGGER.warning(
-            f"{prefix}checks skipped ⚠️. "
-            f"Unable to load YOLO11n for AMP checks due to possible Ultralytics package modifications. {warning_msg}"
+            f"{prefix}checks skipped ⚠️. " f"Unable to load YOLO11n for AMP checks due to possible Ultralytics package modifications. {warning_msg}"
         )
     except AssertionError:
         LOGGER.warning(
@@ -828,9 +818,7 @@ def cuda_device_count() -> int:
     """
     try:
         # Run the nvidia-smi command and capture its output
-        output = subprocess.check_output(
-            ["nvidia-smi", "--query-gpu=count", "--format=csv,noheader,nounits"], encoding="utf-8"
-        )
+        output = subprocess.check_output(["nvidia-smi", "--query-gpu=count", "--format=csv,noheader,nounits"], encoding="utf-8")
 
         # Take the first line and strip any leading/trailing white space
         first_line = output.strip().split("\n")[0]
