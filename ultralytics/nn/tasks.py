@@ -1466,7 +1466,6 @@ def parse_model(d, ch, verbose=True):  # model_dict, input_channels(3)
             c1 = ch[f]
             args = [*args[1:]]
         elif m is DINOv2:
-            assert args[0].upper() in {"S", "B", "L", "G"}, f"Invalid DINOv2 type {args[0]}, must be S, B, L, G"
             c2 = m.dims(args[0])
         else:
             c2 = ch[f]

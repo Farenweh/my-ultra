@@ -17,7 +17,7 @@ Examples:
     >>> os.system(f"onnxslim {f} {f} && open {f}")  # pip install onnxslim
 """
 
-from .hf_backbone import DINOv2
+from .backbones import DINOv2
 
 from .block import (
     C1,
