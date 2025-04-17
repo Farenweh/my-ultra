@@ -8,6 +8,9 @@ import os
 if not os.environ.get("OMP_NUM_THREADS"):
     os.environ["OMP_NUM_THREADS"] = "1"  # default for reduced CPU utilization during training
 
+# 用于抑制多进程移除临时文件，避免无关紧要的错误报告。这可能需要py3.8及以上
+os.environ["PYTHONMULTIPROCESSINGCLEANUP"] = "none"
+
 import comet_ml  # 为了获取全部日志
 import torch
 
