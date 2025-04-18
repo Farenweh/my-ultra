@@ -21,10 +21,6 @@ head:
   - [0, 1, Conv, [1024, 3, 2]]  # P3 1/28 9.44M
   - [-1, 2, C3k2, [1024, True]] # 6 8.93M
 
-<<<<<<< HEAD
   - [[2, 4, 6], 1, Detect, [nc]] # Detect(P3, P4, P5) 1.90M on COCO
   
   # total: 23.52M
-=======
-  - [[2, 4, 6], 1, Detect, [nc]] # Detect(P3, P4, P5) 1.90M on COCO
->>>>>>> 去除了一些错误

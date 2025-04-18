@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 /*.py
+=======
+./*.py
+>>>>>>> 修复了DINOv2的REG键名，修改了Gitignore来恢复对子文件夹中的.py文件追踪
 *.pth
 
 # Byte-compiled / optimized / DLL files
