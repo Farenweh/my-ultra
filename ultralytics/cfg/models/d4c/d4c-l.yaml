@@ -22,3 +22,5 @@ head:
   - [-1, 2, C3k2, [1024, True]] # 6 8.93M
 
   - [[2, 4, 6], 1, Detect, [nc]] # Detect(P3, P4, P5) 1.90M on COCO
+  
+  # total: 23.52M
