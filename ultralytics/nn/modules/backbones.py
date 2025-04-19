@@ -1,5 +1,6 @@
 import torch
 
+from ultralytics import nn
 from ultralytics.utils import LOGGER, colorstr
 from .dinov2.vision_transformer import DinoVisionTransformer
 from .dinov2.configs import dinov2_model_configs, dinov2_pretrained_urls
@@ -25,3 +26,11 @@ class DINOv2(DinoVisionTransformer):
     def dims(scale: str):
         assert scale.lower() in {"s", "b", "l", "g"}, f"Invalid DINOv2 type {scale}, must be s, b, l, g"
         return dinov2_model_configs[scale.lower()]["embed_dim"]
+
+
+class MoDINOv2(nn.Module):
+    def __init__(self):
+        pass
+
+    def forward(self, x):
+        pass
