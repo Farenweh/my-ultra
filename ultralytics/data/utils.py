@@ -912,11 +912,11 @@ def save_dataset_cache_file(prefix: str, path: Path, x: dict, version: str):
     """Save an Ultralytics dataset *.cache dictionary x to path."""
     x["version"] = version  # add cache version
     if is_dir_writeable(path.parent):
-        if path.exists():
-            path.unlink()  # remove *.cache file if exists
+        temp_path = path.with_name(f"{path.name}.{os.getpid()}.tmp")
         try:
-            with open(str(path), "wb") as file:  # context manager here fixes windows async np.save bug
+            with open(str(temp_path), "wb") as file:  # context manager here fixes windows async np.save bug
                 np.save(file, x)
+            os.replace(temp_path, path)  # atomic swap avoids shared-filesystem races between distributed workers
             LOGGER.info(f"{prefix}New cache created: {path}")
         except Exception as e:
             Path(path).unlink(missing_ok=True)  # remove partially written file

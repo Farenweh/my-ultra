@@ -134,7 +134,7 @@ class ClassificationTrainer(BaseTrainer):
         Returns:
             (torch.utils.data.DataLoader): DataLoader for the specified dataset and mode.
         """
-        with torch_distributed_zero_first(rank):  # init dataset *.cache only once if DDP
+        with torch_distributed_zero_first(rank, global_rank=True):  # init dataset *.cache only once if DDP
             dataset = self.build_dataset(dataset_path, mode)
 
         if not dataset.samples:

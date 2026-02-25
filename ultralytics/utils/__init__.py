@@ -31,6 +31,17 @@ from ultralytics.utils.patches import imread, imshow, imwrite, torch_save  # for
 from ultralytics.utils.tqdm import TQDM  # noqa
 
 
+def _get_env_int(name: str, default: int = -1) -> int:
+    """Read an integer environment variable with a fallback for unset or malformed values."""
+    value = os.getenv(name)
+    if value in {None, ""}:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        return default
+
+
 def env_bool(name: str, default: bool = False) -> bool:
     """Parse a boolean environment variable, accepting common truthy strings.
 
@@ -53,8 +64,8 @@ def env_bool(name: str, default: bool = False) -> bool:
 
 
 # PyTorch Multi-GPU DDP Constants
-RANK = int(os.getenv("RANK", "-1"))
-LOCAL_RANK = int(os.getenv("LOCAL_RANK", "-1"))  # https://pytorch.org/docs/stable/elastic/run.html
+RANK = _get_env_int("RANK")
+LOCAL_RANK = _get_env_int("LOCAL_RANK")  # https://pytorch.org/docs/stable/elastic/run.html
 
 # Other Constants
 ARGV = sys.argv or ["", ""]  # sometimes sys.argv = []

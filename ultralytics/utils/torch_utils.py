@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import gc
+import itertools
 import math
 import os
 import random
@@ -32,7 +33,7 @@ from ultralytics.utils import (
     WINDOWS,
     colorstr,
 )
-from ultralytics.utils.checks import check_version
+from ultralytics.utils.checks import IS_ASCEND, check_version
 from ultralytics.utils.cpu import CPUInfo
 from ultralytics.utils.patches import torch_load
 
@@ -61,6 +62,37 @@ if WINDOWS and check_version(TORCH_VERSION, "==2.4.0"):  # reject version 2.4.0 
         "https://github.com/ultralytics/ultralytics/issues/15049"
     )
 
+_ZERO_FIRST_COUNTER = itertools.count()
+
+
+def _distributed_backend_name() -> str:
+    """Return the active distributed backend name as a lowercase string."""
+    backend = dist.get_backend()
+    backend = backend.value if hasattr(backend, "value") else str(backend)
+    return backend.lower()
+
+
+def _get_distributed_store():
+    """Return the default process-group store used for CPU-side synchronization."""
+    from torch.distributed import distributed_c10d
+
+    return distributed_c10d._get_default_store()  # noqa: SLF001
+
+
+def _store_has_key(store, key: str) -> bool:
+    """Return True if a distributed store key exists."""
+    return bool(store.check([key])) if hasattr(store, "check") else False
+
+
+def _zero_first_leader_ranks(global_rank: bool, world_size: int) -> tuple[int, ...]:
+    """Return the global ranks that are allowed to enter a zero-first block before waiters."""
+    if global_rank:
+        return (0,)
+    local_world_size = int(os.getenv("LOCAL_WORLD_SIZE", "0") or 0)
+    if local_world_size <= 0:
+        return (0,)
+    return tuple(range(0, world_size, local_world_size))
+
 
 def get_torch_device_backend(device: torch.device | str):
     """Return the PyTorch module that owns the selected device backend."""
@@ -69,16 +101,49 @@ def get_torch_device_backend(device: torch.device | str):
 
 
 @contextmanager
-def torch_distributed_zero_first(local_rank: int):
+def torch_distributed_zero_first(local_rank: int, global_rank: bool = False):
     """Ensure all processes in distributed training wait for the local master (rank 0) to complete a task first."""
     initialized = dist.is_available() and dist.is_initialized()
-    use_ids = initialized and dist.get_backend() == "nccl"
+    if not initialized or local_rank == -1:
+        yield
+        return
+
+    backend = _distributed_backend_name()
+
+    if backend.endswith("hccl"):
+        store = _get_distributed_store()
+        rank, world_size = dist.get_rank(), dist.get_world_size()
+        leader_ranks = _zero_first_leader_ranks(global_rank, world_size)
+        sequence = next(_ZERO_FIRST_COUNTER)
+        prefix = f"ultralytics/zero_first/{sequence}"
+        done_keys = [f"{prefix}/{leader_rank}/done" for leader_rank in leader_ranks]
+        error_keys = [f"{prefix}/{leader_rank}/error" for leader_rank in leader_ranks]
+        is_leader = rank == 0 if global_rank else local_rank == 0
+
+        if is_leader:
+            done_key = f"{prefix}/{rank}/done"
+            error_key = f"{prefix}/{rank}/error"
+            try:
+                yield
+            except Exception as e:
+                store.set(error_key, repr(e))
+                raise
+            finally:
+                store.set(done_key, "1")
+        else:
+            store.wait(done_keys)
+            for error_key in error_keys:
+                if _store_has_key(store, error_key):
+                    error = store.get(error_key).decode()
+                    raise RuntimeError(f"Rank 0 failed during distributed zero-first section: {error}")
+            yield
+        return
 
     if initialized and local_rank not in {-1, 0}:
-        dist.barrier(device_ids=[torch.cuda.current_device()]) if use_ids else dist.barrier()
+        dist.barrier(device_ids=[torch.cuda.current_device()]) if backend.endswith("nccl") else dist.barrier()
     yield
     if initialized and local_rank == 0:
-        dist.barrier(device_ids=[torch.cuda.current_device()]) if use_ids else dist.barrier()
+        dist.barrier(device_ids=[torch.cuda.current_device()]) if backend.endswith("nccl") else dist.barrier()
 
 
 def smart_inference_mode():
@@ -94,7 +159,7 @@ def smart_inference_mode():
     return decorate
 
 
-def autocast(enabled: bool, device: str = "cuda"):
+def autocast(enabled: bool, device: str = "auto"):
     """Get the appropriate autocast context manager based on PyTorch version and AMP setting.
 
     This function returns a context manager for automatic mixed precision (AMP) training that is compatible with both
@@ -116,6 +181,8 @@ def autocast(enabled: bool, device: str = "cuda"):
         - For PyTorch versions 1.13 and newer, it uses `torch.amp.autocast`.
         - For older versions, it uses the backend-specific AMP context.
     """
+    if device == "auto":
+        device = "npu" if IS_ASCEND else "cuda"
     if device == "npu":
         import torch_npu
 
@@ -125,7 +192,7 @@ def autocast(enabled: bool, device: str = "cuda"):
             device, enabled = "cpu", False
         return torch.amp.autocast(device, enabled=enabled)
     else:
-        return torch.cuda.amp.autocast(enabled)
+        return torch.cuda.amp.autocast(enabled) if not IS_ASCEND else torch.npu.amp.autocast(enabled)
 
 
 @functools.lru_cache
@@ -137,8 +204,23 @@ def get_cpu_info():
 @functools.lru_cache
 def get_gpu_info(index):
     """Return a string with system GPU information, i.e. 'Tesla T4, 15102MiB'."""
-    properties = torch.cuda.get_device_properties(index)
-    return f"{properties.name}, {properties.total_memory / (1 << 20):.0f}MiB"
+    if IS_ASCEND:
+        properties = torch.npu.get_device_name(index)
+        return f"Ascend NPU: {properties}"
+    else:
+        properties = torch.cuda.get_device_properties(index)
+        return f"{properties.name}, {properties.total_memory / (1 << 20):.0f}MiB"
+
+
+def enable_torchvision_npu() -> bool:
+    """Enable torch_npu's torchvision patches when available."""
+    if not IS_ASCEND:
+        return False
+    try:
+        import torch_npu.contrib.transfer_to_npu  # noqa: F401
+    except ImportError:
+        return False
+    return True
 
 
 def parse_device(device: str | int | list | tuple | torch.device = "") -> str:
@@ -239,6 +321,8 @@ def select_device(device="", newline=False, verbose=True):
         the current device untouched.
     """
     if isinstance(device, torch.device):
+        if device.type == "npu":
+            enable_torchvision_npu()
         if device.type not in {"cuda", "npu", "xpu"}:
             return device  # other torch.device inputs pass through; accelerator inputs canonicalize and validate below
     elif str(device).startswith(("tpu", "intel", "vulkan")):
@@ -275,6 +359,8 @@ def select_device(device="", newline=False, verbose=True):
                 f"Invalid {device_type.upper()} 'device={device}' requested. Only {n} device(s) available."
             )
 
+        if device_type == "npu":
+            enable_torchvision_npu()
         if len(indices) == 1:
             backend.set_device(indices[0])  # multi-device DDP ranks each pin their device in trainer._setup_ddp()
         if verbose:
@@ -284,36 +370,56 @@ def select_device(device="", newline=False, verbose=True):
             LOGGER.info(s if newline else s.rstrip())
         return torch.device(device_type, indices[0])
 
+    env_var = "CUDA_VISIBLE_DEVICES" if not IS_ASCEND else "ASCEND_RT_VISIBLE_DEVICES"
+    is_available = torch.cuda.is_available if not IS_ASCEND else torch.npu.is_available
+    device_count = torch.cuda.device_count if not IS_ASCEND else torch.npu.device_count
+
     cpu = device == "cpu"
     mps = device in {"mps", "mps:0"}  # Apple Metal Performance Shaders (MPS)
-    if not cpu and not mps and device:  # non-cpu device requested
-        valid = all(x.isdigit() and int(x) < torch.cuda.device_count() for x in device.split(","))
-        if not (torch.cuda.is_available() and valid):
+    if cpu or mps:
+        if IS_ASCEND:
+            os.environ[env_var] = ""  # force torch.npu.is_available() = False
+    elif device:  # non-cpu device requested
+        if IS_ASCEND:
+            os.environ[env_var] = device  # must be set before querying NPU availability and count
+        valid = (
+            device_count() >= len(device.split(","))
+            if IS_ASCEND
+            else all(x.isdigit() and int(x) < device_count() for x in device.split(","))
+        )
+        if not (is_available() and valid):
             LOGGER.info(s)
             install = (
                 "See https://pytorch.org/get-started/locally/ for up-to-date torch install instructions if no "
-                "CUDA devices are seen by torch.\n"
-                if torch.cuda.device_count() == 0
+                f"{'CUDA' if not IS_ASCEND else 'Ascend'} devices are seen by torch.\n"
+                if device_count() == 0
                 else ""
             )
             raise ValueError(
-                f"Invalid CUDA 'device={device}' requested."
-                f" Use 'device=cpu' or pass valid CUDA device(s) if available,"
+                f"Invalid {'CUDA' if not IS_ASCEND else 'Ascend'} 'device={device}' requested."
+                f" Use 'device=cpu' or pass valid {'CUDA' if not IS_ASCEND else 'Ascend'} device(s) if available,"
                 f" i.e. 'device=0' or 'device=0,1,2,3' for Multi-GPU.\n"
-                f"\ntorch.cuda.is_available(): {torch.cuda.is_available()}"
-                f"\ntorch.cuda.device_count(): {torch.cuda.device_count()}"
-                f"\nos.environ['CUDA_VISIBLE_DEVICES']: {os.environ.get('CUDA_VISIBLE_DEVICES')}\n"
+                f"\ntorch.{'cuda' if not IS_ASCEND else 'npu'}.is_available(): {is_available()}"
+                f"\ntorch.{'cuda' if not IS_ASCEND else 'npu'}.device_count(): {device_count()}"
+                f"\nos.environ['{env_var}']: {os.environ.get(env_var)}\n"
                 f"{install}"
             )
 
-    if not cpu and not mps and torch.cuda.is_available():  # prefer GPU if available
-        devices = device.split(",") if device else [str(torch.cuda.current_device())]  # '' -> current default device
+    if not cpu and not mps and is_available():  # prefer GPU if available
+        if device:
+            devices = device.split(",")
+        else:
+            current_device = torch.npu.current_device if IS_ASCEND else torch.cuda.current_device
+            devices = [str(current_device())]
         space = " " * len(s)
+        if IS_ASCEND:
+            enable_torchvision_npu()
         for i, d in enumerate(devices):
-            s += f"{'' if i == 0 else space}CUDA:{d} ({get_gpu_info(int(d))})\n"
-        arg = f"cuda:{devices[0]}"
-        if device and len(devices) == 1:  # explicit single-GPU request only: '' never moves the current device, and
-            torch.cuda.set_device(int(devices[0]))  # multi-GPU DDP ranks each pin their own device in _setup_ddp()
+            index = i if IS_ASCEND and device else int(d)
+            s += f"{'' if i == 0 else space}{'Ascend' if IS_ASCEND else 'CUDA'}:{d} ({get_gpu_info(index)})\n"
+        arg = f"{'npu' if IS_ASCEND else 'cuda'}:{0 if IS_ASCEND and device else devices[0]}"
+        if device and len(devices) == 1 and not IS_ASCEND:
+            torch.cuda.set_device(int(devices[0]))  # multi-GPU DDP ranks each pin theirs in _setup_ddp()
     elif mps and TORCH_2_0 and torch.backends.mps.is_available():
         # Prefer MPS if available
         s += f"MPS ({get_cpu_info()})\n"

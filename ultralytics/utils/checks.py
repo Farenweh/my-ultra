@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import sys
 import time
+import warnings
 from importlib import metadata
 from pathlib import Path
 from types import SimpleNamespace
@@ -1103,3 +1104,88 @@ IS_PYTHON_MINIMUM_3_9 = check_python("3.9", hard=False)
 IS_PYTHON_MINIMUM_3_10 = check_python("3.10", hard=False)
 IS_PYTHON_MINIMUM_3_12 = check_python("3.12", hard=False)
 IS_PYTHON_MINIMUM_3_13 = check_python("3.13", hard=False)
+
+
+def _parse_env_bool(name: str, default: bool = False) -> bool:
+    """Parse a boolean environment variable with Chinese errors for invalid values."""
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    normalized = value.strip().lower()
+    if normalized in {"true", "1"}:
+        return True
+    if normalized in {"false", "0"}:
+        return False
+    raise ValueError(f"{name}={value!r} 无法解析为布尔值，可选值为 True/False/1/0/空。")
+
+
+def _parse_vram_target(value: str | None) -> float | bool:
+    """Parse VRAM_TARGET into a target fraction or False when disabled."""
+    if value is None or value.strip() == "":
+        return 0.7
+    normalized = value.strip().lower()
+    if normalized == "true":
+        return 0.7
+    if normalized == "false":
+        return False
+    try:
+        target = float(value)
+    except ValueError as exc:
+        raise ValueError(f"VRAM_TARGET={value!r} 无法解析，可选值为 False、True、空，或 [0, 1] 之间的数值。") from exc
+    if not 0.0 <= target <= 1.0:
+        raise ValueError(f"VRAM_TARGET={value!r} 超出范围，数值必须位于 [0, 1]。")
+    return False if target == 0.0 else target
+
+
+def _validate_vram_target_config(vram_target: float | bool, empty_vram_cache: bool):
+    """Validate VRAM_TARGET and EMPTY_VRAM_CACHE compatibility."""
+    if vram_target is not False and empty_vram_cache:
+        raise ValueError(
+            "VRAM_TARGET 已启用时要求 EMPTY_VRAM_CACHE=False，请关闭显存缓存清理或设置 VRAM_TARGET=False。"
+        )
+
+
+IS_ASCEND = hasattr(torch, "npu") and torch.npu.is_available()
+PROFILE = os.getenv("PROFILE", "")  # stack/modules
+EMPTY_VRAM_CACHE = _parse_env_bool("EMPTY_VRAM_CACHE", False)
+VRAM_TARGET_ENV = os.getenv("VRAM_TARGET")
+VRAM_TARGET = _parse_vram_target(VRAM_TARGET_ENV)
+_validate_vram_target_config(VRAM_TARGET, EMPTY_VRAM_CACHE)
+
+_amp_dtype = os.getenv("AMP_DTYPE", "bf16")
+if _amp_dtype in {"float16", "fp16", "half", "FP16"}:
+    AMP_DTYPE = torch.float16
+elif _amp_dtype in {"bfloat16", "bf16", "BF16"}:
+    AMP_DTYPE = torch.bfloat16
+else:
+    raise ValueError(f"不受支持的 AMP_DTYPE {_amp_dtype}，可选值为 float16/fp16/half/FP16 或 bfloat16/bf16/BF16")
+
+if IS_ASCEND:
+    # NOTE: benchmarked on atlas a800 t2, python3.11, pytorch 2.7.1, cann 8.5.0, b32x8, yolo11l, sgd
+    # 1 combo_id=13 epoch2_seconds=211.117000 env={"ACLNN_CACHE_LIMIT": "100000", "CPU_AFFINITY_CONF": "1", "PYTORCH_NPU_ALLOC_CONF": "<unset>", "TASK_QUEUE_ENABLE": "2", "USE_ASCEND_FUSED_GRAD_CLIP": "0", "USE_ASCEND_FUSED_OPTIMIZER": "1", "USE_ASCEND_INTERNAL_FORMAT": "1", "USE_ASCEND_JIT_COMPILE": "1"}
+    # 2 combo_id=15 epoch2_seconds=214.998000 env={"ACLNN_CACHE_LIMIT": "100000", "CPU_AFFINITY_CONF": "1", "PYTORCH_NPU_ALLOC_CONF": "<unset>", "TASK_QUEUE_ENABLE": "2", "USE_ASCEND_FUSED_GRAD_CLIP": "0", "USE_ASCEND_FUSED_OPTIMIZER": "1", "USE_ASCEND_INTERNAL_FORMAT": "1", "USE_ASCEND_JIT_COMPILE": "1"}
+    # 3 combo_id=16 epoch2_seconds=215.361000 env={"ACLNN_CACHE_LIMIT": "100000", "CPU_AFFINITY_CONF": "1", "PYTORCH_NPU_ALLOC_CONF": "expandable_segments:True", "TASK_QUEUE_ENABLE": "2", "USE_ASCEND_FUSED_GRAD_CLIP": "0", "USE_ASCEND_FUSED_OPTIMIZER": "1", "USE_ASCEND_INTERNAL_FORMAT": "1", "USE_ASCEND_JIT_COMPILE": "1"}
+    # 4 combo_id=12 epoch2_seconds=220.154000 env={"ACLNN_CACHE_LIMIT": "100000", "CPU_AFFINITY_CONF": "<unset>", "PYTORCH_NPU_ALLOC_CONF": "<unset>", "TASK_QUEUE_ENABLE": "2", "USE_ASCEND_FUSED_GRAD_CLIP": "0", "USE_ASCEND_FUSED_OPTIMIZER": "1", "USE_ASCEND_INTERNAL_FORMAT": "1", "USE_ASCEND_JIT_COMPILE": "1"}
+    # 5 combo_id=11 epoch2_seconds=223.313000 env={"ACLNN_CACHE_LIMIT": "100000", "CPU_AFFINITY_CONF": "<unset>", "PYTORCH_NPU_ALLOC_CONF": "<unset>", "TASK_QUEUE_ENABLE": "2", "USE_ASCEND_FUSED_GRAD_CLIP": "0", "USE_ASCEND_FUSED_OPTIMIZER": "1", "USE_ASCEND_INTERNAL_FORMAT": "1", "USE_ASCEND_JIT_COMPILE": "1"}
+    # 6 combo_id=14 epoch2_seconds=231.210000 env={"ACLNN_CACHE_LIMIT": "100000", "CPU_AFFINITY_CONF": "2", "PYTORCH_NPU_ALLOC_CONF": "<unset>", "TASK_QUEUE_ENABLE": "2", "USE_ASCEND_FUSED_GRAD_CLIP": "0", "USE_ASCEND_FUSED_OPTIMIZER": "1", "USE_ASCEND_INTERNAL_FORMAT": "1", "USE_ASCEND_JIT_COMPILE": "1"}
+    # 7 combo_id=10 epoch2_seconds=268.783000 env={"ACLNN_CACHE_LIMIT": "100000", "CPU_AFFINITY_CONF": "<unset>", "PYTORCH_NPU_ALLOC_CONF": "<unset>", "TASK_QUEUE_ENABLE": "1", "USE_ASCEND_FUSED_GRAD_CLIP": "0", "USE_ASCEND_FUSED_OPTIMIZER": "1", "USE_ASCEND_INTERNAL_FORMAT": "1", "USE_ASCEND_JIT_COMPILE": "1"}
+    # 8 combo_id=9 epoch2_seconds=276.193000 env={"ACLNN_CACHE_LIMIT": "100000", "CPU_AFFINITY_CONF": "<unset>", "PYTORCH_NPU_ALLOC_CONF": "<unset>", "TASK_QUEUE_ENABLE": "1", "USE_ASCEND_FUSED_GRAD_CLIP": "0", "USE_ASCEND_FUSED_OPTIMIZER": "1", "USE_ASCEND_INTERNAL_FORMAT": "1", "USE_ASCEND_JIT_COMPILE": "1"}
+    # 9 combo_id=7 epoch2_seconds=276.664000 env={"ACLNN_CACHE_LIMIT": "10000", "CPU_AFFINITY_CONF": "<unset>", "PYTORCH_NPU_ALLOC_CONF": "<unset>", "TASK_QUEUE_ENABLE": "1", "USE_ASCEND_FUSED_GRAD_CLIP": "0", "USE_ASCEND_FUSED_OPTIMIZER": "1", "USE_ASCEND_INTERNAL_FORMAT": "1", "USE_ASCEND_JIT_COMPILE": "1"}
+    # 10 combo_id=8 epoch2_seconds=286.741000 env={"ACLNN_CACHE_LIMIT": "10000", "CPU_AFFINITY_CONF": "<unset>", "PYTORCH_NPU_ALLOC_CONF": "<unset>", "TASK_QUEUE_ENABLE": "1", "USE_ASCEND_FUSED_GRAD_CLIP": "0", "USE_ASCEND_FUSED_OPTIMIZER": "1", "USE_ASCEND_INTERNAL_FORMAT": "1", "USE_ASCEND_JIT_COMPILE": "1"}
+    USE_ASCEND_FUSED_OPTIMIZER = os.getenv("USE_ASCEND_FUSED_OPTIMIZER", "1") == "1"
+    USE_ASCEND_FUSED_GRAD_CLIP = os.getenv("USE_ASCEND_FUSED_GRAD_CLIP", "0") == "1"
+    USE_ASCEND_JIT_COMPILE = os.getenv("USE_ASCEND_JIT_COMPILE", "0") == "1"
+    USE_ASCEND_INTERNAL_FORMAT = os.getenv("USE_ASCEND_INTERNAL_FORMAT", "1") == "1"
+
+    os.environ["TASK_QUEUE_ENABLE"] = "2"
+    os.environ["ACLNN_CACHE_LIMIT"] = "500000"
+    os.environ["CPU_AFFINITY_CONF"] = "1"
+    os.environ["PYTORCH_NPU_ALLOC_CONF"] = "expandable_segments:True"
+    os.environ["HOST_CACHE_CAPACITY"] = "50"
+
+    warnings.filterwarnings(
+        "ignore",
+        message=r"HCCL doesn't support gather at the moment\..*",
+        category=UserWarning,
+        module=r"torch_npu\.distributed\.distributed_c10d",
+    )

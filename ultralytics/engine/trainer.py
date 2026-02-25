@@ -44,8 +44,22 @@ from ultralytics.utils import (
     emojis,
 )
 from ultralytics.utils.autobatch import check_train_batch_size
-from ultralytics.utils.checks import check_amp, check_file, check_imgsz, check_model_file_from_stem, print_args
-from ultralytics.utils.dist import ddp_cleanup, generate_ddp_command
+from ultralytics.utils.checks import (
+    IS_ASCEND,
+    check_amp,
+    check_file,
+    check_imgsz,
+    check_model_file_from_stem,
+    print_args,
+)
+from ultralytics.utils.dist import (
+    ddp_cleanup,
+    generate_ddp_command,
+    generate_k8s_ddp_command,
+    is_k8s_distributed_parent,
+    is_k8s_training_enabled,
+    normalize_k8s_launch_config,
+)
 from ultralytics.utils.files import get_latest_run
 from ultralytics.utils.plotting import plot_results
 from ultralytics.utils.torch_utils import (
@@ -130,6 +144,13 @@ class BaseTrainer:
         """
         self.hub_session = overrides.pop("session", None)  # HUB
         self.args = get_cfg(cfg, overrides)
+        self.raw_device = self.args.device
+        self.k8s_training = is_k8s_training_enabled()
+        self.k8s_distributed = self.k8s_training and is_k8s_distributed_parent()
+        if self.k8s_distributed and self._device_is_user_set(self.raw_device):
+            raise ValueError("在任务提交分布式状态下不应手动设置此值")
+        if self.k8s_distributed:
+            self.args.device = self._resolve_k8s_device()
         self.check_resume(overrides)
         self.args.device = parse_device(self.args.device)  # canonical string, resolves '-1' auto-selection once
         self.device = select_device(self.args.device)
@@ -140,7 +161,12 @@ class BaseTrainer:
         init_seeds(self.args.seed + 1 + RANK, deterministic=self.args.deterministic)
 
         # Dirs
-        self.save_dir = get_save_dir(self.args)
+        save_dir_args = self.args
+        if self.k8s_training and not getattr(self.args, "save_dir", None):
+            # Keep the original args unchanged while preventing per-node path increments.
+            save_dir_args = copy(self.args)
+            save_dir_args.exist_ok = True
+        self.save_dir = get_save_dir(save_dir_args)
         self.args.name = self.save_dir.name  # update name for loggers
         self.wdir = self.save_dir / "weights"  # weights dir
         if RANK in {-1, 0}:
@@ -168,12 +194,18 @@ class BaseTrainer:
         # Callbacks - initialize early so on_pretrain_routine_start can capture original args.data
         self.callbacks = _callbacks or callbacks.get_default_callbacks()
 
-        if self.device.type in {"cpu", "mps"}:
-            world_size = 0
-        else:  # i.e. device='0', '0,1,2,3', 'npu:0', or '' auto-selecting a single GPU
-            world_size = len(self.args.device.split(",")) if self.args.device else 1
+        self.local_world_size = self._get_local_world_size(self.args.device)
+        self.k8s_launch_config = normalize_k8s_launch_config(self.local_world_size) if self.k8s_distributed else None
+        self.nnodes = self.k8s_launch_config.nnodes if self.k8s_launch_config else 1
+        env_world_size = int(os.getenv("WORLD_SIZE", 0))
+        if LOCAL_RANK != -1 and env_world_size > 0:
+            world_size = env_world_size
+        elif self.k8s_launch_config:
+            world_size = self.local_world_size * self.nnodes
+        else:
+            world_size = self.local_world_size
 
-        self.ddp = world_size > 1 and "LOCAL_RANK" not in os.environ
+        self.ddp = world_size > 1 and LOCAL_RANK == -1
         self.world_size = world_size
         # Run on_pretrain_routine_start before get_dataset() to capture original args.data (e.g., ul:// URIs)
         if RANK in {-1, 0} and not self.ddp:
@@ -207,6 +239,43 @@ class BaseTrainer:
         """Append the given callback to the event's callback list."""
         self.callbacks[event].append(callback)
 
+    @staticmethod
+    def _get_local_world_size(device) -> int:
+        """Return the number of processes that should run on the local node for the given device spec."""
+        if isinstance(device, str) and len(device):
+            if device in {"cpu", "mps"}:
+                return 0
+            return len([x for x in device.split(",") if x.strip()])
+        if isinstance(device, (tuple, list)):
+            return len(device)
+        if isinstance(device, int):
+            return 1
+        accelerator_available = torch.cuda.is_available() or (IS_ASCEND and torch.npu.is_available())
+        return 1 if accelerator_available else 0
+
+    @staticmethod
+    def _device_is_user_set(device) -> bool:
+        """Return True when the user explicitly provided any non-empty device setting."""
+        if device is None:
+            return False
+        if isinstance(device, str):
+            return device.strip().lower() not in {"", "none"}
+        if isinstance(device, (tuple, list)):
+            return len(device) > 0
+        return True
+
+    @staticmethod
+    def _resolve_k8s_device() -> str:
+        """Resolve all visible local accelerators into an explicit device list for K8s launches."""
+        device_count = 0
+        if IS_ASCEND and hasattr(torch, "npu") and torch.npu.is_available():
+            device_count = torch.npu.device_count()
+        elif torch.cuda.is_available():
+            device_count = torch.cuda.device_count()
+        if device_count < 1:
+            raise ValueError("任务提交分布式状态下未检测到可用加速卡。")
+        return ",".join(str(i) for i in range(device_count))
+
     def set_callback(self, event: str, callback):
         """Override the existing callbacks with the given callback for the specified event."""
         self.callbacks[event] = [callback]
@@ -230,15 +299,16 @@ class BaseTrainer:
                     f"please specify a valid batch size multiple of GPU count {self.world_size}, i.e. batch={self.world_size * 8}."
                 )
 
-            # Command
-            cmd, file = None, None
+            file = None
             try:
-                cmd, file = generate_ddp_command(self)
+                if self.k8s_launch_config:
+                    cmd, file = generate_k8s_ddp_command(self)
+                else:
+                    cmd, file = generate_ddp_command(self)
                 LOGGER.info(f"{colorstr('DDP:')} debug command {' '.join(cmd)}")
                 subprocess.run(cmd, check=True)
             finally:
-                if file is not None:
-                    ddp_cleanup(self, str(file))
+                ddp_cleanup(self, str(file) if file else [])
 
         else:
             self._do_train()
@@ -267,10 +337,22 @@ class BaseTrainer:
         self.accelerator.set_device(index)
         if device_type == "cuda":
             os.environ["TORCH_NCCL_BLOCKING_WAIT"] = "1"  # set to enforce timeout
+        elif device_type == "npu":
+            os.environ["TORCH_HCCL_BLOCKING_WAIT"] = "1"
+            os.environ.setdefault("HCCL_CONNECT_TIMEOUT", "1800")
         elif device_type == "xpu" and not (hasattr(dist, "is_xccl_available") and dist.is_xccl_available()):
             raise RuntimeError("Multi-XPU training requires XCCL, which is not available in this PyTorch build.")
+        backend = (
+            "hccl"
+            if device_type == "npu"
+            else "xccl"
+            if device_type == "xpu"
+            else "nccl"
+            if dist.is_nccl_available()
+            else "gloo"
+        )
         dist.init_process_group(
-            backend={"npu": "hccl", "xpu": "xccl"}.get(device_type, "nccl" if dist.is_nccl_available() else "gloo"),
+            backend=backend,
             timeout=timedelta(seconds=10800),  # 3 hours
             rank=RANK,
             world_size=self.world_size,
@@ -279,8 +361,9 @@ class BaseTrainer:
     def _build_train_pipeline(self):
         """Build dataloaders, optimizer, and scheduler for current batch size."""
         batch_size = self.batch_size // max(self.world_size, 1)
+        dataloader_rank = RANK if self.world_size > 1 else -1
         self.train_loader = self.get_dataloader(
-            self.data["train"], batch_size=batch_size, rank=LOCAL_RANK, mode="train"
+            self.data["train"], batch_size=batch_size, rank=dataloader_rank, mode="train"
         )
         final_batch_size = len(self.train_loader.sampler) % self.train_loader.batch_size or self.train_loader.batch_size
         if self.args.imgsz < 2 * self.stride and not self.train_loader.drop_last and final_batch_size == 1:
@@ -292,7 +375,7 @@ class BaseTrainer:
         self.test_loader = self.get_dataloader(
             self.data.get("val") or self.data.get("test"),
             batch_size=batch_size if self.args.task in {"obb", "semantic", "depth"} else batch_size * 2,
-            rank=LOCAL_RANK,
+            rank=dataloader_rank,
             mode="val",
         )
         self.accumulate = max(round(self.args.nbs / self.batch_size), 1)  # accumulate loss before optimizing
@@ -649,6 +732,7 @@ class BaseTrainer:
                 loader.close()  # shut down persistent dataloader workers so none survive to interpreter exit
         unset_deterministic()
         self.run_callbacks("teardown")
+        self._teardown_train_resources()
 
     def auto_batch(self, max_num_obj=0, dataset_size=0):
         """Calculate optimal batch size based on model and device memory constraints."""
@@ -662,6 +746,42 @@ class BaseTrainer:
             max_num_obj=max_num_obj,
             dataset_size=dataset_size,
         )  # returns batch size
+
+    def _sync_vram_device(self):
+        """Synchronize the current CUDA/NPU device if available."""
+        if self.device.type == "cuda":
+            torch.cuda.synchronize(self.device)
+        elif self.device.type == "npu" and hasattr(torch, "npu"):
+            try:
+                torch.npu.synchronize(self.device)
+            except TypeError:
+                torch.npu.synchronize()
+
+    @staticmethod
+    def _shutdown_loader_workers(loader) -> None:
+        """在解释器退出前关闭持久化 dataloader workers。"""
+        iterator = getattr(loader, "iterator", None)
+        if iterator is None or not hasattr(iterator, "_shutdown_workers"):
+            return
+        try:
+            iterator._shutdown_workers()
+        except Exception:
+            pass
+
+    def _teardown_train_resources(self) -> None:
+        """在加速器 context 仍有效时释放 dataloader 和分布式资源。"""
+        self._shutdown_loader_workers(getattr(self, "train_loader", None))
+        self._shutdown_loader_workers(getattr(self, "test_loader", None))
+        if self.world_size <= 1 or not dist.is_available() or not dist.is_initialized():
+            return
+        try:
+            self._sync_vram_device()
+            if isinstance(self.model, nn.parallel.DistributedDataParallel):
+                self.model = self.model.module
+            gc.collect()
+            dist.barrier()
+        finally:
+            dist.destroy_process_group()
 
     def _get_memory(self, fraction=False):
         """Get accelerator memory utilization in GB or as a fraction of total memory."""

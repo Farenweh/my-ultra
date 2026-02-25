@@ -113,6 +113,7 @@ def test_select_device(monkeypatch):
     from ultralytics.utils import torch_utils
 
     set_calls = []
+    monkeypatch.setattr(torch_utils, "IS_ASCEND", False)
     monkeypatch.setattr(torch_utils.torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch_utils.torch.cuda, "device_count", lambda: 2)
     monkeypatch.setattr(torch_utils.torch.cuda, "current_device", lambda: 0)
