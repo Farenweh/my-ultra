@@ -5,6 +5,8 @@ import csv
 import os
 import platform
 import shutil
+import subprocess
+import sys
 import tarfile
 import urllib
 import zipfile
@@ -44,6 +46,40 @@ from ultralytics.utils import (
 )
 from ultralytics.utils.downloads import download, safe_download
 from ultralytics.utils.torch_utils import TORCH_1_10, TORCH_1_11, TORCH_1_13
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"), [(None, "torch.float16"), ("fp16", "torch.float16"), ("bf16", "torch.bfloat16")]
+)
+def test_amp_dtype_environment_selection(value, expected):
+    """AMP_DTYPE未设置时默认FP16，并保留显式FP16/BF16选择。"""
+    env = os.environ.copy()
+    if value is None:
+        env.pop("AMP_DTYPE", None)
+    else:
+        env["AMP_DTYPE"] = value
+    result = subprocess.run(
+        [sys.executable, "-c", "from ultralytics.utils.checks import AMP_DTYPE; print(AMP_DTYPE)"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.stdout.splitlines()[-1] == expected
+
+
+def test_amp_dtype_rejects_invalid_environment_value():
+    """AMP_DTYPE非法值应在导入配置时明确失败。"""
+    env = os.environ.copy()
+    env["AMP_DTYPE"] = "invalid"
+    result = subprocess.run(
+        [sys.executable, "-c", "from ultralytics.utils.checks import AMP_DTYPE"],
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+    assert result.returncode != 0
+    assert "不受支持的 AMP_DTYPE invalid" in result.stderr
 
 
 def test_dataloader_caps_workers_to_batches():
@@ -149,6 +185,7 @@ def test_select_device(monkeypatch):
     from ultralytics.utils import torch_utils
 
     set_calls = []
+    monkeypatch.setattr(torch_utils, "IS_ASCEND", False)
     monkeypatch.setattr(torch_utils.torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch_utils.torch.cuda, "device_count", lambda: 2)
     monkeypatch.setattr(torch_utils.torch.cuda, "current_device", lambda: 0)

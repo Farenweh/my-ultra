@@ -178,14 +178,13 @@ class BaseValidator:
                     model.set_head_attr(max_det=self.args.max_det, agnostic_nms=self.args.agnostic_nms)
             with torch_distributed_zero_first(LOCAL_RANK):
                 self.args.data = convert_ndjson_to_yolo_if_needed(self.args.data, self.args.fraction)
-            device_type = str(self.args.device).split(":", 1)[0]
-            device_type = device_type if device_type in {"npu", "xpu"} else "cuda"
+            selected_device = select_device(self.args.device, verbose=RANK == -1)
             model = AutoBackend(
                 model=model or self.args.model,
                 # DDP ranks reuse the device assigned in trainer._setup_ddp()
-                device=select_device(self.args.device)
+                device=selected_device
                 if RANK == -1
-                else torch.device(device_type, get_torch_device_backend(device_type).current_device()),
+                else torch.device(selected_device.type, get_torch_device_backend(selected_device).current_device()),
                 dnn=self.args.dnn,
                 data=self.args.data,
                 fp16=self.args.quantize == 16,

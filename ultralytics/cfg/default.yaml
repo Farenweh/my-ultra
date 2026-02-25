@@ -17,7 +17,7 @@ imgsz: 640 # (int | list) train/val use int (square); predict/export may use [h,
 save: True # (bool) save train checkpoints and predict results
 save_period: -1 # (int) save checkpoint every N epochs; disabled if < 1
 cache: False # (bool | str) cache images in RAM (True/'ram') or on 'disk' to speed dataloading; False disables
-device: # (int | str | list) device: 0/[0,1] CUDA, 'npu:0' Ascend, 'xpu:0' Intel, 'cpu'/'mps', -1/[-1,-1] auto GPUs
+device: # (int | str | list) device: 0/[0,1] auto CUDA/Ascend, 'npu:0' Ascend, 'xpu:0' Intel, 'cpu'/'mps', -1/[-1,-1] auto GPUs
 workers: 8 # (int) dataloader workers (per RANK if DDP)
 project: # (str, optional) project name for results root
 name: # (str, optional) experiment name or export hardware target
@@ -27,7 +27,7 @@ cls_remap: True # (bool) when fine-tuning across datasets, remap pretrained cls 
 optimizer: auto # (str) optimizer: SGD, MuSGD, Adam, Adamax, AdamW, NAdam, RAdam, RMSProp, or auto
 verbose: True # (bool) print verbose logs
 seed: 0 # (int) random seed for reproducibility
-deterministic: True # (bool) enable deterministic ops; reproducible but may be slower
+deterministic: False # (bool) enable deterministic ops; reproducible but may be slower
 single_cls: False # (bool) treat all classes as a single class
 rect: False # (bool) rectangular batches for train; rectangular batching for val when mode='val'
 cos_lr: False # (bool) cosine learning rate scheduler

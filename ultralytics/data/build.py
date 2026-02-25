@@ -37,7 +37,7 @@ from ultralytics.data.loaders import (
     autocast_list,
 )
 from ultralytics.data.utils import IMG_FORMATS, VID_FORMATS, get_split_fraction
-from ultralytics.utils import RANK, colorstr
+from ultralytics.utils import LOGGER, RANK, colorstr
 from ultralytics.utils.checks import check_file
 from ultralytics.utils.torch_utils import TORCH_1_13, TORCH_2_0, TORCH_2_7, get_torch_device_backend
 
@@ -227,6 +227,28 @@ class ContiguousDistributedSampler(torch.utils.data.Sampler):
         self.epoch = epoch
 
 
+def _adjust_distributed_eval_batch_size(batch: int, dataset: Dataset, rank: int, shuffle: bool) -> int:
+    """Clamp eval batch size so distributed validation exposes at least one batch to each rank when possible."""
+    if rank == -1 or shuffle or not dist.is_available() or not dist.is_initialized():
+        return batch
+
+    world_size = dist.get_world_size()
+    if world_size <= 1:
+        return batch
+
+    max_batch = len(dataset) // world_size + 1
+    if max_batch < 1:
+        return 1
+
+    adjusted = min(batch, max_batch)
+    if adjusted != batch and RANK in {-1, 0}:
+        LOGGER.warning(
+            f"Reducing validation batch from {batch} to {adjusted} to keep distributed val batches >= world size "
+            f"({len(dataset)} images / {world_size} ranks)."
+        )
+    return adjusted
+
+
 def seed_worker(worker_id: int) -> None:
     """Set dataloader worker seed for reproducibility across worker processes."""
     worker_seed = torch.initial_seed() % 2**32
@@ -346,12 +368,13 @@ def build_dataloader(
     dataset_len = len(dataset)
     batch = min(batch, dataset_len)
     seed = torch.initial_seed() - RANK - 1
+    batch = _adjust_distributed_eval_batch_size(batch, dataset, rank, shuffle)
     sampler = (
         None
         if rank == -1
         else distributed.DistributedSampler(dataset, shuffle=shuffle, seed=seed)
         if shuffle
-        else ContiguousDistributedSampler(dataset)
+        else ContiguousDistributedSampler(dataset, batch_size=batch, rank=rank)
     )
     samples = len(sampler) if sampler is not None else dataset_len
     drop_last = drop_last and bool(batch) and dataset_len % batch != 0

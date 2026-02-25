@@ -12,6 +12,7 @@ import torch
 from tests import MODEL, SOURCE, TASK_MODEL_DATA
 from ultralytics import YOLO
 from ultralytics.cfg import get_cfg
+from ultralytics.engine import trainer as trainer_module
 from ultralytics.engine.exporter import Exporter
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.models.yolo import classify, depth, detect, obb, pose, segment, semantic
@@ -34,6 +35,182 @@ def test_export(monkeypatch, tmp_path):
     assert test_func in exporter.callbacks["on_export_start"], "on_export_start callback not registered"
     f = exporter(model=YOLO("yolo26n.yaml").model)
     YOLO(f)(SOURCE)  # exported model inference
+
+
+def test_build_optimizer_ascend_fused_adamw_missing_fails(monkeypatch):
+    """启用 Ascend fused optimizer 时，缺少 NpuFusedAdamW 必须直接失败。"""
+    trainer = object.__new__(BaseTrainer)
+    trainer.args = SimpleNamespace(lr0=0.001, momentum=0.9, warmup_bias_lr=0.0)
+    trainer.data = {"nc": 80}
+    model = torch.nn.Sequential(torch.nn.Conv2d(3, 4, 1), torch.nn.BatchNorm2d(4))
+
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", True)
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_FUSED_OPTIMIZER", True, raising=False)
+    monkeypatch.setitem(sys.modules, "torch_npu", SimpleNamespace(optim=SimpleNamespace()))
+
+    with pytest.raises(RuntimeError, match="NpuFusedAdamW"):
+        trainer.build_optimizer(model, name="AdamW", lr=0.001, momentum=0.9, decay=1e-5)
+
+
+def test_build_optimizer_ascend_fused_adamw_uses_explicit_class(monkeypatch):
+    """Ascend AdamW 应显式调用 torch_npu.optim.NpuFusedAdamW。"""
+    trainer = object.__new__(BaseTrainer)
+    trainer.args = SimpleNamespace(lr0=0.001, momentum=0.9, warmup_bias_lr=0.0)
+    trainer.data = {"nc": 80}
+    model = torch.nn.Sequential(torch.nn.Conv2d(3, 4, 1), torch.nn.BatchNorm2d(4))
+
+    class FakeNpuFusedAdamW:
+        def __init__(self, params):
+            self.param_groups = params
+
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", True)
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_FUSED_OPTIMIZER", True, raising=False)
+    monkeypatch.setitem(
+        sys.modules, "torch_npu", SimpleNamespace(optim=SimpleNamespace(NpuFusedAdamW=FakeNpuFusedAdamW))
+    )
+
+    optimizer = trainer.build_optimizer(model, name="AdamW", lr=0.001, momentum=0.9, decay=1e-5)
+
+    assert isinstance(optimizer, FakeNpuFusedAdamW)
+
+
+def test_optimizer_step_ascend_fused_grad_clip_missing_fails(monkeypatch):
+    """启用 fused grad clip 时，优化器缺少 clip_grad_norm_fused_ 必须直接失败。"""
+    trainer = object.__new__(BaseTrainer)
+    trainer.model = torch.nn.Linear(2, 2)
+    trainer.optimizer = SimpleNamespace()
+    trainer.ema = None
+
+    class Scaler:
+        def unscale_(self, optimizer):
+            pass
+
+    trainer.scaler = Scaler()
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", True)
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_FUSED_GRAD_CLIP", True, raising=False)
+
+    with pytest.raises(RuntimeError, match="clip_grad_norm_fused_"):
+        trainer.optimizer_step()
+
+
+@pytest.mark.parametrize(
+    ("setting", "fused_optimizer", "has_fused_method", "expected"),
+    [
+        (None, True, True, "fused"),
+        (None, True, False, "standard"),
+        (None, False, True, "standard"),
+        (False, True, True, "standard"),
+        (True, False, True, "fused"),
+    ],
+)
+def test_optimizer_step_ascend_fused_grad_clip_modes(monkeypatch, setting, fused_optimizer, has_fused_method, expected):
+    """三态配置应支持自动启用、能力回退、关闭优化器联动和显式覆盖。"""
+    trainer = object.__new__(BaseTrainer)
+    trainer.model = torch.nn.Linear(2, 2)
+    trainer.optimizer = SimpleNamespace(zero_grad=lambda: None)
+    trainer.device = torch.device("npu")
+    trainer.ema = None
+
+    class Scaler:
+        def unscale_(self, optimizer):
+            pass
+
+        def step(self, optimizer):
+            pass
+
+        def update(self):
+            pass
+
+    trainer.scaler = Scaler()
+    calls = []
+    if has_fused_method:
+        trainer.optimizer.clip_grad_norm_fused_ = lambda **kwargs: calls.append("fused")
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", True)
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_FUSED_GRAD_CLIP", setting, raising=False)
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_FUSED_OPTIMIZER", fused_optimizer, raising=False)
+    monkeypatch.setattr(torch.nn.utils, "clip_grad_norm_", lambda *args, **kwargs: calls.append("standard"))
+
+    trainer.optimizer_step()
+
+    assert calls == [expected]
+
+
+@pytest.mark.parametrize(
+    ("rank", "device", "expected_output"),
+    [
+        (-1, "npu", True),
+        (0, "npu", True),
+        (1, "npu", False),
+        (8, "npu", False),
+        (15, "npu", False),
+        (1, "cuda", True),
+    ],
+)
+def test_optimizer_step_limits_npu_scaler_stdout_to_global_rank_zero(
+    monkeypatch, capsys, rank, device, expected_output
+):
+    """NPU scaler标准输出仅应出现在单卡或global rank 0，其他后端保持原行为。"""
+    calls = []
+
+    class Scaler:
+        def unscale_(self, optimizer):
+            calls.append("unscale")
+
+        def step(self, optimizer):
+            calls.append("step")
+            print("scaler step stdout")
+
+        def update(self):
+            calls.append("update")
+            print("scaler update stdout")
+
+    trainer = object.__new__(BaseTrainer)
+    trainer.model = torch.nn.Linear(2, 2)
+    trainer.optimizer = SimpleNamespace(zero_grad=lambda: calls.append("zero_grad"))
+    trainer.device = torch.device(device)
+    trainer.scaler = Scaler()
+    trainer.ema = None
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", False)
+    monkeypatch.setattr(trainer_module, "RANK", rank)
+    monkeypatch.setattr(torch.nn.utils, "clip_grad_norm_", lambda *args, **kwargs: calls.append("clip"))
+
+    trainer.optimizer_step()
+
+    output = capsys.readouterr().out
+    assert ("scaler step stdout" in output) is expected_output
+    assert ("scaler update stdout" in output) is expected_output
+    assert calls == ["unscale", "clip", "step", "update", "zero_grad"]
+
+
+def test_optimizer_step_restores_stdout_when_silent_npu_scaler_fails(monkeypatch, capsys):
+    """非零rank的scaler异常应继续传播，并在退出静默上下文后恢复stdout。"""
+
+    class Scaler:
+        def unscale_(self, optimizer):
+            pass
+
+        def step(self, optimizer):
+            print("hidden scaler stdout")
+            raise RuntimeError("scaler step failed")
+
+        def update(self):
+            pytest.fail("step失败后不应调用update")
+
+    trainer = object.__new__(BaseTrainer)
+    trainer.model = torch.nn.Linear(2, 2)
+    trainer.optimizer = SimpleNamespace(zero_grad=lambda: None)
+    trainer.device = torch.device("npu")
+    trainer.scaler = Scaler()
+    trainer.ema = None
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", False)
+    monkeypatch.setattr(trainer_module, "RANK", 1)
+    monkeypatch.setattr(torch.nn.utils, "clip_grad_norm_", lambda *args, **kwargs: None)
+
+    with pytest.raises(RuntimeError, match="scaler step failed"):
+        trainer.optimizer_step()
+    print("stdout restored")
+
+    assert capsys.readouterr().out == "stdout restored\n"
 
 
 @pytest.mark.parametrize(

@@ -88,7 +88,7 @@ class DetectionTrainer(BaseTrainer):
             (DataLoader): PyTorch dataloader object.
         """
         assert mode in {"train", "val"}, f"Mode must be 'train' or 'val', not {mode}."
-        with torch_distributed_zero_first(rank):  # init dataset *.cache only once if DDP
+        with torch_distributed_zero_first(rank, global_rank=True):  # init dataset *.cache only once if DDP
             dataset = self.build_dataset(dataset_path, mode, batch_size)
         shuffle = mode == "train"
         if getattr(dataset, "rect", False) and shuffle and not np.all(dataset.batch_shapes == dataset.batch_shapes[0]):
@@ -100,7 +100,7 @@ class DetectionTrainer(BaseTrainer):
             workers=self.args.workers if mode == "train" else self.args.workers * 2,
             shuffle=shuffle,
             rank=rank,
-            drop_last=self.args.compile and mode == "train",
+            drop_last=mode == "train" and (self.args.compile or rank != -1),
             device=self.device,
         )
 
