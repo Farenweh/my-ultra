@@ -12,6 +12,7 @@ import torch
 from tests import MODEL, SOURCE, TASK_MODEL_DATA
 from ultralytics import YOLO
 from ultralytics.cfg import get_cfg
+from ultralytics.engine import trainer as trainer_module
 from ultralytics.engine.exporter import Exporter
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.models.yolo import classify, depth, detect, obb, pose, segment, semantic
@@ -34,6 +35,62 @@ def test_export(monkeypatch, tmp_path):
     assert test_func in exporter.callbacks["on_export_start"], "on_export_start callback not registered"
     f = exporter(model=YOLO("yolo26n.yaml").model)
     YOLO(f)(SOURCE)  # exported model inference
+
+
+def test_build_optimizer_ascend_fused_adamw_missing_fails(monkeypatch):
+    """启用 Ascend fused optimizer 时，缺少 NpuFusedAdamW 必须直接失败。"""
+    trainer = object.__new__(BaseTrainer)
+    trainer.args = SimpleNamespace(lr0=0.001, momentum=0.9, warmup_bias_lr=0.0)
+    trainer.data = {"nc": 80}
+    model = torch.nn.Sequential(torch.nn.Conv2d(3, 4, 1), torch.nn.BatchNorm2d(4))
+
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", True)
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_FUSED_OPTIMIZER", True)
+    monkeypatch.setitem(sys.modules, "torch_npu", SimpleNamespace(optim=SimpleNamespace()))
+
+    with pytest.raises(RuntimeError, match="NpuFusedAdamW"):
+        trainer.build_optimizer(model, name="AdamW", lr=0.001, momentum=0.9, decay=1e-5)
+
+
+def test_build_optimizer_ascend_fused_adamw_uses_explicit_class(monkeypatch):
+    """Ascend AdamW 应显式调用 torch_npu.optim.NpuFusedAdamW。"""
+    trainer = object.__new__(BaseTrainer)
+    trainer.args = SimpleNamespace(lr0=0.001, momentum=0.9, warmup_bias_lr=0.0)
+    trainer.data = {"nc": 80}
+    model = torch.nn.Sequential(torch.nn.Conv2d(3, 4, 1), torch.nn.BatchNorm2d(4))
+
+    class FakeNpuFusedAdamW:
+        def __init__(self, params):
+            self.param_groups = params
+
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", True)
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_FUSED_OPTIMIZER", True)
+    monkeypatch.setitem(
+        sys.modules, "torch_npu", SimpleNamespace(optim=SimpleNamespace(NpuFusedAdamW=FakeNpuFusedAdamW))
+    )
+
+    optimizer = trainer.build_optimizer(model, name="AdamW", lr=0.001, momentum=0.9, decay=1e-5)
+
+    assert isinstance(optimizer, FakeNpuFusedAdamW)
+
+
+def test_optimizer_step_ascend_fused_grad_clip_missing_fails(monkeypatch):
+    """启用 fused grad clip 时，优化器缺少 clip_grad_norm_fused_ 必须直接失败。"""
+    trainer = object.__new__(BaseTrainer)
+    trainer.model = torch.nn.Linear(2, 2)
+    trainer.optimizer = SimpleNamespace()
+    trainer.ema = None
+
+    class Scaler:
+        def unscale_(self, optimizer):
+            pass
+
+    trainer.scaler = Scaler()
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", True)
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_FUSED_GRAD_CLIP", True)
+
+    with pytest.raises(RuntimeError, match="clip_grad_norm_fused_"):
+        trainer.optimizer_step()
 
 
 @pytest.mark.parametrize(

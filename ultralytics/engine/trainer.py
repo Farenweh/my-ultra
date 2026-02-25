@@ -48,6 +48,8 @@ from ultralytics.utils.autobatch import check_train_batch_size
 from ultralytics.utils.checks import (
     IS_ASCEND,
     PROFILE,
+    USE_ASCEND_FUSED_GRAD_CLIP,
+    USE_ASCEND_FUSED_OPTIMIZER,
     check_amp,
     check_file,
     check_imgsz,
@@ -1037,7 +1039,11 @@ class BaseTrainer:
     def optimizer_step(self):
         """Perform a single step of the training optimizer with gradient clipping and EMA update."""
         self.scaler.unscale_(self.optimizer)  # unscale gradients
-        if self.device.type == "npu" and TORCH_2_0:
+        if IS_ASCEND and USE_ASCEND_FUSED_GRAD_CLIP:
+            if not hasattr(self.optimizer, "clip_grad_norm_fused_"):
+                raise RuntimeError("USE_ASCEND_FUSED_GRAD_CLIP=1 需要优化器具有方法 clip_grad_norm_fused_().")
+            self.optimizer.clip_grad_norm_fused_(max_norm=10, norm_type=2)
+        elif self.device.type == "npu" and TORCH_2_0:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0, foreach=False)
         else:
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)
@@ -1366,7 +1372,15 @@ class BaseTrainer:
                 p2 = [v for k, v in p.items() if not pattern.search(k)]
                 g_.extend([{"params": p1, **x, "lr": lr * 3}, {"params": p2, **x}])
             g = g_
-        optimizer = (partial(MuSGD, muon=muon, sgd=sgd) if use_muon else getattr(optim, name))(params=g)
+        optimizer_cls = partial(MuSGD, muon=muon, sgd=sgd) if use_muon else getattr(optim, name)
+        if IS_ASCEND and USE_ASCEND_FUSED_OPTIMIZER and not use_muon:
+            import torch_npu
+
+            fused_name = f"NpuFused{name}"
+            optimizer_cls = getattr(torch_npu.optim, fused_name, None)
+            if optimizer_cls is None:
+                raise RuntimeError(f"USE_ASCEND_FUSED_OPTIMIZER=1 requires torch_npu.optim.{fused_name}.")
+        optimizer = optimizer_cls(params=g)
 
         LOGGER.info(
             f"{colorstr('optimizer:')} {type(optimizer).__name__}(lr={lr}, momentum={momentum}) with parameter groups "
