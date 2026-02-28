@@ -11,6 +11,7 @@ from __future__ import annotations
 import gc
 import math
 import os
+import shutil
 import subprocess
 import time
 import warnings
@@ -46,6 +47,7 @@ from ultralytics.utils import (
 from ultralytics.utils.autobatch import check_train_batch_size
 from ultralytics.utils.checks import (
     IS_ASCEND,
+    PROFILE,
     check_amp,
     check_file,
     check_imgsz,
@@ -483,6 +485,43 @@ class BaseTrainer:
         # Batch size
         if self.batch_size < 1 and RANK == -1:  # single-GPU only, estimate best batch size
             self.args.batch = self.batch_size = self.auto_batch()
+
+        # NPU Profile
+        if PROFILE != "":
+            assert IS_ASCEND, "此处profile仅适用于Ascend设备"
+
+            profile_path = f"{self.save_dir}/profile"
+            if os.path.exists(profile_path):
+                shutil.rmtree(profile_path)
+            experimental_config = torch.npu.torch_npu.profiler._ExperimentalConfig(
+                export_type=[torch.npu.torch_npu.profiler.ExportType.Text],
+                profiler_level=torch.npu.torch_npu.profiler.ProfilerLevel.Level1,
+                mstx=False,  # 原参数名msprof_tx改为mstx，新版本依旧兼容原参数名msprof_tx
+                aic_metrics=torch.npu.torch_npu.profiler.AiCMetrics.AiCoreNone,
+                l2_cache=False,
+                op_attr=False,
+                data_simplification=False,
+                record_op_args=False,
+                gc_detect_threshold=None,
+                host_sys=[],
+                sys_io=False,
+                sys_interconnection=False,
+            )
+            self.profiler = torch.npu.torch_npu.profiler.profile(
+                activities=[
+                    torch.npu.torch_npu.profiler.ProfilerActivity.CPU,
+                    torch.npu.torch_npu.profiler.ProfilerActivity.NPU,
+                ],
+                schedule=torch.npu.torch_npu.profiler.schedule(wait=3, warmup=5, active=2, repeat=1, skip_first=1),
+                on_trace_ready=torch.npu.torch_npu.profiler.tensorboard_trace_handler(profile_path),
+                record_shapes=False,
+                profile_memory=False,
+                with_stack="stack" in PROFILE,
+                with_modules="modules" in PROFILE,
+                with_flops=False,
+                experimental_config=experimental_config,
+            )
+
         self._build_train_pipeline()
         self.validator = self.get_validator()
         self.ema = ModelEMA(self.model)
@@ -544,6 +583,10 @@ class BaseTrainer:
                     LOGGER.info(self.progress_string())
                 pbar = TQDM(enumerate(self.train_loader), total=nb)
             self.tloss = None
+
+            if PROFILE:
+                self.profiler.start()
+
             for i, batch in pbar:
                 self.run_callbacks("on_train_batch_start")
                 # Warmup
@@ -655,6 +698,40 @@ class BaseTrainer:
                         self.plot_training_samples(batch, ni)
 
                 self.run_callbacks("on_train_batch_end")
+
+                if PROFILE:
+                    self.profiler.step()
+                    if i == 10:
+                        from posixpath import dirname, basename
+
+                        self.profiler.stop()
+                        if RANK not in {-1, 0}:
+                            exit()  # only analyze from rank 0
+                        subprocess.run(
+                            [
+                                "msprof-analyze",
+                                "advisor",
+                                "all",
+                                "-d",
+                                dirname(self.profiler.prof_if.prof_path),
+                                "-o",
+                                dirname(dirname(self.profiler.prof_if.prof_path)),
+                            ],
+                        )
+                        LOGGER.info(colorstr("bold", "blue", "msprof完成，开始压缩"))
+                        subprocess.run(
+                            [
+                                "tar",
+                                "-czf",
+                                f"{self.save_dir}/profile.tar.gz",
+                                "-C",
+                                dirname(dirname(self.profiler.prof_if.prof_path)),
+                                basename(dirname(self.profiler.prof_if.prof_path)),
+                            ],
+                        )
+                        shutil.rmtree(dirname(self.profiler.prof_if.prof_path))
+                        exit()
+
                 if self.stop:
                     break  # allow external stop (e.g. platform cancellation) between batches
             else:
