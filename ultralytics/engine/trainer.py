@@ -58,7 +58,12 @@ from ultralytics.utils.checks import (
 )
 
 if IS_ASCEND:
-    from ultralytics.utils.checks import USE_ASCEND_FUSED_GRAD_CLIP, USE_ASCEND_FUSED_OPTIMIZER
+    from ultralytics.utils.checks import (
+        USE_ASCEND_FUSED_GRAD_CLIP,
+        USE_ASCEND_FUSED_OPTIMIZER,
+        USE_ASCEND_INTERNAL_FORMAT,
+        USE_ASCEND_JIT_COMPILE,
+    )
 
 from ultralytics.utils.dist import (
     ddp_cleanup,
@@ -535,6 +540,21 @@ class BaseTrainer:
                 with_modules="modules" in PROFILE,
                 with_flops=False,
                 experimental_config=experimental_config,
+            )
+
+        # NPU optimize
+        if IS_ASCEND:
+            jit_compile = USE_ASCEND_JIT_COMPILE is True
+            internal_format = USE_ASCEND_INTERNAL_FORMAT is not False
+            torch.npu.set_compile_mode(jit_compile=jit_compile)
+            torch.npu.config.allow_internal_format = internal_format
+            LOGGER.info(
+                colorstr(
+                    "bold",
+                    "blue",
+                    f"Ascend JIT compile mode: {'enabled' if jit_compile else 'disabled'}\n"
+                    + f"Ascend internal format: {'enabled' if internal_format else 'disabled'}",
+                )
             )
 
         self._build_train_pipeline()
@@ -1385,12 +1405,14 @@ class BaseTrainer:
                 g_.extend([{"params": p1, **x, "lr": lr * 3}, {"params": p2, **x}])
             g = g_
         optimizer_cls = partial(MuSGD, muon=muon, sgd=sgd) if use_muon else getattr(optim, name)
-        if IS_ASCEND and USE_ASCEND_FUSED_OPTIMIZER and not use_muon:
+        if IS_ASCEND and USE_ASCEND_FUSED_OPTIMIZER is not False and not use_muon:
             import torch_npu
 
             fused_name = f"NpuFused{name}"
-            optimizer_cls = getattr(torch_npu.optim, fused_name, None)
-            if optimizer_cls is None:
+            fused_optimizer_cls = getattr(torch_npu.optim, fused_name, None)
+            if fused_optimizer_cls is not None:
+                optimizer_cls = fused_optimizer_cls
+            elif USE_ASCEND_FUSED_OPTIMIZER is True:
                 raise RuntimeError(f"USE_ASCEND_FUSED_OPTIMIZER=1 requires torch_npu.optim.{fused_name}.")
         optimizer = optimizer_cls(params=g)
 

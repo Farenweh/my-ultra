@@ -1275,18 +1275,24 @@ if IS_ASCEND:
     # 8 combo_id=9 epoch2_seconds=276.193000 env={"ACLNN_CACHE_LIMIT": "100000", "CPU_AFFINITY_CONF": "<unset>", "PYTORCH_NPU_ALLOC_CONF": "<unset>", "TASK_QUEUE_ENABLE": "1", "USE_ASCEND_FUSED_GRAD_CLIP": "0", "USE_ASCEND_FUSED_OPTIMIZER": "1", "USE_ASCEND_INTERNAL_FORMAT": "1", "USE_ASCEND_JIT_COMPILE": "1"}
     # 9 combo_id=7 epoch2_seconds=276.664000 env={"ACLNN_CACHE_LIMIT": "10000", "CPU_AFFINITY_CONF": "<unset>", "PYTORCH_NPU_ALLOC_CONF": "<unset>", "TASK_QUEUE_ENABLE": "1", "USE_ASCEND_FUSED_GRAD_CLIP": "0", "USE_ASCEND_FUSED_OPTIMIZER": "1", "USE_ASCEND_INTERNAL_FORMAT": "1", "USE_ASCEND_JIT_COMPILE": "1"}
     # 10 combo_id=8 epoch2_seconds=286.741000 env={"ACLNN_CACHE_LIMIT": "10000", "CPU_AFFINITY_CONF": "<unset>", "PYTORCH_NPU_ALLOC_CONF": "<unset>", "TASK_QUEUE_ENABLE": "1", "USE_ASCEND_FUSED_GRAD_CLIP": "0", "USE_ASCEND_FUSED_OPTIMIZER": "1", "USE_ASCEND_INTERNAL_FORMAT": "1", "USE_ASCEND_JIT_COMPILE": "1"}
-    USE_ASCEND_FUSED_OPTIMIZER = os.getenv("USE_ASCEND_FUSED_OPTIMIZER", "1") == "1"
+    USE_ASCEND_FUSED_OPTIMIZER: bool | None = (
+        None if "USE_ASCEND_FUSED_OPTIMIZER" not in os.environ else os.environ["USE_ASCEND_FUSED_OPTIMIZER"] == "1"
+    )
     USE_ASCEND_FUSED_GRAD_CLIP: bool | None = (
         None if "USE_ASCEND_FUSED_GRAD_CLIP" not in os.environ else os.environ["USE_ASCEND_FUSED_GRAD_CLIP"] == "1"
     )
-    USE_ASCEND_JIT_COMPILE = os.getenv("USE_ASCEND_JIT_COMPILE", "0") == "1"
-    USE_ASCEND_INTERNAL_FORMAT = os.getenv("USE_ASCEND_INTERNAL_FORMAT", "1") == "1"
+    USE_ASCEND_JIT_COMPILE: bool | None = (
+        None if "USE_ASCEND_JIT_COMPILE" not in os.environ else os.environ["USE_ASCEND_JIT_COMPILE"] == "1"
+    )
+    USE_ASCEND_INTERNAL_FORMAT: bool | None = (
+        None if "USE_ASCEND_INTERNAL_FORMAT" not in os.environ else os.environ["USE_ASCEND_INTERNAL_FORMAT"] == "1"
+    )
 
-    os.environ["TASK_QUEUE_ENABLE"] = "2"
-    os.environ["ACLNN_CACHE_LIMIT"] = "500000"
-    os.environ["CPU_AFFINITY_CONF"] = "1"
-    os.environ["PYTORCH_NPU_ALLOC_CONF"] = "expandable_segments:True"
-    os.environ["HOST_CACHE_CAPACITY"] = "50"
+    os.environ.setdefault("TASK_QUEUE_ENABLE", "2")
+    os.environ.setdefault("ACLNN_CACHE_LIMIT", "500000")
+    os.environ.setdefault("CPU_AFFINITY_CONF", "1")
+    os.environ.setdefault("PYTORCH_NPU_ALLOC_CONF", "expandable_segments:True")
+    os.environ.setdefault("HOST_CACHE_CAPACITY", "50")
 
     warnings.filterwarnings(
         "ignore",

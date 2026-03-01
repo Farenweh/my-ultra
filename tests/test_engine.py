@@ -52,8 +52,12 @@ def test_build_optimizer_ascend_fused_adamw_missing_fails(monkeypatch):
         trainer.build_optimizer(model, name="AdamW", lr=0.001, momentum=0.9, decay=1e-5)
 
 
-def test_build_optimizer_ascend_fused_adamw_uses_explicit_class(monkeypatch):
-    """Ascend AdamW 应显式调用 torch_npu.optim.NpuFusedAdamW。"""
+@pytest.mark.parametrize(
+    ("setting", "has_fused_class", "expected_fused"),
+    [(None, True, True), (None, False, False), (False, True, False), (True, True, True)],
+)
+def test_build_optimizer_ascend_fused_adamw_modes(monkeypatch, setting, has_fused_class, expected_fused):
+    """融合优化器三态配置应支持自动选择、能力回退、显式禁用和严格启用。"""
     trainer = object.__new__(BaseTrainer)
     trainer.args = SimpleNamespace(lr0=0.001, momentum=0.9, warmup_bias_lr=0.0)
     trainer.data = {"nc": 80}
@@ -64,14 +68,59 @@ def test_build_optimizer_ascend_fused_adamw_uses_explicit_class(monkeypatch):
             self.param_groups = params
 
     monkeypatch.setattr(trainer_module, "IS_ASCEND", True)
-    monkeypatch.setattr(trainer_module, "USE_ASCEND_FUSED_OPTIMIZER", True, raising=False)
-    monkeypatch.setitem(
-        sys.modules, "torch_npu", SimpleNamespace(optim=SimpleNamespace(NpuFusedAdamW=FakeNpuFusedAdamW))
-    )
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_FUSED_OPTIMIZER", setting, raising=False)
+    fused_optimizers = {"NpuFusedAdamW": FakeNpuFusedAdamW} if has_fused_class else {}
+    monkeypatch.setitem(sys.modules, "torch_npu", SimpleNamespace(optim=SimpleNamespace(**fused_optimizers)))
 
     optimizer = trainer.build_optimizer(model, name="AdamW", lr=0.001, momentum=0.9, decay=1e-5)
 
-    assert isinstance(optimizer, FakeNpuFusedAdamW)
+    assert isinstance(optimizer, FakeNpuFusedAdamW) is expected_fused
+
+
+@pytest.mark.parametrize(
+    ("jit_setting", "internal_setting", "expected_jit", "expected_internal"),
+    [(None, None, False, True), (False, False, False, False), (True, True, True, True)],
+)
+def test_setup_train_resolves_ascend_runtime_modes(
+    monkeypatch, jit_setting, internal_setting, expected_jit, expected_internal
+):
+    """Ascend JIT 和内部格式应在功能所有者处解析三态默认值。"""
+    trainer = object.__new__(BaseTrainer)
+    trainer.args = SimpleNamespace(
+        amp=False,
+        channels_last=False,
+        compile=False,
+        distill_model=None,
+        freeze=None,
+        imgsz=32,
+    )
+    trainer.batch_size = 1
+    trainer.device = torch.device("cpu")
+    trainer.model = torch.nn.Linear(2, 2)
+    trainer.setup_model = lambda: None
+    trainer.set_model_attributes = lambda: None
+    trainer.world_size = 1
+
+    compile_modes = []
+    npu_config = SimpleNamespace(allow_internal_format=None)
+    fake_npu = SimpleNamespace(
+        config=npu_config,
+        set_compile_mode=lambda **kwargs: compile_modes.append(kwargs["jit_compile"]),
+    )
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", True)
+    monkeypatch.setattr(trainer_module, "PROFILE", "")
+    monkeypatch.setattr(trainer_module, "RANK", -1)
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_JIT_COMPILE", jit_setting, raising=False)
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_INTERNAL_FORMAT", internal_setting, raising=False)
+    monkeypatch.setattr(trainer_module, "attempt_compile", lambda model, **kwargs: model)
+    monkeypatch.setattr(torch, "npu", fake_npu, raising=False)
+    trainer._build_train_pipeline = lambda: (_ for _ in ()).throw(RuntimeError("runtime modes configured"))
+
+    with pytest.raises(RuntimeError, match="runtime modes configured"):
+        trainer._setup_train()
+
+    assert compile_modes == [expected_jit]
+    assert npu_config.allow_internal_format is expected_internal
 
 
 def test_optimizer_step_ascend_fused_grad_clip_missing_fails(monkeypatch):
