@@ -50,6 +50,8 @@ from ultralytics.utils.checks import (
     PROFILE,
     USE_ASCEND_FUSED_GRAD_CLIP,
     USE_ASCEND_FUSED_OPTIMIZER,
+    USE_ASCEND_INTERNAL_FORMAT,
+    USE_ASCEND_JIT_COMPILE,
     check_amp,
     check_file,
     check_imgsz,
@@ -522,6 +524,25 @@ class BaseTrainer:
                 with_modules="modules" in PROFILE,
                 with_flops=False,
                 experimental_config=experimental_config,
+            )
+
+        # NPU optimize
+        if IS_ASCEND:
+            if USE_ASCEND_JIT_COMPILE:
+                torch.npu.set_compile_mode(jit_compile=True)
+            else:
+                torch.npu.set_compile_mode(jit_compile=False)
+            if USE_ASCEND_INTERNAL_FORMAT:
+                torch.npu.config.allow_internal_format = True
+            else:
+                torch.npu.config.allow_internal_format = False
+            LOGGER.info(
+                colorstr(
+                    "bold",
+                    "blue",
+                    f"Ascend JIT compile mode: {'enabled' if USE_ASCEND_JIT_COMPILE else 'disabled'}\n"
+                    + f"Ascend internal format: {'enabled' if USE_ASCEND_INTERNAL_FORMAT else 'disabled'}",
+                )
             )
 
         self._build_train_pipeline()
