@@ -8,11 +8,12 @@ import math
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch.nn.init import constant_, xavier_uniform_
+from torch.nn.init import constant_, trunc_normal_, xavier_uniform_
 
 from ultralytics.utils.torch_utils import TORCH_1_11
 
 from .conv import Conv
+from .third_party.dinov3.dinov3.layers import LayerScale, RopePositionEmbedding, SelfAttentionBlock
 from .utils import _get_clones, inverse_sigmoid, multi_scale_deformable_attn_pytorch
 
 __all__ = (
@@ -798,3 +799,75 @@ class DeformableTransformerDecoder(nn.Module):
             refer_bbox = refined_bbox.detach() if self.training else refined_bbox
 
         return torch.stack(dec_bboxes), torch.stack(dec_cls)
+
+
+class RoPEViT(nn.Module):
+    def __init__(
+        self,
+        c1: int,
+        embed_dim: int,
+        num_heads: int,
+        num_layers: int,
+        ffn_ratio: float = 4.0,
+        rope_rescale_coords: float | None = None,
+    ):
+        super().__init__()
+        self.c1, self.embed_dim, self.num_heads, self.num_layers = c1, embed_dim, num_heads, num_layers
+
+        self.proj = nn.Linear(c1, embed_dim) if c1 != embed_dim else nn.Identity()
+        self.rope_embed = RopePositionEmbedding(
+            embed_dim=embed_dim,
+            num_heads=num_heads,
+            dtype=torch.float32,
+            rescale_coords=rope_rescale_coords,
+        )
+        self.blocks = nn.ModuleList(
+            [
+                SelfAttentionBlock(
+                    dim=embed_dim,
+                    num_heads=num_heads,
+                    ffn_ratio=ffn_ratio,
+                    qkv_bias=True,
+                    proj_bias=True,
+                    ffn_bias=True,
+                    init_values=1e-5,
+                    mask_k_bias=True,
+                )
+                for _ in range(num_layers)
+            ]
+        )
+        self.norm = nn.LayerNorm(embed_dim)
+        self._init_dinov3_style_weights()
+
+    def _init_dinov3_style_weights(self):
+        """Align initialization with DINOv3 ViT blocks (Linear/LayerNorm/LayerScale and masked K-bias)."""
+        self.rope_embed._init_weights()
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                trunc_normal_(module.weight, std=0.02)
+                if module.bias is not None:
+                    nn.init.zeros_(module.bias)
+                if hasattr(module, "bias_mask") and module.bias_mask is not None:
+                    o = module.out_features
+                    module.bias_mask.fill_(1)
+                    module.bias_mask[o // 3 : 2 * o // 3].fill_(0)
+            elif isinstance(module, nn.LayerNorm):
+                module.reset_parameters()
+            elif isinstance(module, LayerScale):
+                module.reset_parameters()
+
+    def prepare_tokens(self, x: torch.Tensor) -> tuple[torch.Tensor, tuple[int, int]]:
+        if x.ndim != 4:
+            raise ValueError(f"RoPEViT expects a BCHW tensor, but got shape {tuple(x.shape)}")
+        _, _, h, w = x.shape
+        x = x.flatten(2).transpose(1, 2)
+        x = self.proj(x)
+        return x, (h, w)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x, (h, w) = self.prepare_tokens(x)
+        rope_sincos = self.rope_embed(H=h, W=w)
+        for blk in self.blocks:
+            x = blk(x, rope_sincos)
+        x = self.norm(x)
+        return x.transpose(1, 2).reshape(x.shape[0], self.embed_dim, h, w).contiguous()

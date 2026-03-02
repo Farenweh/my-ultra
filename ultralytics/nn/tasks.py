@@ -76,6 +76,8 @@ from ultralytics.nn.modules import (
     YOLOESegment,
     YOLOESegment26,
     v10Detect,
+    DINOv3ViT,
+    RoPEViT,
 )
 from ultralytics.utils import (
     DEFAULT_CFG_DICT,
@@ -2120,6 +2122,13 @@ def parse_model(d, ch, verbose=True):
             c2 = args[0]
             c1 = ch[f]
             args = [*args[1:]]
+        elif m in frozenset({DINOv3ViT}):
+            c1 = ch[f]
+            c2 = m.dims(args[0])
+        elif m in frozenset({RoPEViT}):
+            c1 = ch[f]
+            c2 = args[0]
+            args.insert(0, c1)  # for RoPEViT, first arg is channels
         else:
             c2 = ch[f]
 
