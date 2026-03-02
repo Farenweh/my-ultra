@@ -105,7 +105,9 @@ from .transformer import (
     TransformerBlock,
     TransformerEncoderLayer,
     TransformerLayer,
+    RoPEViT,
 )
+from .backbone import DINOv3ViT
 
 __all__ = (
     "AIFI",
@@ -190,4 +192,6 @@ __all__ = (
     "YOLOESegment",
     "YOLOESegment26",
     "v10Detect",
+    "DINOv3ViT",
+    "RoPEViT",
 )
