@@ -786,27 +786,32 @@ class DeformableTransformerDecoder(nn.Module):
         output = embed
         dec_bboxes = []
         dec_cls = []
-        last_refined_bbox = None
-        refer_bbox = refer_bbox.sigmoid()
+        # Match inverse_sigmoid(sigmoid(x), eps=1e-5) behavior while avoiding repeated inverse_sigmoid calls.
+        eps = 1e-5
+        logit_min = math.log(eps / (1.0 - eps))
+        logit_max = -logit_min
+        refer_bbox_logits_det = refer_bbox.clamp(min=logit_min, max=logit_max)
+        refer_bbox = refer_bbox_logits_det.sigmoid()
+        refer_bbox_logits_for_loss = refer_bbox_logits_det
         for i, layer in enumerate(self.layers):
             output = layer(output, refer_bbox, feats, shapes, padding_mask, attn_mask, pos_mlp(refer_bbox))
 
             bbox = bbox_head[i](output)
-            refined_bbox = torch.sigmoid(bbox + inverse_sigmoid(refer_bbox))
+            ref_logits = refer_bbox_logits_for_loss if (self.training and i > 0) else refer_bbox_logits_det
+            refined_logits = bbox + ref_logits
+            refined_bbox = refined_logits.sigmoid()
 
             if self.training:
                 dec_cls.append(score_head[i](output))
-                if i == 0:
-                    dec_bboxes.append(refined_bbox)
-                else:
-                    dec_bboxes.append(torch.sigmoid(bbox + inverse_sigmoid(last_refined_bbox)))
+                dec_bboxes.append(refined_bbox)
             elif i == self.eval_idx:
                 dec_cls.append(score_head[i](output))
                 dec_bboxes.append(refined_bbox)
                 break
 
-            last_refined_bbox = refined_bbox
-            refer_bbox = refined_bbox.detach() if self.training else refined_bbox
+            refer_bbox_logits_for_loss = refined_logits.clamp(min=logit_min, max=logit_max)
+            refer_bbox_logits_det = refer_bbox_logits_for_loss.detach() if self.training else refer_bbox_logits_for_loss
+            refer_bbox = refer_bbox_logits_det.sigmoid()
 
         return torch.stack(dec_bboxes), torch.stack(dec_cls)
 
