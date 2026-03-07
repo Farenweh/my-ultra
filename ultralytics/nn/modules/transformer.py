@@ -647,7 +647,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
         super().__init__()
 
         # Self attention
-        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout)
+        self.self_attn = nn.MultiheadAttention(d_model, n_heads, dropout=dropout, batch_first=True)
         self.dropout1 = nn.Dropout(dropout)
         self.norm1 = nn.LayerNorm(d_model)
 
@@ -708,9 +708,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
         """
         # Self attention
         q = k = self.with_pos_embed(embed, query_pos)
-        tgt = self.self_attn(q.transpose(0, 1), k.transpose(0, 1), embed.transpose(0, 1), attn_mask=attn_mask)[
-            0
-        ].transpose(0, 1)
+        tgt = self.self_attn(q, k, embed, attn_mask=attn_mask, need_weights=False)[0]
         embed = embed + self.dropout1(tgt)
         embed = self.norm1(embed)
 
