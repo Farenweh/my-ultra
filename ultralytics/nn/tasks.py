@@ -1914,7 +1914,7 @@ def load_checkpoint(weight, device=None, inplace=True, fuse=False):
     Args:
         weight (str | Path): Model weight path.
         device (torch.device, optional): Device to load model to.
-        inplace (bool): Whether to do inplace operations.
+        inplace (bool): 是否允许保留模块自身启用的原地操作；False 会全局禁用，True 不会强制开启。
         fuse (bool): Whether to fuse model.
 
     Returns:
@@ -1947,7 +1947,8 @@ def load_checkpoint(weight, device=None, inplace=True, fuse=False):
     # Module updates
     for m in model.modules():
         if hasattr(m, "inplace"):
-            m.inplace = inplace
+            # 作为全局权限上限：允许保留模块原值或统一关闭，但不覆盖模块为数值/别名安全设置的 False。
+            m.inplace = bool(m.inplace and inplace)
         elif isinstance(m, torch.nn.Upsample) and not hasattr(m, "recompute_scale_factor"):
             m.recompute_scale_factor = None  # torch 1.11.0 compatibility
 

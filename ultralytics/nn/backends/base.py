@@ -81,16 +81,22 @@ class BaseBackend(ABC):
         metadata (dict): Model metadata dictionary containing export configuration.
     """
 
-    def __init__(self, weight: str | torch.nn.Module, device: torch.device | str, fp16: bool = False):
+    def __init__(
+        self, weight: str | torch.nn.Module, device: torch.device | str, fp16: bool = False, bf16: bool = False
+    ):
         """Initialize the base backend with common attributes and load the model.
 
         Args:
             weight (str | torch.nn.Module): Path to the model weights file or a PyTorch module instance.
             device (torch.device | str): Device to run inference on (e.g., 'cpu', 'cuda:0').
             fp16 (bool): Whether to use FP16 half-precision inference.
+            bf16 (bool): Whether to use BF16 whole-model inference.
         """
+        if fp16 and bf16:
+            raise ValueError("fp16 and bf16 whole-model inference are mutually exclusive.")
         self.device = device
         self.fp16 = fp16
+        self.bf16 = bf16
         self.nhwc = False
         self.stride = 32
         self.names = {}
@@ -103,6 +109,11 @@ class BaseBackend(ABC):
         self.metadata = {}
         self.model = None
         self.load_model(weight)
+
+    @property
+    def dtype(self) -> torch.dtype:
+        """Return the floating-point input dtype expected by this backend."""
+        return torch.bfloat16 if self.bf16 else torch.float16 if self.fp16 else torch.float32
 
     @abstractmethod
     def load_model(self, weight: str | torch.nn.Module) -> None:

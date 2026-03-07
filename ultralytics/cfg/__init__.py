@@ -188,6 +188,7 @@ QUANTIZE_ALIASES = {
     "32": 32,
     "int8": 8,
     "fp16": 16,
+    "bf16": "bf16",
     "fp32": 32,
     "w8a8": 8,
     "w16a16": 16,
@@ -196,7 +197,12 @@ QUANTIZE_ALIASES = {
     "w8a32": "w8a32",
 }
 QUANTIZE_DOCS_URL = "https://docs.ultralytics.com/modes/export#quantization-options"
-QUANTIZE_VALID_VALUES = "8, 16, 32, 'int8', 'fp16', 'fp32', 'w8a8', 'w16a16', 'w8a16', or 'w8a32'"
+QUANTIZE_VALID_VALUES = (
+    "8, 16, 32, 'int8', 'fp16', 'bf16', 'fp32', 'w8a8', 'w16a16', 'w8a16', or 'w8a32'"
+)
+AMP_VALID_VALUES = "False, True, 'fp16', 'bf16', or 'fp32'"
+RUNTIME_MODES = frozenset({"train", "val", "predict", "track"})
+TRAIN_RUNTIME_QUANTIZE = frozenset({16, "bf16", 32})
 
 # Define keys for arg type checks
 CFG_FLOAT_KEYS = frozenset(
@@ -419,13 +425,24 @@ def check_cfg(cfg: dict, hard: bool = True) -> None:
         - None values are ignored as they may be from optional arguments.
         - Fraction keys use [0.0, 1.0]; dataset fraction also accepts counts and [train, val, test] lists.
     """
-    typed_keys = CFG_FLOAT_KEYS | CFG_FRACTION_KEYS | CFG_INT_KEYS | CFG_BOOL_KEYS | CFG_STR_KEYS | {"scale", "compile"}
+    typed_keys = CFG_FLOAT_KEYS | CFG_FRACTION_KEYS | CFG_INT_KEYS | CFG_BOOL_KEYS | CFG_STR_KEYS | {
+        "scale",
+        "compile",
+        "amp",
+    }
     for k, v in cfg.items():
         if v is None and (
             k == "amp" or (DEFAULT_CFG_DICT.get(k) is not None and k in typed_keys and k != "auto_augment")
         ):
             raise TypeError(f"'{k}=None' is invalid. '{k}' must not be None.")
         if v is not None:  # None values may be from optional args
+            if k == "amp":
+                if isinstance(v, bool):
+                    continue
+                if isinstance(v, str) and v.lower() in {"fp16", "bf16", "fp32"}:
+                    cfg[k] = v.lower()
+                    continue
+                raise ValueError(f"'{k}={v}' is invalid. Valid '{k}' values are {AMP_VALID_VALUES}.")
             if k in CFG_FLOAT_KEYS and not isinstance(v, FLOAT_OR_INT):
                 if hard:
                     raise TypeError(
@@ -519,6 +536,19 @@ def check_cfg(cfg: dict, hard: bool = True) -> None:
                         )
                 else:
                     cfg[k] = scheme
+
+    mode, amp, quantize = cfg.get("mode"), cfg.get("amp"), cfg.get("quantize")
+    if mode in RUNTIME_MODES and quantize is not None and amp not in {False, "fp32"}:
+        raise ValueError(
+            f"'amp={amp}' and 'quantize={quantize}' are mutually exclusive in mode='{mode}'. "
+            "AMP uses autocast while quantize requests manual whole-model precision; set amp=False or clear quantize."
+        )
+    if mode == "train" and quantize is not None and quantize not in TRAIN_RUNTIME_QUANTIZE:
+        raise ValueError(
+            f"'quantize={quantize}' is not supported during training validation. "
+            "Use quantize=16, quantize=bf16, quantize=32, or leave it unset; INT8 and w8a* schemes are for export "
+            "or already-quantized inference backends."
+        )
 
 
 def get_save_dir(args: SimpleNamespace, name: str | None = None) -> Path:

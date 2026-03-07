@@ -98,6 +98,8 @@ Use the `quantize` argument to request the export precision. String values are c
 
 The legacy `half=True` and `int8=True` flags are still accepted with deprecation warnings and forward to `quantize=16` and `quantize=8`.
 
+`"bf16"` is accepted by the shared configuration parser only for native PyTorch runtime inference. It is not an export precision, so `export(quantize="bf16")` fails early with an explicit error. Use `amp="bf16"` for BF16 autocast, or `amp=False, quantize="bf16"` for manual whole-model BF16 `.pt` inference.
+
 Not every export format supports every precision. Explicit `quantize` requests either produce that precision or fail before export:
 
 | Format        | FP32 (`32`/unset) | FP16 (`16`)       | INT8 (`8`) | W8A16 (`"w8a16"`) | Notes                                                                                                                                                                                                                                                   |

@@ -187,6 +187,7 @@ class AutoBackend(nn.Module):
         fuse: bool = True,
         verbose: bool = True,
         channels_last: bool | None = None,
+        bf16: bool = False,
     ):
         """Initialize the AutoBackend for inference.
 
@@ -199,6 +200,7 @@ class AutoBackend(nn.Module):
             fuse (bool): Fuse Conv2D + BatchNorm layers for optimization.
             verbose (bool): Enable verbose logging.
             channels_last (bool, optional): Use channels-last memory format, or auto-enable it on supported x86 CPUs.
+            bf16 (bool): Enable whole-model BF16 inference for native PyTorch models.
         """
         super().__init__()
         device = device or torch.device("cpu")
@@ -210,6 +212,12 @@ class AutoBackend(nn.Module):
             and any(x.is_inference() for x in (*model.parameters(), *model.buffers()))
         ):
             model = deepcopy(model)  # retained backends require normal tensors for fusion and later mutation
+
+        if bf16 and format != "pt":
+            raise ValueError(
+                f"quantize=bf16 whole-model inference supports only native PyTorch '.pt' or in-memory models, "
+                f"but got format='{format}'."
+            )
 
         # Check if format supports FP16
         fp16 &= format in {"pt", "torchscript", "onnx", "openvino", "engine", "triton"}
@@ -235,6 +243,7 @@ class AutoBackend(nn.Module):
                 f"See https://docs.ultralytics.com/modes/predict for help."
             )
         if format == "pt":
+            backend_kwargs["bf16"] = bf16
             backend_kwargs["fuse"] = fuse
             backend_kwargs["verbose"] = verbose
         elif format in {"saved_model", "pb", "edgetpu", "dnn"}:
@@ -307,8 +316,8 @@ class AutoBackend(nn.Module):
         """
         if self.nhwc:
             im = im.permute(0, 2, 3, 1)  # torch BCHW to numpy BHWC shape(1,320,192,3)
-        if self.backend.fp16 and im.dtype != torch.float16:
-            im = im.half()
+        if im.is_floating_point() and im.dtype != self.backend.dtype:
+            im = im.to(self.backend.dtype)
 
         # Build forward kwargs based on backend type
         forward_kwargs = {}
@@ -354,7 +363,7 @@ class AutoBackend(nn.Module):
             im = (
                 im
                 if im is not None
-                else torch.empty(*imgsz, dtype=torch.half if self.fp16 else torch.float, device=self.device)
+                else torch.empty(*imgsz, dtype=self.dtype, device=self.device)
             )
             for _ in range(2 if self.format == "torchscript" else 1):
                 self.forward(im)  # warmup model

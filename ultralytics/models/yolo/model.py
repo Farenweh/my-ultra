@@ -532,6 +532,7 @@ class YOLOE(Model):
                         "verbose": kwargs.get("verbose", self.overrides.get("verbose", refer_image is None)),
                         "batch": 1,
                         "device": args.device,
+                        "amp": args.amp,
                         "quantize": args.quantize,
                         "imgsz": args.imgsz,
                     },

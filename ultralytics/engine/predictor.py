@@ -56,7 +56,7 @@ from ultralytics.nn.autobackend import AutoBackend
 from ultralytics.utils import DEFAULT_CFG, LOGGER, MACOS, WINDOWS, callbacks, colorstr, ops
 from ultralytics.utils.checks import check_imgsz, check_imshow
 from ultralytics.utils.plotting import class_activation_map
-from ultralytics.utils.torch_utils import attempt_compile, select_device, smart_inference_mode
+from ultralytics.utils.torch_utils import attempt_compile, autocast, resolve_amp_dtype, select_device, smart_inference_mode
 
 STREAM_WARNING = """
 Inference results will accumulate in RAM unless `stream=True` is passed, which can cause out-of-memory errors for large
@@ -154,6 +154,8 @@ class BasePredictor:
         self.transforms = None
         self.callbacks = _callbacks or callbacks.get_default_callbacks()
         self.txt_path = None
+        self.amp_enabled = False
+        self.amp_dtype = torch.float16
         self._lock = threading.Lock()  # for automatic thread-safe inference
         callbacks.add_integration_callbacks(self)
 
@@ -175,10 +177,9 @@ class BasePredictor:
             if im.shape[1] == 3:
                 im = im.flip(1)  # BGR to RGB
             im = im.contiguous()
-            im = (im.half() if self.model.fp16 else im.float()).div_(255)  # uint8 to fp16/32, 0 - 255 to 0.0 - 1.0
+            im = im.to(dtype=self.model.dtype).div_(255)  # uint8 to model dtype, 0 - 255 to 0.0 - 1.0
         else:
-            im = im.to(self.device)
-            im = im.half() if self.model.fp16 else im.float()  # already 0.0 - 1.0, no division
+            im = im.to(self.device, dtype=self.model.dtype)  # already 0.0 - 1.0, no division
         return im
 
     def inference(self, im: torch.Tensor, *args, **kwargs):
@@ -341,12 +342,14 @@ class BasePredictor:
                     im = self.preprocess(im0s)
 
                 if not self.done_warmup:
-                    self.model.warmup(im=im)
+                    with autocast(self.amp_enabled, device=self.device.type, dtype=self.amp_dtype):
+                        self.model.warmup(im=im)
                     self.done_warmup = True
 
                 # Inference
                 with profilers[1]:
-                    preds = self.inference(im, *args, **kwargs)
+                    with autocast(self.amp_enabled, device=self.device.type, dtype=self.amp_dtype):
+                        preds = self.inference(im, *args, **kwargs)
                     if self.args.embed:
                         yield from [preds] if isinstance(preds, torch.Tensor) else preds  # yield embedding tensors
                         continue
@@ -431,11 +434,21 @@ class BasePredictor:
             data=self.args.data,
             fp16=self.args.quantize == 16,
             channels_last=self.args.channels_last,
+            bf16=self.args.quantize == "bf16",
             fuse=True,
             verbose=verbose,
         )
 
         self.device = self.model.device  # update device
+        if self.model.format == "pt" and self.args.quantize not in {None, 16, "bf16", 32}:
+            raise ValueError(
+                f"quantize={self.args.quantize!r} is not a native PyTorch runtime precision; "
+                "use 16, 'bf16', 32, or an already-quantized exported backend."
+            )
+        requested_amp_dtype = resolve_amp_dtype(self.args.amp)
+        self.amp_enabled = requested_amp_dtype is not None and self.model.format == "pt"
+        self.amp_dtype = requested_amp_dtype or torch.float16
+        self.done_warmup = False
         if hasattr(self.model, "imgsz") and not getattr(self.model, "dynamic", False):
             self.args.imgsz = self.model.imgsz  # reuse imgsz from export metadata
         self.model.eval()

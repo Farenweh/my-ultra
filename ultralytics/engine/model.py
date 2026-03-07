@@ -11,7 +11,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from ultralytics.cfg import QUANTIZE_ALIASES, TASK2DATA, _handle_deprecation, get_cfg, get_save_dir
+from ultralytics.cfg import TASK2DATA, _handle_deprecation, get_cfg, get_save_dir
 from ultralytics.engine.results import Results
 from ultralytics.nn.tasks import BaseModel, guess_model_task, load_checkpoint, yaml_model_load
 from ultralytics.utils import (
@@ -514,15 +514,14 @@ class Model(torch.nn.Module):
         if (
             not self.predictor
             or self.predictor.args.device != args.get("device", self.predictor.args.device)
-            or self.predictor.args.channels_last != args.get("channels_last", self.predictor.args.channels_last)
-            or self.predictor.args.quantize != QUANTIZE_ALIASES.get(str(q := args.get("quantize")).lower(), q)
         ):
             self.predictor = (predictor or self._smart_load("predictor"))(overrides=args, _callbacks=self.callbacks)
             self.predictor.setup_model(model=self.model, verbose=is_cli)
         else:  # only update args if predictor is already setup
             save_keys = ("project", "name", "save_dir", "exist_ok")
             prev_save_args = tuple(getattr(self.predictor.args, k, None) for k in save_keys)
-            setup_keys = ("device", "dnn", "data", "end2end", "compile", "channels_last", "quantize")
+            setup_keys = ("device", "dnn", "data", "end2end", "compile", "channels_last", "quantize", "amp")
+            previous_setup = tuple(getattr(self.predictor.args, k, None) for k in setup_keys)
             base_args = {
                 **DEFAULT_CFG_DICT,
                 **self.overrides,
@@ -531,6 +530,9 @@ class Model(torch.nn.Module):
             if hasattr(self.predictor.model, "imgsz") and not self.predictor.model.dynamic:
                 base_args["imgsz"] = self.predictor.args.imgsz
             self.predictor.args = get_cfg(base_args, {**custom, **kwargs})
+            current_setup = tuple(getattr(self.predictor.args, k, None) for k in setup_keys)
+            if current_setup != previous_setup:
+                self.predictor.setup_model(model=self.model, verbose=is_cli)
             if self.predictor.args.show:
                 self.predictor.args.show = checks.check_imshow(warn=True)
             if prev_save_args != tuple(getattr(self.predictor.args, k, None) for k in save_keys):

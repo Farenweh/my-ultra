@@ -217,7 +217,9 @@ def benchmark(
             assert export_format != "edgetpu", "inference not supported"
             assert export_format != "coreml" or platform.system() == "Darwin", "inference requires macOS>=10.13"
             assert export_format != "axelera", "inference only supported on Axelera hardware"
-            exported_model.predict(ASSETS / "bus.jpg", imgsz=imgsz, device=device, quantize=quantize, verbose=False)
+            exported_model.predict(
+                ASSETS / "bus.jpg", imgsz=imgsz, device=device, amp=False, quantize=quantize, verbose=False
+            )
 
             # Validate
             results = exported_model.val(
@@ -226,6 +228,7 @@ def benchmark(
                 imgsz=imgsz,
                 plots=False,
                 device=device,
+                amp=False,
                 quantize=quantize,
                 verbose=False,
                 conf=0.001,  # all the pre-set benchmark mAP values are based on conf=0.001

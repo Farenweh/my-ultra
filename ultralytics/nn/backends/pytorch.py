@@ -28,6 +28,7 @@ class PyTorchBackend(BaseBackend):
         fp16: bool = False,
         fuse: bool = True,
         verbose: bool = True,
+        bf16: bool = False,
     ):
         """Initialize the PyTorch backend.
 
@@ -37,10 +38,11 @@ class PyTorchBackend(BaseBackend):
             fp16 (bool): Whether to use FP16 half-precision inference.
             fuse (bool): Whether to fuse Conv2D + BatchNorm layers for optimization.
             verbose (bool): Whether to print verbose model loading messages.
+            bf16 (bool): Whether to use BF16 whole-model inference.
         """
         self.fuse = fuse
         self.verbose = verbose
-        super().__init__(weight, device, fp16)
+        super().__init__(weight, device, fp16, bf16=bf16)
 
     def load_model(self, weight: str | torch.nn.Module) -> None:
         """Load a PyTorch model from a checkpoint file or nn.Module instance.
@@ -65,7 +67,7 @@ class PyTorchBackend(BaseBackend):
         self.stride = max(int(model.stride.max()), 32) if hasattr(model, "stride") else 32
         self.names = model.module.names if hasattr(model, "module") else getattr(model, "names", {})
         self.channels = model.yaml.get("channels", 3) if hasattr(model, "yaml") else 3
-        model.half() if self.fp16 else model.float()
+        model.bfloat16() if self.bf16 else model.half() if self.fp16 else model.float()
 
         for p in model.parameters():
             p.requires_grad = False

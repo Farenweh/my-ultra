@@ -88,6 +88,7 @@ from ultralytics.utils.torch_utils import (
     init_seeds,
     one_cycle,
     parse_device,
+    resolve_amp_dtype,
     select_device,
     strip_optimizer,
     torch_distributed_zero_first,
@@ -458,29 +459,28 @@ class BaseTrainer:
                 f"Reduce 'freeze' or pass a list of specific layer indices."
             )
 
-        # Check AMP
-        self.amp = self.args.amp not in {False, "fp32"}
-        self.amp = torch.tensor(self.amp).to(self.device)
-        if self.amp and self.args.amp != "bf16" and RANK in {-1, 0}:  # Single-GPU and DDP
+        # Check AMP. Keep enablement and dtype separate so AMP never masquerades as manual model quantization.
+        self.amp_dtype = resolve_amp_dtype(self.args.amp)
+        amp_enabled = torch.tensor(self.amp_dtype is not None, device=self.device)
+        if amp_enabled and RANK in {-1, 0}:  # Single-GPU and DDP
             callbacks_backup = callbacks.default_callbacks.copy()  # backup callbacks as check_amp() resets them
-            self.amp = torch.tensor(check_amp(self.model), device=self.device)
+            amp_enabled = torch.tensor(check_amp(self.model, self.amp_dtype), device=self.device)
             callbacks.default_callbacks = callbacks_backup  # restore callbacks
         if RANK > -1 and self.world_size > 1:  # DDP
-            self.amp = self.amp.int()  # gloo errors with boolean
-            dist.broadcast(self.amp, src=0)  # broadcast from rank 0 to all other ranks
-        self.amp = bool(self.amp)  # as boolean
+            amp_enabled = amp_enabled.int()  # gloo errors with boolean
+            dist.broadcast(amp_enabled, src=0)  # broadcast from rank 0 to all other ranks
+        self.amp_enabled = bool(amp_enabled)
+        self.amp = self.amp_enabled  # compatibility alias for callbacks and task-specific trainers
+        scaler_enabled = self._amp_uses_grad_scaler(self.amp_enabled, self.amp_dtype)
         if self.device.type == "npu":
             import torch_npu
 
-            self.scaler = torch_npu.npu.amp.GradScaler(enabled=self.amp and self.args.amp != "bf16")
+            self.scaler = torch_npu.npu.amp.GradScaler(enabled=scaler_enabled)
         else:
             self.scaler = (
-                torch.amp.GradScaler(
-                    self.device.type if self.device.type == "xpu" else "cuda",
-                    enabled=self.amp and self.args.amp != "bf16",
-                )
+                torch.amp.GradScaler(self.device.type if self.device.type == "xpu" else "cuda", enabled=scaler_enabled)
                 if TORCH_2_4
-                else torch.cuda.amp.GradScaler(enabled=self.amp and self.args.amp != "bf16")
+                else torch.cuda.amp.GradScaler(enabled=scaler_enabled)
             )
         # Check imgsz
         gs = max(int(self.model.stride.max() if hasattr(self.model, "stride") else 32), 32)  # grid size (max stride)
@@ -572,6 +572,11 @@ class BaseTrainer:
         self.scheduler.last_epoch = self.start_epoch - 1  # do not move
         self.run_callbacks("on_pretrain_routine_end")
 
+    @staticmethod
+    def _amp_uses_grad_scaler(enabled: bool, dtype: torch.dtype | None) -> bool:
+        """Return whether AMP requires loss scaling (FP16 only; BF16 has sufficient exponent range)."""
+        return enabled and dtype == torch.float16
+
     def _do_train(self):
         """Perform the full training loop including setup, epoch iteration, validation, and final evaluation."""
         if self.world_size > 1:
@@ -647,7 +652,7 @@ class BaseTrainer:
 
                 # Forward
                 try:
-                    with autocast(torch.bfloat16 if self.args.amp == "bf16" else self.amp, device=self.device.type):
+                    with autocast(self.amp_enabled, device=self.device.type, dtype=self.amp_dtype):
                         batch = self.preprocess_batch(batch)
                         if self.args.compile:
                             # Decouple inference and loss calculations for improved compile performance
@@ -854,7 +859,8 @@ class BaseTrainer:
         return check_train_batch_size(
             model=self.model,
             imgsz=max_imgsz,
-            amp=torch.bfloat16 if self.args.amp == "bf16" else self.amp,
+            amp=self.amp_enabled,
+            amp_dtype=self.amp_dtype,
             batch=self.batch_size,
             max_num_obj=max_num_obj,
             dataset_size=dataset_size,
@@ -1199,6 +1205,9 @@ class BaseTrainer:
             LOGGER.info(f"\nValidating {model}...")
             self.validator.args.plots = self.args.plots
             self.validator.args.compile = False  # disable final val compile as too slow
+            self.validator.args.amp = (
+                False if not self.amp_enabled else "bf16" if self.amp_dtype == torch.bfloat16 else "fp16"
+            )
             self.metrics = self.validator(model=model)
             self.metrics.pop("fitness", None)
             self.epoch += 1  # log best metrics at step epochs+1, not overwriting last epoch

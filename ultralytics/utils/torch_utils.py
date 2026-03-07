@@ -169,15 +169,33 @@ def smart_inference_mode(mode=True):
     return decorate
 
 
-def autocast(enabled: bool | torch.dtype, device: str = "auto"):
+def resolve_amp_dtype(amp: bool | str) -> torch.dtype | None:
+    """Resolve a public AMP setting into an autocast dtype, or None when AMP is disabled."""
+    if amp is False:
+        return None
+    if amp is True:
+        return torch.float16
+    if isinstance(amp, str):
+        value = amp.lower()
+        if value == "fp16":
+            return torch.float16
+        if value == "bf16":
+            return torch.bfloat16
+        if value == "fp32":
+            return None
+    raise ValueError(f"amp={amp!r} is invalid; expected False, True, 'fp16', 'bf16', or 'fp32'.")
+
+
+def autocast(enabled: bool, device: str = "auto", dtype: torch.dtype | None = None):
     """Get the appropriate autocast context manager based on PyTorch version and AMP setting.
 
     This function returns a context manager for automatic mixed precision (AMP) training that is compatible with both
     older and newer versions of PyTorch. It handles the differences in the autocast API between PyTorch versions.
 
     Args:
-        enabled (bool | torch.dtype): Whether to enable AMP, or the autocast dtype to enable.
+        enabled (bool): Whether to enable automatic mixed precision.
         device (str, optional): Device type to use for autocast, e.g. "cuda" or "npu".
+        dtype (torch.dtype, optional): Autocast dtype. Defaults to torch.float16 for backward compatibility.
 
     Returns:
         (torch.amp.autocast): The appropriate autocast context manager.
@@ -192,30 +210,20 @@ def autocast(enabled: bool | torch.dtype, device: str = "auto"):
     """
     if device == "auto":
         device = "npu" if IS_ASCEND else "cuda"
-    dtype = enabled if isinstance(enabled, torch.dtype) else None
-    enabled = bool(enabled)
-    if dtype is torch.bfloat16 and device != "npu":
-        bf16_supported = device == "cuda" and TORCH_1_13
-        if bf16_supported:
-            bf16_supported = (
-                torch.cuda.is_bf16_supported(including_emulation=False)
-                if TORCH_2_4
-                else torch.cuda.is_bf16_supported()
-                and (bool(torch.version.hip) or torch.cuda.get_device_capability()[0] >= 8)
-            )
-        if not bf16_supported:
-            raise RuntimeError("bfloat16 autocast requires CUDA with native bfloat16 support and torch>=1.13")
-    kwargs = {"dtype": dtype} if dtype is not None else {}
-    if device == "npu":
-        import torch_npu
-
-        return torch_npu.npu.amp.autocast(enabled=enabled, **kwargs)
+    dtype = torch.float16 if dtype is None else dtype
+    if dtype not in {torch.float16, torch.bfloat16}:
+        raise ValueError(f"autocast dtype must be torch.float16 or torch.bfloat16, got {dtype}.")
     if TORCH_1_13:
         if device == "mps" and not TORCH_2_5:  # MPS autocast added in torch 2.5.0, errors on older versions
             device, enabled = "cpu", False
-        return torch.amp.autocast(device, enabled=enabled, **kwargs)
-    else:
-        return torch.cuda.amp.autocast(enabled) if not IS_ASCEND else torch.npu.amp.autocast(enabled)
+        return torch.amp.autocast(device, enabled=enabled, dtype=dtype)
+    if device == "npu":
+        return torch.npu.amp.autocast(enabled=enabled, dtype=dtype)
+    if TORCH_1_10:
+        return torch.cuda.amp.autocast(enabled=enabled, dtype=dtype)
+    if enabled and dtype != torch.float16:
+        raise RuntimeError("PyTorch <1.10 的 CUDA autocast 不支持 bfloat16，请使用 amp=fp16 或升级 PyTorch")
+    return torch.cuda.amp.autocast(enabled=enabled)
 
 
 @functools.lru_cache

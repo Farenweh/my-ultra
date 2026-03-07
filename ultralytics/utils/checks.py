@@ -974,7 +974,7 @@ def collect_system_info():
     return info_dict
 
 
-def check_amp(model):
+def check_amp(model, amp_dtype: torch.dtype = torch.float16):
     """Check the PyTorch Automatic Mixed Precision (AMP) functionality of a YOLO model.
 
     If the checks fail, it means there are anomalies with AMP on the system that may cause NaN losses or zero-mAP
@@ -1016,11 +1016,17 @@ def check_amp(model):
         """All close FP32 vs AMP results."""
         batch = [im] * 8
         imgsz = max(256, int(model.stride.max() * 4))  # max stride P5-32 and P6-64
-        a = m(batch, imgsz=imgsz, device=device, verbose=False)[0].boxes.data  # FP32 inference
-        with autocast(enabled=True, device=device.type):
-            b = m(batch, imgsz=imgsz, device=device, verbose=False)[0].boxes.data  # AMP inference
+        a = m(batch, imgsz=imgsz, device=device, amp=False, quantize=None, verbose=False)[0].boxes.data
+        with autocast(enabled=True, device=device.type, dtype=amp_dtype):
+            b = m(batch, imgsz=imgsz, device=device, amp=False, quantize=None, verbose=False)[0].boxes.data
         del m
-        return a.shape == b.shape and torch.allclose(a, b.float(), atol=0.5)  # close to 0.5 absolute tolerance
+        if amp_dtype == torch.bfloat16:
+            # BF16 has less mantissa precision than FP16, so boxes near the confidence threshold can flicker after NMS.
+            a, b = a[a[:, 4] >= 0.30], b[b[:, 4] >= 0.30]
+            atol = 2.0
+        else:
+            atol = 0.5
+        return a.shape == b.shape and torch.allclose(a, b.float(), atol=atol)  # absolute tolerance
 
     im = ASSETS / "bus.jpg"  # image to check
     LOGGER.info(f"{prefix}running Automatic Mixed Precision (AMP) checks...")
@@ -1254,14 +1260,6 @@ EMPTY_VRAM_CACHE = _parse_env_bool("EMPTY_VRAM_CACHE", False)
 VRAM_TARGET_ENV = os.getenv("VRAM_TARGET")
 VRAM_TARGET = _parse_vram_target(VRAM_TARGET_ENV)
 _validate_vram_target_config(VRAM_TARGET, EMPTY_VRAM_CACHE)
-
-_amp_dtype = os.getenv("AMP_DTYPE", "fp16")
-if _amp_dtype in {"float16", "fp16", "half", "FP16"}:
-    AMP_DTYPE = torch.float16
-elif _amp_dtype in {"bfloat16", "bf16", "BF16"}:
-    AMP_DTYPE = torch.bfloat16
-else:
-    raise ValueError(f"不受支持的 AMP_DTYPE {_amp_dtype}，可选值为 float16/fp16/half/FP16 或 bfloat16/bf16/BF16")
 
 if IS_ASCEND:
     # NOTE: benchmarked on atlas a800 t2, python3.11, pytorch 2.7.1, cann 8.5.0, b32x8, yolo11l, sgd

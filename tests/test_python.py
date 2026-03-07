@@ -5,8 +5,6 @@ import csv
 import os
 import platform
 import shutil
-import subprocess
-import sys
 import tarfile
 import urllib
 import zipfile
@@ -46,40 +44,6 @@ from ultralytics.utils import (
 )
 from ultralytics.utils.downloads import download, safe_download
 from ultralytics.utils.torch_utils import TORCH_1_10, TORCH_1_11, TORCH_1_13
-
-
-@pytest.mark.parametrize(
-    ("value", "expected"), [(None, "torch.float16"), ("fp16", "torch.float16"), ("bf16", "torch.bfloat16")]
-)
-def test_amp_dtype_environment_selection(value, expected):
-    """AMP_DTYPE未设置时默认FP16，并保留显式FP16/BF16选择。"""
-    env = os.environ.copy()
-    if value is None:
-        env.pop("AMP_DTYPE", None)
-    else:
-        env["AMP_DTYPE"] = value
-    result = subprocess.run(
-        [sys.executable, "-c", "from ultralytics.utils.checks import AMP_DTYPE; print(AMP_DTYPE)"],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    assert result.stdout.splitlines()[-1] == expected
-
-
-def test_amp_dtype_rejects_invalid_environment_value():
-    """AMP_DTYPE非法值应在导入配置时明确失败。"""
-    env = os.environ.copy()
-    env["AMP_DTYPE"] = "invalid"
-    result = subprocess.run(
-        [sys.executable, "-c", "from ultralytics.utils.checks import AMP_DTYPE"],
-        capture_output=True,
-        text=True,
-        env=env,
-    )
-    assert result.returncode != 0
-    assert "不受支持的 AMP_DTYPE invalid" in result.stderr
 
 
 def test_dataloader_caps_workers_to_batches():
@@ -293,6 +257,76 @@ def test_restricted_load_criterion(tmp_path):
     model.criterion = model.init_criterion()
     torch.save({"model": model}, tmp_path / "legacy.pt")
     assert torch_safe_load(tmp_path / "legacy.pt", safe_only=True)[0]["model"].criterion is not None
+
+
+@pytest.mark.parametrize(("backend", "torch_1_10"), (("cuda", True), ("npu", False)))
+def test_legacy_autocast_forwards_amp_dtype(monkeypatch, backend, torch_1_10):
+    """Test legacy CUDA and NPU autocast paths receive the configured AMP dtype when supported."""
+    from types import SimpleNamespace
+
+    from ultralytics.utils import torch_utils
+
+    calls = []
+
+    def legacy_autocast(**kwargs):
+        calls.append(kwargs)
+        return "context"
+
+    monkeypatch.setattr(torch_utils, "TORCH_1_13", False)
+    monkeypatch.setattr(torch_utils, "TORCH_1_10", torch_1_10)
+    monkeypatch.setattr(torch_utils, "IS_ASCEND", backend == "npu")
+    monkeypatch.setattr(
+        torch_utils.torch, backend, SimpleNamespace(amp=SimpleNamespace(autocast=legacy_autocast)), raising=False
+    )
+
+    assert torch_utils.autocast(enabled=True, dtype=torch.bfloat16) == "context"
+    assert calls == [{"enabled": True, "dtype": torch.bfloat16}]
+
+
+def test_torch_1_8_cuda_autocast_uses_supported_signature(monkeypatch):
+    """Test torch 1.8 CUDA autocast receives no unsupported dtype keyword."""
+    from ultralytics.utils import torch_utils
+
+    calls = []
+
+    def legacy_autocast(enabled=True):
+        calls.append(enabled)
+        return "context"
+
+    monkeypatch.setattr(torch_utils, "TORCH_1_13", False)
+    monkeypatch.setattr(torch_utils, "TORCH_1_10", False)
+    monkeypatch.setattr(torch_utils, "IS_ASCEND", False)
+    monkeypatch.setattr(torch_utils.torch.cuda.amp, "autocast", legacy_autocast)
+
+    assert torch_utils.autocast(enabled=True, dtype=torch.float16) == "context"
+    assert calls == [True]
+
+
+def test_torch_1_8_cuda_autocast_rejects_bfloat16(monkeypatch):
+    """Test torch 1.8 fails clearly instead of silently running unscaled FP16 for a BF16 request."""
+    from ultralytics.utils import torch_utils
+
+    monkeypatch.setattr(torch_utils, "TORCH_1_13", False)
+    monkeypatch.setattr(torch_utils, "TORCH_1_10", False)
+    monkeypatch.setattr(torch_utils, "IS_ASCEND", False)
+    with pytest.raises(RuntimeError, match="不支持 bfloat16"):
+        torch_utils.autocast(enabled=True, dtype=torch.bfloat16)
+
+
+def test_modern_autocast_forwards_requested_dtype(monkeypatch):
+    """现代 autocast API 应显式收到设备、开关和用户选择的 dtype。"""
+    from ultralytics.utils import torch_utils
+
+    calls = []
+    monkeypatch.setattr(torch_utils, "TORCH_1_13", True)
+    monkeypatch.setattr(
+        torch_utils.torch,
+        "amp",
+        type("FakeAmp", (), {"autocast": staticmethod(lambda *args, **kwargs: calls.append((args, kwargs)) or "ctx")}),
+    )
+
+    assert torch_utils.autocast(True, device="cuda", dtype=torch.bfloat16) == "ctx"
+    assert calls == [(("cuda",), {"enabled": True, "dtype": torch.bfloat16})]
 
 
 def test_model_forward():

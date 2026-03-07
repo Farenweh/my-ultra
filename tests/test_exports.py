@@ -97,7 +97,7 @@ def test_onnx_int8_quantize_excludes_non_weighted_ops(monkeypatch):
 
 
 def test_quantize_canonicalization():
-    """Quantize accepts 8/16/32 (int or str) and w-notation, canonicalizing to the int form (unset stays None)."""
+    """Quantize accepts runtime BF16 plus export schemes and canonicalizes case-insensitively."""
     for value, expected in [
         (8, 8),
         (16, 16),
@@ -109,6 +109,8 @@ def test_quantize_canonicalization():
         ("W8A8", 8),
         ("fp16", 16),
         ("Fp16", 16),
+        ("bf16", "bf16"),
+        ("BF16", "bf16"),
         ("w16a16", 16),
         ("fp32", 32),
         ("fP32", 32),
@@ -117,12 +119,52 @@ def test_quantize_canonicalization():
         ("w8a32", "w8a32"),
         ("W8A32", "w8a32"),
     ]:
-        assert get_cfg(overrides={"quantize": value}).quantize == expected
+        assert get_cfg(overrides={"mode": "export", "quantize": value}).quantize == expected
     assert get_cfg().quantize is None  # unset default is FP32
     with pytest.raises(ValueError, match="quantize"):
-        get_cfg(overrides={"quantize": "x4"})
+        get_cfg(overrides={"mode": "export", "quantize": "x4"})
     with pytest.raises(ValueError, match="quantize"):
-        get_cfg(overrides={"quantize": "a8w8"})
+        get_cfg(overrides={"mode": "export", "quantize": "a8w8"})
+
+
+@pytest.mark.parametrize(("value", "expected"), [(False, False), (True, True), ("FP16", "fp16"), ("Bf16", "bf16")])
+def test_amp_precision_canonicalization(value, expected):
+    """AMP accepts booleans and case-insensitive FP16/BF16 strings."""
+    assert get_cfg(overrides={"amp": value}).amp == expected
+
+
+@pytest.mark.parametrize("value", (None, 0, 16, "true", "fp32", "invalid"))
+def test_amp_precision_rejects_invalid_values(value):
+    """AMP rejects values outside its four-value public contract."""
+    with pytest.raises((TypeError, ValueError), match="amp"):
+        get_cfg(overrides={"amp": value})
+
+
+@pytest.mark.parametrize("mode", ("train", "val", "predict", "track"))
+@pytest.mark.parametrize("amp", (True, "fp16", "bf16"))
+def test_runtime_amp_and_quantize_are_mutually_exclusive(mode, amp):
+    """All runtime entry modes reject manual precision while AMP is enabled."""
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        get_cfg(overrides={"mode": mode, "amp": amp, "quantize": "bf16"})
+
+
+@pytest.mark.parametrize("mode", ("export", "benchmark"))
+def test_export_and_benchmark_exempt_amp_quantize_conflict(mode):
+    """Export and benchmark keep independent precision behavior."""
+    cfg = get_cfg(overrides={"mode": mode, "amp": True, "quantize": "bf16"})
+    assert cfg.amp is True and cfg.quantize == "bf16"
+
+
+def test_train_rejects_export_only_quantization():
+    """Training rejects INT8 and mixed weight/activation export requests before setup."""
+    with pytest.raises(ValueError, match="not supported during training validation"):
+        get_cfg(overrides={"mode": "train", "amp": False, "quantize": 8})
+
+
+def test_bf16_export_is_explicitly_rejected():
+    """BF16 manual precision is runtime-only and must not leak into exporters."""
+    with pytest.raises(ValueError, match="only supported for native PyTorch"):
+        validate_args("onnx", SimpleNamespace(quantize="bf16"), ["batch"])
 
 
 def test_quantize_deprecation():

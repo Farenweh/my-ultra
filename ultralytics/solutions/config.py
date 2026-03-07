@@ -48,6 +48,7 @@ class SolutionConfig:
         conf (float): Confidence threshold for keeping predictions.
         device (str, optional): Device to run inference on (e.g., 'cpu', '0' for CUDA GPU).
         max_det (int): Maximum number of detections allowed per video frame.
+        amp (bool | str): AMP inference precision; manual quantize requires False.
         quantize (int | str | None): Inference precision, e.g. 16 (FP16). Only PyTorch and TorchScript models compute in
             it; elsewhere the artifact and runtime decide, though 16 rounds OpenVINO and Triton inputs and returns
             Triton outputs as FP16. Replaces the deprecated half flag.
@@ -95,6 +96,7 @@ class SolutionConfig:
     conf: float = 0.25
     device: str | None = None
     max_det: int = 300
+    amp: bool | str = True
     quantize: int | str | None = None
     imgsz: int = 640
     tracker: str = "botsort.yaml"
