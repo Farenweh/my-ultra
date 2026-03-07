@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -130,13 +131,27 @@ class HungarianMatcher(nn.Module):
         # Set invalid values (NaNs and infinities) to 0
         C[C.isnan() | C.isinf()] = 0.0
 
-        C = C.cpu()
-        indices = [linear_sum_assignment(c[:, :n]) for c, n in zip(C, gt_groups)]
-        gt_groups = torch.as_tensor([0, *gt_groups[:-1]]).cumsum_(0)  # (idx for queries, idx for gt)
-        return [
-            (torch.tensor(i, dtype=torch.long), torch.tensor(j, dtype=torch.long) + gt_groups[k])
-            for k, (i, j) in enumerate(indices)
-        ]
+        # 代价矩阵复用上游逐图计算，仅合并 CPU 匹配索引的张量构造。
+        C_np = C.cpu().numpy()
+        indices = [linear_sum_assignment(c[:, :n]) for c, n in zip(C_np, gt_groups)]
+        gt_offsets_np = np.zeros(bs, dtype=np.int64)
+        if bs > 1:
+            gt_offsets_np[1:] = np.cumsum(gt_groups[:-1], dtype=np.int64)
+        match_lengths = [len(src_idx) for src_idx, _ in indices]
+        total_matches = sum(match_lengths)
+        if total_matches == 0:
+            return [(torch.empty(0, dtype=torch.long), torch.empty(0, dtype=torch.long)) for _ in range(bs)]
+
+        src_np = np.concatenate([src_idx.astype(np.int64, copy=False) for src_idx, _ in indices], axis=0)
+        dst_np = np.concatenate(
+            [(dst_idx.astype(np.int64, copy=False) + gt_offsets_np[bi]) for bi, (_, dst_idx) in enumerate(indices)],
+            axis=0,
+        )
+        src_all = torch.from_numpy(src_np)
+        dst_all = torch.from_numpy(dst_np)
+        src_split = src_all.split(match_lengths)
+        dst_split = dst_all.split(match_lengths)
+        return list(zip(src_split, dst_split))
 
 
 def get_cdn_group(
@@ -244,8 +259,8 @@ def get_cdn_group(
 
     num_dn = int(max_nums * 2 * num_group)  # total denoising queries
     dn_cls_embed = class_embed[dn_cls]  # bs*num * 2 * num_group, 256
-    padding_cls = torch.zeros(bs, num_dn, dn_cls_embed.shape[-1], device=gt_cls.device)
-    padding_bbox = torch.zeros(bs, num_dn, 4, device=gt_bbox.device)
+    padding_cls = torch.zeros(bs, num_dn, dn_cls_embed.shape[-1], device=gt_cls.device, dtype=dn_cls_embed.dtype)
+    padding_bbox = torch.zeros(bs, num_dn, 4, device=gt_bbox.device, dtype=dn_bbox.dtype)
 
     map_indices = torch.cat([torch.tensor(range(num), dtype=torch.long) for num in gt_groups])
     pos_idx = torch.stack([map_indices + max_nums * i for i in range(num_group)], dim=0)
@@ -255,7 +270,7 @@ def get_cdn_group(
     padding_bbox[(dn_b_idx, map_indices)] = dn_bbox
 
     tgt_size = num_dn + num_queries
-    attn_mask = torch.zeros([tgt_size, tgt_size], dtype=torch.bool)
+    attn_mask = torch.zeros([tgt_size, tgt_size], dtype=torch.bool, device=class_embed.device)
     # Match query cannot see the reconstruct
     attn_mask[num_dn:, :num_dn] = True
     # Reconstruct cannot see each other
@@ -277,6 +292,6 @@ def get_cdn_group(
     return (
         padding_cls.to(class_embed.device),
         padding_bbox.to(class_embed.device),
-        attn_mask.to(class_embed.device),
+        attn_mask,
         dn_meta,
     )
