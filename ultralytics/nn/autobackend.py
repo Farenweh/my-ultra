@@ -198,6 +198,7 @@ class AutoBackend(nn.Module):
         verbose: bool = True,
         channels_last: bool | None = None,
         end2end: bool | None = None,
+        bf16: bool = False,
     ):
         """Initialize the AutoBackend for inference.
 
@@ -212,6 +213,7 @@ class AutoBackend(nn.Module):
             verbose (bool): Enable verbose logging.
             channels_last (bool, optional): Use channels-last memory format, or auto-enable it on supported x86 CPUs.
             end2end (bool, optional): Select the native detection head before fusion; None preserves its current mode.
+            bf16 (bool): Enable whole-model BF16 inference for native PyTorch models.
         """
         super().__init__()
         # Determine model format from path/URL
@@ -225,7 +227,13 @@ class AutoBackend(nn.Module):
         ):
             model = deepcopy(model)  # retained backends require normal tensors for fusion and later mutation
 
-        # Check if format supports FP16; PyTorch CPU FP16 is slow and breaks some models (e.g. RT-DETR returns no boxes)
+        if bf16 and format != "pt":
+            raise ValueError(
+                f"quantize=bf16 whole-model inference supports only native PyTorch '.pt' or in-memory models, "
+                f"but got format='{format}'."
+            )
+
+        # 保留上游 CPU FP16 回退，避免原生模型出现空检测结果。
         fp16 &= format in {"onnx", "openvino", "engine"} or (format in {"pt", "torchscript"} and str(device) != "cpu")
 
         # Set device
@@ -249,6 +257,7 @@ class AutoBackend(nn.Module):
                 f"See https://docs.ultralytics.com/modes/predict for help."
             )
         if format == "pt":
+            backend_kwargs["bf16"] = bf16
             backend_kwargs["fuse"] = fuse
             backend_kwargs["verbose"] = verbose
             backend_kwargs["end2end"] = end2end
@@ -336,8 +345,8 @@ class AutoBackend(nn.Module):
             return [torch.cat(t) for t in zip(*ys)] if isinstance(ys[0], list) else torch.cat(ys)
         if self.nhwc:
             im = im.permute(0, 2, 3, 1)  # torch BCHW to numpy BHWC shape(1,320,192,3)
-        if self.backend.fp16 and im.dtype != torch.float16:
-            im = im.half()
+        if im.is_floating_point() and im.dtype != self.backend.dtype:
+            im = im.to(self.backend.dtype)
         if (pad := self.batch - im.shape[0] if fixed else 0) > 0:  # static-batch exports reject short batches
             im = torch.cat((im, im.new_zeros(pad, *im.shape[1:])))
 
@@ -388,7 +397,7 @@ class AutoBackend(nn.Module):
             im = (
                 im
                 if im is not None
-                else torch.empty(*imgsz, dtype=torch.half if self.fp16 else torch.float, device=self.device)
+                else torch.empty(*imgsz, dtype=self.dtype, device=self.device)
             )
             for _ in range(2 if self.format == "torchscript" else 1):
                 self.forward(im)  # warmup model

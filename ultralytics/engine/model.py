@@ -31,7 +31,7 @@ from ultralytics.utils import (
 from ultralytics.utils.torch_utils import unwrap_model
 
 # Predictor arguments applied at model or tracker setup, so changing one rebuilds the predictor and its trackers
-PREDICTOR_SETUP_KEYS = ("device", "dnn", "data", "nms", "compile", "channels_last", "quantize", "tracker")
+PREDICTOR_SETUP_KEYS = ("device", "dnn", "data", "nms", "compile", "channels_last", "quantize", "tracker", "amp")
 
 
 class Model(torch.nn.Module):

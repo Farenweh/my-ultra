@@ -1019,8 +1019,8 @@ def collect_system_info():
     return info_dict
 
 
-def check_amp(model):
-    """Check the PyTorch Automatic Mixed Precision (AMP) functionality on a YOLO model's device.
+def check_amp(model, amp_dtype: torch.dtype = torch.float16):
+    """Check the PyTorch Automatic Mixed Precision (AMP) functionality of a YOLO model.
 
     An untrained YOLO26n built from its YAML runs one FP32 forward pass in train mode on a random batch, and every
     Conv2d and Attention layer is recomputed under AMP from its own FP32 input. Comparing layer by layer keeps the
@@ -1030,6 +1030,7 @@ def check_amp(model):
 
     Args:
         model (torch.nn.Module): A YOLO model instance, whose device is checked.
+        amp_dtype (torch.dtype): 检查使用的 AMP 精度，默认为 FP16。
 
     Returns:
         (bool): Returns True if the AMP functionality works correctly on the model's device, else False.
@@ -1066,7 +1067,7 @@ def check_amp(model):
 
     def compare_amp(layer, inputs, output):
         """Recompute a layer under AMP from its FP32 input and record whether it matches the FP32 output."""
-        with autocast(enabled=True, device=device.type):
+        with autocast(enabled=True, device=device.type, dtype=amp_dtype):
             y = layer.forward(inputs[0])  # forward() skips this layer's own hook
         close.append(bool((output - y.float()).norm() <= 0.05 * output.norm()))  # False for NaN or inf
 
@@ -1295,14 +1296,6 @@ EMPTY_VRAM_CACHE = _parse_env_bool("EMPTY_VRAM_CACHE", False)
 VRAM_TARGET_ENV = os.getenv("VRAM_TARGET")
 VRAM_TARGET = _parse_vram_target(VRAM_TARGET_ENV)
 _validate_vram_target_config(VRAM_TARGET, EMPTY_VRAM_CACHE)
-
-_amp_dtype = os.getenv("AMP_DTYPE", "fp16")
-if _amp_dtype in {"float16", "fp16", "half", "FP16"}:
-    AMP_DTYPE = torch.float16
-elif _amp_dtype in {"bfloat16", "bf16", "BF16"}:
-    AMP_DTYPE = torch.bfloat16
-else:
-    raise ValueError(f"不受支持的 AMP_DTYPE {_amp_dtype}，可选值为 float16/fp16/half/FP16 或 bfloat16/bf16/BF16")
 
 if IS_ASCEND:
     # NOTE: benchmarked on atlas a800 t2, python3.11, pytorch 2.7.1, cann 8.5.0, b32x8, yolo11l, sgd
