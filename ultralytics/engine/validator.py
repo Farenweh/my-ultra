@@ -55,6 +55,8 @@ from ultralytics.utils.torch_utils import (
     smart_inference_mode,
     torch_distributed_zero_first,
     unwrap_model,
+    resolve_amp_dtype,
+    is_qat,
 )
 
 
@@ -146,6 +148,9 @@ class BaseValidator:
 
         self.plots = {}
         self.callbacks = _callbacks or callbacks.get_default_callbacks()
+        self.amp_enabled = False
+        self.amp_dtype = torch.float16
+        self.input_dtype = torch.float32
 
     @smart_inference_mode()
     def __call__(self, trainer=None, model=None, **kwargs):
@@ -162,14 +167,13 @@ class BaseValidator:
         self.training = trainer is not None
         model = self.get_model(model, trainer, **kwargs)
         augment = self.args.augment and (not self.training)
+        owns_model = False
         if self.training:
             if hasattr(model, "end2end"):
                 model.end2end = self.args.nms is False
             self.device = trainer.device
             self.data = trainer.data
-            # Keep training validation read-only: inputs may be fp16, but EMA/model weights stay fp32 under autocast.
-            self.args.quantize = 16 if (self.device.type != "cpu" and trainer.amp) else None
-            model = model.float()
+            model, owns_model = self._prepare_training_model(trainer, model)
             self.loss = {k: torch.zeros_like(v) for k, v in trainer.loss_items.items()}
             self.args.plots &= trainer.stopper.possible_stop or (trainer.epoch == trainer.epochs - 1)
             model.eval()
@@ -193,11 +197,22 @@ class BaseValidator:
                 fp16=self.args.quantize == 16,
                 channels_last=self.args.channels_last,
                 end2end=self.args.nms is False,
+                bf16=self.args.quantize == "bf16",
             )
             self.device = model.device  # update device
-            self.args.quantize = 16 if model.fp16 else None  # record actual inference precision
+            self.input_dtype = model.dtype
             stride, fmt = model.stride, model.format
             pt = fmt == "pt"
+            if pt and self.args.quantize not in {None, 16, "bf16", 32} and not (
+                self.args.quantize == 8 and is_qat(model.model)
+            ):
+                raise ValueError(
+                    f"quantize={self.args.quantize!r} is not a native PyTorch runtime precision; "
+                    "use 16, 'bf16', 32, or an already-quantized exported backend."
+                )
+            requested_amp_dtype = resolve_amp_dtype(self.args.amp)
+            self.amp_enabled = requested_amp_dtype is not None and pt
+            self.amp_dtype = requested_amp_dtype or torch.float16
             if augment and not model.base_model:
                 LOGGER.warning(f"'augment' is not supported by this model (format='{fmt}'), ignoring.")
                 augment = False
@@ -233,7 +248,8 @@ class BaseValidator:
             model.eval()
             if self.args.compile:
                 model = attempt_compile(model, device=self.device, mode=self.args.compile)
-            model.warmup(imgsz=(1 if pt else self.args.batch, self.data["channels"], imgsz, imgsz))  # warmup
+            with autocast(self.amp_enabled, device=self.device.type, dtype=self.amp_dtype):
+                model.warmup(imgsz=(1 if pt else self.args.batch, self.data["channels"], imgsz, imgsz))  # warmup
 
         self.run_callbacks("on_val_start")
         dt = (
@@ -252,7 +268,7 @@ class BaseValidator:
             with dt[0]:
                 batch = self.preprocess(batch)
 
-            with autocast(self.training and self.args.quantize == 16, device=self.device.type):
+            with autocast(self.amp_enabled, device=self.device.type, dtype=self.amp_dtype):
                 # Inference
                 with dt[1]:
                     preds = model(batch["img"], augment=augment)
@@ -283,6 +299,13 @@ class BaseValidator:
             self.print_results()
             self.run_callbacks("on_val_end")
 
+        if owns_model:
+            # Drop the per-epoch FP16/BF16 validation copy before returning to training.
+            del model
+            device_backend = get_torch_device_backend(self.device)
+            if hasattr(device_backend, "empty_cache"):
+                device_backend.empty_cache()
+
         if self.training:
             loss = self._reduce_training_loss(trainer)
             if loss is None:
@@ -305,6 +328,20 @@ class BaseValidator:
             if self.args.plots or self.args.save_json:
                 LOGGER.info(f"Results saved to {colorstr('bold', self.save_dir)}")
             return stats
+
+    def _prepare_training_model(self, trainer, source_model=None) -> tuple[torch.nn.Module, bool]:
+        """Select a read-only FP32 training model or create an owned manual-precision validation copy."""
+        self.amp_enabled = getattr(trainer, "amp_enabled", bool(trainer.amp))
+        self.amp_dtype = getattr(trainer, "amp_dtype", torch.float16) or torch.float16
+        source_model = source_model if source_model is not None else trainer.ema.ema or trainer.model
+        if trainer.args.compile and hasattr(source_model, "_orig_mod"):
+            source_model = source_model._orig_mod  # validate non-compiled original model to avoid issues
+        if self.args.quantize in {16, "bf16"}:
+            # Manual whole-model precision must never mutate the live EMA/model used by training and checkpointing.
+            self.input_dtype = torch.float16 if self.args.quantize == 16 else torch.bfloat16
+            return deepcopy(unwrap_model(source_model)).to(dtype=self.input_dtype), True
+        self.input_dtype = torch.float32
+        return source_model.float(), False
 
     def _reduce_training_loss(self, trainer) -> dict[str, torch.Tensor] | None:
         """Return the global mean validation loss when distributed ranks own unequal batch counts."""

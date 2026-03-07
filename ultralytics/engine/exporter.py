@@ -463,6 +463,11 @@ def validate_args(format, passed_args, valid_args):
     custom = {"batch": 1, "data": None, "device": None}  # exporter defaults
     default_args = get_cfg(DEFAULT_CFG, custom)
     if passed_args.quantize is not None:  # 32/None (FP32) is universal except FP32_UNSUPPORTED_FORMATS
+        if passed_args.quantize == "bf16":
+            raise ValueError(
+                "quantize=bf16 is only supported for native PyTorch '.pt' or in-memory runtime inference; "
+                "it is not an export precision."
+            )
         options = [label for label, formats in QUANTIZE_PRECISIONS if format in formats]
         if format not in FP32_UNSUPPORTED_FORMATS:
             options.append("32 or None (FP32)")
@@ -993,7 +998,7 @@ class Exporter:
                 f"work. Use export 'imgsz={max(self.imgsz)}' if val is required."
             )
             imgsz = self.imgsz[0] if square else str(self.imgsz)[1:-1].replace(" ", "")
-            q = "quantize=16" if self.args.quantize == 16 else ""  # FP16 inference flag for the val/predict hint
+            q = "amp=False quantize=16" if self.args.quantize == 16 else ""  # 手动指定推理精度时关闭 AMP
             d = f"data={data}" if check_data_portable(data) else ""  # omit host paths that would not run here
             inference_commands = (
                 f"\nPredict:         yolo predict task={model.task} model={f} imgsz={imgsz} {q}"

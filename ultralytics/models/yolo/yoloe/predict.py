@@ -79,7 +79,7 @@ class YOLOEVPDetectPredictor(DetectionPredictor):
                 self._process_single_image(dst_shape, src, category[i], bboxes[i]) for i, src in enumerate(src_shapes)
             ]
         prompts = torch.nn.utils.rnn.pad_sequence(visuals, batch_first=True).to(self.device)  # (B, N, H, W)
-        return prompts.half() if self.model.fp16 else prompts.float()
+        return prompts.to(dtype=self.model.dtype)
 
     def _process_single_image(self, dst_shape, src_shape, category, bboxes=None, masks=None):
         """Resize one image's prompts and generate its visuals."""

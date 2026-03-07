@@ -538,7 +538,7 @@ class Model(torch.nn.Module):
         prompts = kwargs.pop("prompts", None)  # for SAM-type models
         args = {**self.overrides, **custom, **kwargs}  # highest priority args on the right
 
-        setup_keys = ("device", "dnn", "data", "nms", "compile", "channels_last", "quantize")  # applied at model setup
+        setup_keys = ("device", "dnn", "data", "nms", "compile", "channels_last", "quantize", "amp")
         if (
             not self.predictor
             or any(getattr(self.predictor.args, k) != args[k] for k in ("device", "channels_last", "nms") if k in args)
@@ -549,12 +549,16 @@ class Model(torch.nn.Module):
         else:  # only update args if predictor is already setup
             save_keys = ("project", "name", "save_dir", "exist_ok")
             prev_save_args = tuple(getattr(self.predictor.args, k, None) for k in save_keys)
+            previous_setup = tuple(getattr(self.predictor.args, k, None) for k in setup_keys)
             base_args = {
                 **DEFAULT_CFG_DICT,
                 **self.overrides,
                 **{k: getattr(self.predictor.args, k) for k in setup_keys},
             }
             self.predictor.args = get_cfg(base_args, {**custom, **kwargs})
+            current_setup = tuple(getattr(self.predictor.args, k, None) for k in setup_keys)
+            if current_setup != previous_setup:
+                self.predictor.setup_model(model=self.model, verbose=is_cli)
             if self.predictor.args.show:
                 self.predictor.args.show = checks.check_imshow(warn=True)
             if prev_save_args != tuple(getattr(self.predictor.args, k, None) for k in save_keys):

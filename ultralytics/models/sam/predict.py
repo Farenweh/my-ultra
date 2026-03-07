@@ -25,7 +25,7 @@ from ultralytics.engine.results import Results
 from ultralytics.utils import DEFAULT_CFG, LOGGER, ops
 from ultralytics.utils.checks import check_imgsz
 from ultralytics.utils.metrics import box_iou, mask_iou
-from ultralytics.utils.torch_utils import select_device, smart_inference_mode
+from ultralytics.utils.torch_utils import autocast, resolve_amp_dtype, select_device, smart_inference_mode
 
 from .amg import (
     batch_iterator,
@@ -141,7 +141,7 @@ class Predictor(BasePredictor):
         im = im.to(self.device)
         if not_tensor:
             im = (im - self.mean) / self.std
-        im = im.half() if self.model.fp16 else im.float()
+        im = im.to(dtype=self.torch_dtype)
         return im
 
     def pre_transform(self, im):
@@ -487,7 +487,14 @@ class Predictor(BasePredictor):
             model = self.get_model()
         # Move model to device first, then cast dtype, then set eval so any eval-time caches are created on-device.
         model = model.to(device)
-        model = model.half() if self.args.quantize == 16 else model.float()
+        model_dtype = (
+            torch.float16
+            if self.args.quantize == 16
+            else torch.bfloat16
+            if self.args.quantize == "bf16"
+            else torch.float32
+        )
+        model = model.to(dtype=model_dtype)
         model.eval()
         self.model = model
         self.device = device
@@ -499,8 +506,13 @@ class Predictor(BasePredictor):
         self.model.base_model = False  # SAMModel is no Ultralytics BaseModel and honors neither `augment` nor `embed`
         self.model.stride = 32
         self.model.fp16 = self.args.quantize == 16
+        self.model.bf16 = self.args.quantize == "bf16"
+        self.model.dtype = model_dtype
+        requested_amp_dtype = resolve_amp_dtype(self.args.amp)
+        self.amp_enabled = requested_amp_dtype is not None
+        self.amp_dtype = requested_amp_dtype or torch.float16
         self.done_warmup = True
-        self.torch_dtype = torch.float16 if self.model.fp16 else torch.float32
+        self.torch_dtype = model_dtype
 
     def get_model(self):
         """Retrieve or build the Segment Anything Model (SAM) for image segmentation tasks."""
@@ -593,7 +605,8 @@ class Predictor(BasePredictor):
         assert len(self.dataset) == 1, "`set_image` only supports setting one image!"
         for batch in self.dataset:
             im = self.preprocess(batch[1])
-            self.features = self.get_im_features(im)
+            with autocast(self.amp_enabled, device=self.device.type, dtype=self.amp_dtype):
+                self.features = self.get_im_features(im)
             break
 
     def setup_source(self, source):
