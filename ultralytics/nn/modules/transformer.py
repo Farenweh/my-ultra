@@ -508,6 +508,8 @@ class MSDeformAttn(nn.Module):
         self.attention_weights = nn.Linear(d_model, n_heads * n_levels * n_points)
         self.value_proj = nn.Linear(d_model, d_model)
         self.output_proj = nn.Linear(d_model, d_model)
+        self._cached_value_shapes = None
+        self._cached_offset_normalizer = None
 
         self._reset_parameters()
 
@@ -573,8 +575,18 @@ class MSDeformAttn(nn.Module):
         attention_weights = F.softmax(attention_weights, -1)
         num_points = refer_bbox.shape[-1]
         if num_points == 2:
-            offset_normalizer = torch.as_tensor(value_shapes, dtype=query.dtype, device=query.device).flip(-1)
-            offset_normalizer = offset_normalizer[:, None, :].expand(-1, self.n_points, -1).reshape(n_total_points, 2)
+            value_shapes_tuple = tuple((int(h), int(w)) for h, w in value_shapes)
+            if (
+                self._cached_value_shapes != value_shapes_tuple
+                or self._cached_offset_normalizer is None
+                or self._cached_offset_normalizer.dtype != query.dtype
+                or self._cached_offset_normalizer.device != query.device
+            ):
+                self._cached_value_shapes = value_shapes_tuple
+                self._cached_offset_normalizer = torch.as_tensor(
+                    value_shapes_tuple, dtype=query.dtype, device=query.device
+                ).flip(-1)[:, None, :].expand(-1, self.n_points, -1).reshape(n_total_points, 2)
+            offset_normalizer = self._cached_offset_normalizer
             sampling_locations = refer_bbox[:, :, None, :, :] + sampling_offsets / offset_normalizer
         elif num_points == 4:
             sampling_locations = (
