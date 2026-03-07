@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import itertools
 import os
+import subprocess
+import sys
 import types
+
+import pytest
 
 import ultralytics.utils.torch_utils as torch_utils
 
@@ -23,6 +27,32 @@ def test_select_device_npu_list_uses_visible_device_mapping(monkeypatch):
 
     assert os.environ["ASCEND_RT_VISIBLE_DEVICES"] == "1"
     assert str(device) == "npu:0"
+
+
+@pytest.mark.skipif(
+    not hasattr(torch_utils.torch, "npu") or not torch_utils.torch.npu.is_available(),
+    reason="NPU is not available",
+)
+def test_nn_modules_import_does_not_lock_visible_devices():
+    script = """
+import os
+import torch
+import ultralytics.nn.modules
+
+os.environ["ASCEND_RT_VISIBLE_DEVICES"] = "1"
+x = torch.ones(1, device="npu:0")
+print(x.cpu().item())
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=os.getcwd(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "1.0" in result.stdout
 
 
 class FakeStore:

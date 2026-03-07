@@ -8,8 +8,102 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.nn.init import uniform_
+from ultralytics.utils import LOGGER
+from ultralytics.utils.checks import IS_ASCEND
 
 __all__ = "inverse_sigmoid", "multi_scale_deformable_attn_pytorch"
+
+MultiScaleDeformableAttnFunction = None
+_MSDA_IMPORT_ATTEMPTED = False
+_MSDA_FASTPATH_WARNING_EMITTED = False
+
+
+def _get_msda_fastpath_function():
+    """Lazy-load MMCV's Ascend MSDA op after device visibility has been configured."""
+    global MultiScaleDeformableAttnFunction, _MSDA_IMPORT_ATTEMPTED
+    if not _MSDA_IMPORT_ATTEMPTED:
+        _MSDA_IMPORT_ATTEMPTED = True
+        try:
+            from mmcv.ops.multi_scale_deform_attn import MultiScaleDeformableAttnFunction as msda_function
+        except Exception:
+            msda_function = None
+        MultiScaleDeformableAttnFunction = msda_function
+    return MultiScaleDeformableAttnFunction
+
+
+def _get_msda_fastpath_unavailable_reason(
+    value: torch.Tensor, embed_dims: int, num_queries: int, num_points: int
+) -> str | None:
+    """Return why the Ascend MSDA fast path is unavailable, or None when supported."""
+    if not IS_ASCEND or value.device.type != "npu":
+        return None
+    if value.dtype not in (torch.float16, torch.float32):
+        return f"dtype={value.dtype} 不受支持"
+    if not 32 <= embed_dims <= 256:
+        return f"embed_dims={embed_dims} 超出 [32, 256]"
+    if embed_dims % 8 != 0:
+        return f"embed_dims={embed_dims} 不能被 8 整除"
+    if num_queries < 32:
+        return f"num_queries={num_queries} 小于 32"
+    if not 4 <= num_points <= 8:
+        return f"num_points={num_points} 超出 [4, 8]"
+    return None
+
+
+def _warn_msda_fastpath_unavailable(reason: str):
+    """Warn once when Ascend MSDA fast path cannot be used."""
+    global _MSDA_FASTPATH_WARNING_EMITTED
+    if not _MSDA_FASTPATH_WARNING_EMITTED:
+        LOGGER.warning(f"Ascend MSDA fastpath 不可用（{reason}），将回退到 PyTorch 实现；后续不再重复提示。")
+        _MSDA_FASTPATH_WARNING_EMITTED = True
+
+
+def _raise_if_ascend_bf16_grid_sample(value: torch.Tensor, sampling_locations: torch.Tensor):
+    """Reject Ascend BF16 fallback before calling grid_sample."""
+    if (
+        IS_ASCEND
+        and value.device.type == "npu"
+        and (value.dtype == torch.bfloat16 or sampling_locations.dtype == torch.bfloat16)
+    ):
+        raise RuntimeError(
+            "Ascend NPU 上 multi_scale_deformable_attn_pytorch 不支持 BF16："
+            "F.grid_sample 在昇腾上不支持 BF16，只支持 FP16 和 FP32。"
+        )
+
+
+_MSDA_FASTPATH_CACHE_MAX = 16
+_MSDA_FASTPATH_CACHE: dict[tuple[str, int, tuple[tuple[int, int], ...]], tuple[torch.Tensor, torch.Tensor]] = {}
+
+
+def _get_msda_fastpath_tensors(
+    value_spatial_shapes: torch.Tensor | list | tuple, device: torch.device
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Get (spatial_shapes, level_start_index) tensors for MMCV fast path with lightweight caching.
+
+    Cache is used when input shapes are Python sequences (typical decoder path), avoiding repeated tensor construction.
+    For tensor input, we keep behavior stateless to avoid content-dependent sync-heavy key generation.
+    """
+    if isinstance(value_spatial_shapes, torch.Tensor):
+        if value_spatial_shapes.device == device and value_spatial_shapes.dtype == torch.int32:
+            spatial_shapes = value_spatial_shapes
+        else:
+            spatial_shapes = value_spatial_shapes.to(device=device, dtype=torch.int32)
+        level_start_index = torch.cat([spatial_shapes.new_zeros((1,)), spatial_shapes.prod(1).cumsum(0)[:-1]])
+        return spatial_shapes, level_start_index
+
+    shape_key = tuple((int(h), int(w)) for h, w in value_spatial_shapes)
+    device_index = device.index if device.index is not None else -1
+    cache_key = (device.type, device_index, shape_key)
+    cached = _MSDA_FASTPATH_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
+
+    spatial_shapes = torch.tensor(shape_key, device=device, dtype=torch.int32)
+    level_start_index = torch.cat([spatial_shapes.new_zeros((1,)), spatial_shapes.prod(1).cumsum(0)[:-1]])
+    if len(_MSDA_FASTPATH_CACHE) >= _MSDA_FASTPATH_CACHE_MAX:
+        _MSDA_FASTPATH_CACHE.pop(next(iter(_MSDA_FASTPATH_CACHE)))
+    _MSDA_FASTPATH_CACHE[cache_key] = (spatial_shapes, level_start_index)
+    return spatial_shapes, level_start_index
 
 
 def _get_clones(module, n):
@@ -126,7 +220,30 @@ def multi_scale_deformable_attn_pytorch(
     """
     bs, _, num_heads, embed_dims = value.shape
     _, num_queries, _, num_total_points, _ = sampling_locations.shape
-    num_points = num_total_points // len(value_spatial_shapes)
+    num_levels = len(value_spatial_shapes)
+    if num_total_points % num_levels:
+        raise ValueError(f"num_total_points={num_total_points} must be divisible by num_levels={num_levels}.")
+    num_points = num_total_points // num_levels
+    _raise_if_ascend_bf16_grid_sample(value, sampling_locations)
+
+    # Ascend fast path via MMCV fused op, fallback to Ultralytics handwritten path when unavailable/unsupported.
+    fastpath_unavailable_reason = _get_msda_fastpath_unavailable_reason(value, embed_dims, num_queries, num_points)
+    use_ascend_fastpath = IS_ASCEND and value.device.type == "npu" and fastpath_unavailable_reason is None
+    msda_function = _get_msda_fastpath_function() if use_ascend_fastpath else None
+    if use_ascend_fastpath and msda_function is None:
+        fastpath_unavailable_reason = "MMCV MultiScaleDeformableAttnFunction 导入失败"
+    if msda_function is not None:
+        spatial_shapes, level_start_index = _get_msda_fastpath_tensors(value_spatial_shapes, value.device)
+        return msda_function.apply(
+            value,
+            spatial_shapes,
+            level_start_index,
+            sampling_locations.reshape(bs, num_queries, num_heads, num_levels, num_points, 2),
+            attention_weights.reshape(bs, num_queries, num_heads, num_levels, num_points),
+            64,
+        )
+    if IS_ASCEND and value.device.type == "npu" and fastpath_unavailable_reason is not None:
+        _warn_msda_fastpath_unavailable(fastpath_unavailable_reason)
 
     # (bs, num_keys, num_heads, embed_dims) -> tuple of (bs*num_heads, embed_dims, H*W) per level
     value_list = value.permute(0, 2, 3, 1).flatten(0, 1).split([h * w for h, w in value_spatial_shapes], dim=-1)
