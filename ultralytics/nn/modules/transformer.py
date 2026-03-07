@@ -508,8 +508,14 @@ class MSDeformAttn(nn.Module):
         self.attention_weights = nn.Linear(d_model, n_heads * n_levels * n_points)
         self.value_proj = nn.Linear(d_model, d_model)
         self.output_proj = nn.Linear(d_model, d_model)
+        self._msda_fastpath_cache = {}
 
         self._reset_parameters()
+
+    def _apply(self, fn):
+        """Discard device-bound metadata before applying a module transform."""
+        self._msda_fastpath_cache.clear()
+        return super()._apply(fn)
 
     def _reset_parameters(self):
         """Reset module parameters."""
@@ -582,7 +588,9 @@ class MSDeformAttn(nn.Module):
             )
         else:
             raise ValueError(f"Last dim of reference_points must be 2 or 4, but got {num_points}.")
-        output = multi_scale_deformable_attn_pytorch(value, value_shapes, sampling_locations, attention_weights)
+        output = multi_scale_deformable_attn_pytorch(
+            value, value_shapes, sampling_locations, attention_weights, self._msda_fastpath_cache
+        )
         return self.output_proj(output)
 
 
