@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
@@ -111,47 +112,102 @@ class HungarianMatcher(nn.Module):
         if sum(gt_groups) == 0:
             return [(torch.tensor([], dtype=torch.long), torch.tensor([], dtype=torch.long)) for _ in range(bs)]
 
-        # Flatten to compute cost matrices in batch format
-        pred_scores = pred_scores.detach().view(-1, nc)
+        # Compute score activations once.
+        pred_scores = pred_scores.detach()
         pred_scores = F.sigmoid(pred_scores) if self.use_fl else F.softmax(pred_scores, dim=-1)
-        pred_bboxes = pred_bboxes.detach().view(-1, 4)
+        pred_bboxes = pred_bboxes.detach()
 
-        # Compute classification cost
-        pred_scores = pred_scores[:, gt_cls]
-        if self.use_fl:
-            neg_cost_class = (1 - self.alpha) * (pred_scores**self.gamma) * (-(1 - pred_scores + 1e-8).log())
-            pos_cost_class = self.alpha * ((1 - pred_scores) ** self.gamma) * (-(pred_scores + 1e-8).log())
-            cost_class = pos_cost_class - neg_cost_class
-        else:
-            cost_class = -pred_scores
+        gt_groups_np = np.asarray(gt_groups, dtype=np.int64)
+        gt_offsets_np = np.zeros(bs, dtype=np.int64)
+        if bs > 1:
+            gt_offsets_np[1:] = np.cumsum(gt_groups_np[:-1], dtype=np.int64)
 
-        # Compute L1 cost between boxes
-        cost_bbox = (pred_bboxes.unsqueeze(1) - gt_bboxes.unsqueeze(0)).abs().sum(-1)  # (bs*num_queries, num_gt)
-
-        # Compute GIoU cost between boxes, (bs*num_queries, num_gt)
-        cost_giou = 1.0 - bbox_iou(pred_bboxes.unsqueeze(1), gt_bboxes.unsqueeze(0), xywh=True, GIoU=True).squeeze(-1)
-
-        # Combine costs into final cost matrix
-        C = (
-            self.cost_gain["class"] * cost_class
-            + self.cost_gain["bbox"] * cost_bbox
-            + self.cost_gain["giou"] * cost_giou
-        )
-
-        # Add mask costs if available
         if self.with_mask:
+            # Keep the original flattened path for mask matching until a padded implementation is needed.
+            pred_scores_flat = pred_scores.view(-1, nc)
+            pred_bboxes_flat = pred_bboxes.view(-1, 4)
+            pred_scores_flat = pred_scores_flat[:, gt_cls]
+            if self.use_fl:
+                neg_cost_class = (1 - self.alpha) * (pred_scores_flat**self.gamma) * (
+                    -(1 - pred_scores_flat + 1e-8).log()
+                )
+                pos_cost_class = self.alpha * ((1 - pred_scores_flat) ** self.gamma) * (-(pred_scores_flat + 1e-8).log())
+                cost_class = pos_cost_class - neg_cost_class
+            else:
+                cost_class = -pred_scores_flat
+            cost_bbox = (pred_bboxes_flat.unsqueeze(1) - gt_bboxes.unsqueeze(0)).abs().sum(-1)
+            cost_giou = 1.0 - bbox_iou(pred_bboxes_flat.unsqueeze(1), gt_bboxes.unsqueeze(0), xywh=True, GIoU=True).squeeze(-1)
+            C = (
+                self.cost_gain["class"] * cost_class
+                + self.cost_gain["bbox"] * cost_bbox
+                + self.cost_gain["giou"] * cost_giou
+            )
             C += self._cost_mask(bs, gt_groups, masks, gt_mask)
+            C[C.isnan() | C.isinf()] = 0.0
+            C_np = C.view(bs, nq, -1).cpu().numpy()
+        else:
+            max_gt = int(gt_groups_np.max())
+            gt_bboxes_pad = gt_bboxes.new_zeros((bs, max_gt, 4))
+            gt_cls_pad = gt_cls.new_zeros((bs, max_gt))
+            for bi in range(bs):
+                num_gt = int(gt_groups_np[bi])
+                if num_gt == 0:
+                    continue
+                start = int(gt_offsets_np[bi])
+                end = start + num_gt
+                gt_bboxes_pad[bi, :num_gt] = gt_bboxes[start:end]
+                gt_cls_pad[bi, :num_gt] = gt_cls[start:end]
 
-        # Set invalid values (NaNs and infinities) to 0
-        C[C.isnan() | C.isinf()] = 0.0
+            pred_scores_local = pred_scores.gather(2, gt_cls_pad.unsqueeze(1).expand(-1, nq, -1))
+            if self.use_fl:
+                neg_cost_class = (1 - self.alpha) * (pred_scores_local**self.gamma) * (
+                    -(1 - pred_scores_local + 1e-8).log()
+                )
+                pos_cost_class = self.alpha * ((1 - pred_scores_local) ** self.gamma) * (-(pred_scores_local + 1e-8).log())
+                cost_class = pos_cost_class - neg_cost_class
+            else:
+                cost_class = -pred_scores_local
 
-        C = C.view(bs, nq, -1).cpu()
-        indices = [linear_sum_assignment(c[i]) for i, c in enumerate(C.split(gt_groups, -1))]
-        gt_groups = torch.as_tensor([0, *gt_groups[:-1]]).cumsum_(0)  # (idx for queries, idx for gt)
-        return [
-            (torch.tensor(i, dtype=torch.long), torch.tensor(j, dtype=torch.long) + gt_groups[k])
-            for k, (i, j) in enumerate(indices)
-        ]
+            cost_bbox = (pred_bboxes.unsqueeze(2) - gt_bboxes_pad.unsqueeze(1)).abs().sum(-1)
+            cost_giou = 1.0 - bbox_iou(pred_bboxes.unsqueeze(2), gt_bboxes_pad.unsqueeze(1), xywh=True, GIoU=True).squeeze(-1)
+            C = (
+                self.cost_gain["class"] * cost_class
+                + self.cost_gain["bbox"] * cost_bbox
+                + self.cost_gain["giou"] * cost_giou
+            )
+            C[C.isnan() | C.isinf()] = 0.0
+            C_np = C.cpu().numpy()
+
+        indices = []
+        for bi in range(bs):
+            num_gt = int(gt_groups_np[bi])
+            if num_gt == 0:
+                empty = np.empty(0, dtype=np.int64)
+                indices.append((empty, empty))
+                continue
+
+            if self.with_mask:
+                start = int(gt_offsets_np[bi])
+                end = start + num_gt
+                indices.append(linear_sum_assignment(C_np[bi, :, start:end]))
+            else:
+                indices.append(linear_sum_assignment(C_np[bi, :, :num_gt]))
+
+        match_lengths = [len(src_idx) for src_idx, _ in indices]
+        total_matches = sum(match_lengths)
+        if total_matches == 0:
+            return [(torch.empty(0, dtype=torch.long), torch.empty(0, dtype=torch.long)) for _ in range(bs)]
+
+        src_np = np.concatenate([src_idx.astype(np.int64, copy=False) for src_idx, _ in indices], axis=0)
+        dst_np = np.concatenate(
+            [(dst_idx.astype(np.int64, copy=False) + gt_offsets_np[bi]) for bi, (_, dst_idx) in enumerate(indices)],
+            axis=0,
+        )
+        src_all = torch.from_numpy(src_np)
+        dst_all = torch.from_numpy(dst_np)
+        src_split = src_all.split(match_lengths)
+        dst_split = dst_all.split(match_lengths)
+        return list(zip(src_split, dst_split))
 
     # This function is for future RT-DETR Segment models
     # def _cost_mask(self, bs, num_gts, masks=None, gt_mask=None):
@@ -277,18 +333,22 @@ def get_cdn_group(
 
     num_dn = int(max_nums * 2 * num_group)  # total denoising queries
     dn_cls_embed = class_embed[dn_cls]  # bs*num * 2 * num_group, 256
-    padding_cls = torch.zeros(bs, num_dn, dn_cls_embed.shape[-1], device=gt_cls.device)
-    padding_bbox = torch.zeros(bs, num_dn, 4, device=gt_bbox.device)
+    padding_cls = torch.zeros(bs, num_dn, dn_cls_embed.shape[-1], device=gt_cls.device, dtype=dn_cls_embed.dtype)
+    padding_bbox = torch.zeros(bs, num_dn, 4, device=gt_bbox.device, dtype=dn_bbox.dtype)
 
-    map_indices = torch.cat([torch.tensor(range(num), dtype=torch.long) for num in gt_groups])
-    pos_idx = torch.stack([map_indices + max_nums * i for i in range(num_group)], dim=0)
+    gt_groups_tensor = torch.as_tensor(gt_groups, dtype=torch.long, device=gt_bbox.device)
+    local_indices = torch.arange(max_nums, dtype=torch.long, device=gt_bbox.device).unsqueeze(0).expand(bs, -1)
+    local_indices = local_indices[local_indices < gt_groups_tensor.unsqueeze(1)]
+    group_offsets = max_nums * torch.arange(num_group, dtype=torch.long, device=gt_bbox.device).unsqueeze(1)
+    pos_idx = local_indices.unsqueeze(0) + group_offsets
 
-    map_indices = torch.cat([map_indices + max_nums * i for i in range(2 * num_group)])
+    all_offsets = max_nums * torch.arange(2 * num_group, dtype=torch.long, device=gt_bbox.device).unsqueeze(1)
+    map_indices = (local_indices.unsqueeze(0) + all_offsets).reshape(-1)
     padding_cls[(dn_b_idx, map_indices)] = dn_cls_embed
     padding_bbox[(dn_b_idx, map_indices)] = dn_bbox
 
     tgt_size = num_dn + num_queries
-    attn_mask = torch.zeros([tgt_size, tgt_size], dtype=torch.bool)
+    attn_mask = torch.zeros([tgt_size, tgt_size], dtype=torch.bool, device=class_embed.device)
     # Match query cannot see the reconstruct
     attn_mask[num_dn:, :num_dn] = True
     # Reconstruct cannot see each other
@@ -309,6 +369,6 @@ def get_cdn_group(
     return (
         padding_cls.to(class_embed.device),
         padding_bbox.to(class_embed.device),
-        attn_mask.to(class_embed.device),
+        attn_mask,
         dn_meta,
     )
