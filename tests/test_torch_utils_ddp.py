@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import itertools
 import os
+import subprocess
+import sys
 import types
 
 import pytest
@@ -45,6 +47,38 @@ def test_select_device_unprefixed_list_routes_to_npu(monkeypatch, device_request
     assert torch_utils.parse_device(device_request) == "0,1"
     assert os.environ["ASCEND_RT_VISIBLE_DEVICES"] == "0,1"
     assert str(device) == "npu:0"
+
+
+@pytest.mark.skipif(
+    not hasattr(torch_utils.torch, "npu") or not torch_utils.torch.npu.is_available(),
+    reason="NPU is not available",
+)
+def test_nn_modules_import_respects_preconfigured_visible_device():
+    """在子进程启动前配置单张可见卡，导入模型模块后仍能正常使用逻辑卡 0。"""
+    script = """
+import torch
+import ultralytics.nn.modules
+
+assert torch.npu.device_count() == 1, "子进程应仅有一张可见 NPU"
+x = torch.ones(1, device="npu:0")
+assert x.device == torch.device("npu:0"), "张量应位于逻辑卡 0"
+assert x.cpu().item() == 1.0, "NPU 张量计算结果错误"
+print("NPU 初始化检查通过")
+"""
+    visible_devices = os.environ.get("ASCEND_RT_VISIBLE_DEVICES") or "0"
+    device_id = visible_devices.split(",", 1)[0]
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=os.getcwd(),
+        env={**os.environ, "ASCEND_RT_VISIBLE_DEVICES": device_id},
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "NPU 初始化检查通过" in result.stdout
 
 
 class FakeStore:
