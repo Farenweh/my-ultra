@@ -47,6 +47,7 @@ from ultralytics.utils import (
 from ultralytics.utils.autobatch import check_train_batch_size
 from ultralytics.utils.checks import (
     IS_ASCEND,
+    EMPTY_VRAM_CACHE,
     PROFILE,
     USE_ASCEND_FUSED_GRAD_CLIP,
     USE_ASCEND_FUSED_OPTIMIZER,
@@ -901,6 +902,8 @@ class BaseTrainer:
 
     def _clear_memory(self, threshold: float | None = None):
         """Clear accelerator memory by calling garbage collector and emptying cache."""
+        if not EMPTY_VRAM_CACHE:
+            return
         if threshold:
             assert 0 <= threshold <= 1, "Threshold must be between 0 and 1."
             if self._get_memory(fraction=True) <= threshold:

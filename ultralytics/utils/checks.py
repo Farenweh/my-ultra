@@ -1118,7 +1118,6 @@ def _parse_env_bool(name: str, default: bool = False) -> bool:
         return False
     raise ValueError(f"{name}={value!r} 无法解析为布尔值，可选值为 True/False/1/0/空。")
 
-
 def _parse_vram_target(value: str | None) -> float | bool:
     """Parse VRAM_TARGET into a target fraction or False when disabled."""
     if value is None or value.strip() == "":
