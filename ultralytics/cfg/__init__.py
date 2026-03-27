@@ -258,6 +258,7 @@ CFG_FRACTION_KEYS = frozenset(
 CFG_INT_KEYS = frozenset(
     {  # integer-only arguments
         "epochs",
+        "iters_per_epoch",
         "patience",
         "workers",
         "seed",
@@ -271,6 +272,7 @@ CFG_INT_KEYS = frozenset(
     }
 )
 CFG_INT_MIN = {  # minimum valid values for integer arguments used as divisors, sizes or seeds
+    "iters_per_epoch": 1,
     "nbs": 1,
     "max_det": 1,
     "mask_ratio": 1,
