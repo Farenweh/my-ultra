@@ -132,9 +132,7 @@ def _fetch_trainer_metadata(trainer) -> dict:
         (dict): Dictionary containing current epoch, step, save assets flag, and final epoch flag.
     """
     curr_epoch = trainer.epoch + 1
-
-    train_num_steps_per_epoch = len(trainer.train_loader.dataset) // trainer.batch_size
-    curr_step = curr_epoch * train_num_steps_per_epoch
+    curr_step = getattr(trainer, "global_step", curr_epoch * getattr(trainer, "iters_per_epoch", len(trainer.train_loader)))
     final_epoch = curr_epoch == trainer.epochs
 
     save = trainer.args.save

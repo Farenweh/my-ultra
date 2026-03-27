@@ -241,6 +241,12 @@ class BaseTrainer:
             self.csv.unlink()
         self.plot_idx = [0, 1, 2]
         self.nan_recovery_attempts = 0
+        self.iters_per_epoch = self.args.iters_per_epoch
+        self.global_step = 0
+        self.data_cycle = 0
+        self._data_cycle_batch = 0
+        self._train_cycle_iterator = None
+        self._train_cycle_size = None
 
     def add_callback(self, event: str, callback):
         """Append the given callback to the event's callback list."""
@@ -385,9 +391,12 @@ class BaseTrainer:
             rank=dataloader_rank,
             mode="val",
         )
+        self._train_cycle_size = len(self.train_loader)
+        self.iters_per_epoch = self.args.iters_per_epoch or self._train_cycle_size
+        self._restore_train_cycle_state(self.global_step, self.data_cycle, self._data_cycle_batch)
         self.accumulate = max(round(self.args.nbs / self.batch_size), 1)  # accumulate loss before optimizing
         weight_decay = self.args.weight_decay * self.batch_size * self.accumulate / self.args.nbs  # scale weight_decay
-        iterations = math.ceil(len(self.train_loader.dataset) / max(self.batch_size, self.args.nbs)) * self.epochs
+        iterations = self.iters_per_epoch * self.epochs
         self.optimizer = self.build_optimizer(
             model=self.model,
             name=self.args.optimizer,
@@ -397,6 +406,67 @@ class BaseTrainer:
             iterations=iterations,
         )
         self._setup_scheduler()
+
+    def _restore_train_cycle_state(
+        self, global_step: int = 0, data_cycle: int | None = None, data_cycle_batch: int | None = None
+    ):
+        """Restore train-loader progress for logical epochs."""
+        cycle_size = max(int(self._train_cycle_size or 1), 1)
+        global_step = max(int(global_step), 0)
+        if data_cycle is None or data_cycle_batch is None:
+            data_cycle, data_cycle_batch = divmod(global_step, cycle_size)
+        data_cycle = max(int(data_cycle), 0)
+        data_cycle_batch = max(int(data_cycle_batch), 0)
+        if data_cycle_batch >= cycle_size:
+            data_cycle += data_cycle_batch // cycle_size
+            data_cycle_batch %= cycle_size
+        self.global_step = global_step
+        self.data_cycle = data_cycle
+        self._data_cycle_batch = data_cycle_batch
+        self._train_cycle_iterator = None
+
+    def _invalidate_train_cycle_iterator(self):
+        """Drop the active loader-cycle iterator so the next batch uses fresh loader state."""
+        self._train_cycle_iterator = None
+
+    def _start_train_cycle(self):
+        """Start a full dataloader cycle and restore the intra-cycle offset if needed."""
+        if RANK != -1 and hasattr(self.train_loader, "sampler") and hasattr(self.train_loader.sampler, "set_epoch"):
+            self.train_loader.sampler.set_epoch(self.data_cycle)
+        self._train_cycle_iterator = iter(self.train_loader)
+        if self._data_cycle_batch:
+            for _ in range(self._data_cycle_batch):
+                try:
+                    next(self._train_cycle_iterator)
+                except StopIteration:
+                    self.data_cycle += 1
+                    self._data_cycle_batch = 0
+                    self._train_cycle_iterator = None
+                    self._start_train_cycle()
+                    return
+
+    def _next_train_batch(self):
+        """Return the next batch while allowing logical epochs to span partial loader cycles."""
+        if self._train_cycle_iterator is None:
+            self._start_train_cycle()
+
+        assert self._train_cycle_iterator is not None, "Train cycle iterator failed to initialize."
+        try:
+            batch = next(self._train_cycle_iterator)
+        except StopIteration:
+            self.data_cycle += 1
+            self._data_cycle_batch = 0
+            self._train_cycle_iterator = None
+            self._start_train_cycle()
+            assert self._train_cycle_iterator is not None, "Train cycle iterator failed to restart."
+            batch = next(self._train_cycle_iterator)
+
+        self._data_cycle_batch += 1
+        if self._data_cycle_batch >= max(int(self._train_cycle_size or 1), 1):
+            self.data_cycle += 1
+            self._data_cycle_batch = 0
+            self._train_cycle_iterator = None
+        return batch
 
     def _setup_train(self):
         """Configure model, optimizer, dataloaders, and training utilities before the training loop."""
@@ -567,18 +637,21 @@ class BaseTrainer:
             self._setup_ddp()
         self._setup_train()
 
-        nb = len(self.train_loader)  # number of batches
+        nb = self.iters_per_epoch  # logical batches per epoch
         nw = self._get_warmup_iterations(nb)
         last_opt_step = -1
         self.epoch_time = None
         self.epoch_time_start = time.time()
         self.train_time_start = time.time()
         self.run_callbacks("on_train_start")
+        duration = f"{self.args.time} hours..." if self.args.time else f"{self.epochs} epochs..."
+        if self.args.iters_per_epoch:
+            duration = duration[:-3] + f" ({self.iters_per_epoch} iters/epoch)..."
         LOGGER.info(
             f"Image sizes {self.args.imgsz} train, {self.args.imgsz} val\n"
             f"Using {self.train_loader.num_workers * (self.world_size or 1)} dataloader workers\n"
             f"Logging results to {colorstr('bold', self.save_dir)}\n"
-            f"Starting training for " + (f"{self.args.time} hours..." if self.args.time else f"{self.epochs} epochs...")
+            f"Starting training for {duration}"
         )
         if self.args.close_mosaic:
             base_idx = (self.epochs - self.args.close_mosaic) * nb
@@ -594,27 +667,28 @@ class BaseTrainer:
                 self.scheduler.step()
 
             self._model_train()
-            if RANK != -1:
-                self.train_loader.sampler.set_epoch(epoch)
-            pbar = enumerate(self.train_loader)
             # Update dataloader attributes (optional)
             if epoch == (self.epochs - self.args.close_mosaic):
                 self._close_dataloader_mosaic()
                 self.train_loader.reset()
+                self._invalidate_train_cycle_iterator()
 
+            pbar = range(nb)
             if RANK in {-1, 0}:
                 if self.loss_names:
                     LOGGER.info(self.progress_string())
-                pbar = TQDM(enumerate(self.train_loader), total=nb)
+                pbar = TQDM(pbar, total=nb)
             self.tloss = None
 
             if PROFILE:
                 self.profiler.start()
 
-            for i, batch in pbar:
+            for i in pbar:
+                batch = self._next_train_batch()
                 self.run_callbacks("on_train_batch_start")
                 # Warmup
                 ni = i + nb * epoch
+                self.batch_i = i
                 if ni < nw:
                     xi = [0, nw]  # x interp
                     self.accumulate = max(1, int(np.interp(ni, xi, [1, self.args.nbs / self.batch_size]).round()))
@@ -685,11 +759,13 @@ class BaseTrainer:
                     self._clear_memory()
                     self._build_train_pipeline()  # rebuild dataloaders, optimizer, scheduler
                     self.scheduler.last_epoch = self.start_epoch - 1
-                    nb = len(self.train_loader)
+                    nb = self.iters_per_epoch
                     nw = self._get_warmup_iterations(nb)
                     last_opt_step = -1
+                    self._restore_train_cycle_state(global_step=epoch * nb)
                     self.optimizer.zero_grad()
                     break  # restart epoch loop with reduced batch size
+                self.global_step = ni + 1
                 if ni - last_opt_step >= self.accumulate:
                     self.optimizer_step()
                     last_opt_step = ni
@@ -962,6 +1038,9 @@ class BaseTrainer:
         torch.save(
             {
                 "epoch": self.epoch,
+                "global_step": self.global_step,
+                "data_cycle": self.data_cycle,
+                "data_cycle_batch": self._data_cycle_batch,
                 "best_fitness": self.best_fitness,
                 "model": None,  # resume and final checkpoints derive from EMA
                 "ema": ema,
@@ -1200,10 +1279,12 @@ class BaseTrainer:
                 self.args = get_cfg(ckpt_args)
                 self.args.model = self.args.resume = str(last)  # reinstate model
                 for k in (
+                    "epochs",
                     "imgsz",
                     "batch",
                     "device",
                     "close_mosaic",
+                    "iters_per_epoch",
                     "augmentations",
                     "save_period",
                     "workers",
@@ -1247,6 +1328,11 @@ class BaseTrainer:
             self.ema.ema.load_state_dict(ckpt["ema"].float().state_dict())
             self.ema.updates = ckpt["updates"]
         self.best_fitness = ckpt.get("best_fitness")
+        self._restore_train_cycle_state(
+            global_step=ckpt.get("global_step", self.global_step),
+            data_cycle=ckpt.get("data_cycle"),
+            data_cycle_batch=ckpt.get("data_cycle_batch"),
+        )
 
     def _handle_nan_recovery(self, epoch):
         """Detect and recover from NaN/Inf loss by loading last checkpoint."""
@@ -1304,6 +1390,10 @@ class BaseTrainer:
             )
             self.epochs += ckpt["epoch"]  # finetune additional epochs
         self._load_checkpoint_state(ckpt)
+
+        if ckpt.get("global_step") is None:
+            self._restore_train_cycle_state(global_step=start_epoch * self.iters_per_epoch)
+
         if getattr(unwrap_model(self.model), "end2end", False):
             # initialize loss and resume o2o and o2m args
             unwrap_model(self.model).criterion = unwrap_model(self.model).init_criterion()
@@ -1320,6 +1410,7 @@ class BaseTrainer:
         if hasattr(self.train_loader.dataset, "close_mosaic"):
             LOGGER.info("Closing dataloader mosaic")
             self.train_loader.dataset.close_mosaic(hyp=copy(self.args))
+        self._invalidate_train_cycle_iterator()
 
     def build_optimizer(self, model, name="auto", lr=0.001, momentum=0.9, decay=1e-5, iterations=1e5):
         """Construct an optimizer for the given model.

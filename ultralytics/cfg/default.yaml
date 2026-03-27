@@ -10,6 +10,7 @@ mode: train # (str) YOLO mode, i.e. train, val, predict, export, track, benchmar
 model: # (str, optional) path to model file, i.e. yolo26n.pt or yolo26n.yaml
 data: # (str, optional) path to data file, i.e. coco8.yaml
 epochs: 100 # (int) number of epochs to train for
+iters_per_epoch: # (int, optional) logical train iterations per epoch; when set, each epoch runs this many batches
 time: # (float, optional) max hours to train; overrides epochs if set
 patience: 100 # (int) early stop after N epochs without val improvement
 batch: 16 # (int | float) batch size as int (e.g. 16), or float 0.0–1.0 for AutoBatch fraction of GPU memory
