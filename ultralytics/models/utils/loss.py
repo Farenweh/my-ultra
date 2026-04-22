@@ -254,6 +254,262 @@ class DETRLoss(nn.Module):
         #     loss[f'loss_dice_aux{postfix}'] = loss[4]
         return loss
 
+    def _collect_match_indices_serial(
+        self,
+        pred_bboxes: torch.Tensor,
+        pred_scores: torch.Tensor,
+        gt_bboxes: torch.Tensor,
+        gt_cls: torch.Tensor,
+        gt_groups: list[int],
+        match_indices: list[tuple[torch.Tensor, torch.Tensor]] | None = None,
+        masks: torch.Tensor | None = None,
+        gt_mask: torch.Tensor | None = None,
+    ) -> list[list[tuple[torch.Tensor, torch.Tensor]]]:
+        """Collect per-layer Hungarian match indices with serial solving."""
+        num_layers = int(pred_bboxes.shape[0])
+        if num_layers == 0:
+            return []
+
+        if match_indices is not None:
+            return [match_indices for _ in range(num_layers)]
+
+        layer_match_indices: list[list[tuple[torch.Tensor, torch.Tensor]] | None] = [None] * num_layers
+        aux_layers = num_layers - 1
+
+        if aux_layers > 0 and self.aux_loss:
+            if self.use_uni_match:
+                uni_layer = max(0, min(self.uni_match_ind, aux_layers - 1))
+                uni_masks = masks[uni_layer] if masks is not None else None
+                shared_indices = self.matcher(
+                    pred_bboxes[uni_layer], pred_scores[uni_layer], gt_bboxes, gt_cls, gt_groups, masks=uni_masks, gt_mask=gt_mask
+                )
+                for i in range(aux_layers):
+                    layer_match_indices[i] = shared_indices
+            else:
+                for i in range(aux_layers):
+                    aux_masks = masks[i] if masks is not None else None
+                    layer_match_indices[i] = self.matcher(
+                        pred_bboxes[i], pred_scores[i], gt_bboxes, gt_cls, gt_groups, masks=aux_masks, gt_mask=gt_mask
+                    )
+
+        last_masks = masks[-1] if masks is not None else None
+        layer_match_indices[-1] = self.matcher(
+            pred_bboxes[-1], pred_scores[-1], gt_bboxes, gt_cls, gt_groups, masks=last_masks, gt_mask=gt_mask
+        )
+        return [m for m in layer_match_indices if m is not None]
+
+    def _pack_layer_indices(
+        self, layer_match_indices: list[list[tuple[torch.Tensor, torch.Tensor]]]
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None:
+        """Pack per-layer match indices into [L, M] tensors for batched gather."""
+        if not layer_match_indices:
+            return None
+
+        batch_idx_layers: list[torch.Tensor] = []
+        src_idx_layers: list[torch.Tensor] = []
+        gt_idx_layers: list[torch.Tensor] = []
+        match_size: int | None = None
+        index_device: torch.device | None = None
+
+        for match_indices in layer_match_indices:
+            (batch_idx, src_idx), gt_idx = self._get_index(match_indices)
+            current_size = int(batch_idx.numel())
+            if match_size is None:
+                match_size = current_size
+                index_device = batch_idx.device
+            elif current_size != match_size:
+                return None
+
+            if index_device is not None:
+                batch_idx = batch_idx.to(index_device)
+                src_idx = src_idx.to(index_device)
+                gt_idx = gt_idx.to(index_device)
+            batch_idx_layers.append(batch_idx)
+            src_idx_layers.append(src_idx)
+            gt_idx_layers.append(gt_idx)
+
+        return torch.stack(batch_idx_layers, dim=0), torch.stack(src_idx_layers, dim=0), torch.stack(gt_idx_layers, dim=0)
+
+    def _forward_group_legacy(
+        self,
+        pred_bboxes: torch.Tensor,
+        pred_scores: torch.Tensor,
+        batch: dict[str, Any],
+        postfix: str = "",
+        match_indices: list[tuple[torch.Tensor, torch.Tensor]] | None = None,
+        layer_match_indices: list[list[tuple[torch.Tensor, torch.Tensor]]] | None = None,
+    ) -> dict[str, torch.Tensor]:
+        """Legacy per-layer loss implementation used for fallback and equivalence checks."""
+        gt_cls, gt_bboxes, gt_groups = batch["cls"], batch["bboxes"], batch["gt_groups"]
+
+        if layer_match_indices is None:
+            total_loss = self._get_loss(
+                pred_bboxes[-1], pred_scores[-1], gt_bboxes, gt_cls, gt_groups, postfix=postfix, match_indices=match_indices
+            )
+            if self.aux_loss:
+                total_loss.update(
+                    self._get_loss_aux(
+                        pred_bboxes[:-1], pred_scores[:-1], gt_bboxes, gt_cls, gt_groups, match_indices, postfix
+                    )
+                )
+            return total_loss
+
+        num_layers = int(pred_bboxes.shape[0])
+        if len(layer_match_indices) != num_layers:
+            return self._forward_group_legacy(pred_bboxes, pred_scores, batch, postfix=postfix, match_indices=match_indices)
+
+        total_loss = self._get_loss(
+            pred_bboxes[-1],
+            pred_scores[-1],
+            gt_bboxes,
+            gt_cls,
+            gt_groups,
+            postfix=postfix,
+            match_indices=layer_match_indices[-1],
+        )
+        if self.aux_loss:
+            aux = pred_scores.new_zeros(3)
+            for i in range(max(num_layers - 1, 0)):
+                loss_i = self._get_loss(
+                    pred_bboxes[i],
+                    pred_scores[i],
+                    gt_bboxes,
+                    gt_cls,
+                    gt_groups,
+                    postfix=postfix,
+                    match_indices=layer_match_indices[i],
+                )
+                aux[0] += loss_i[f"loss_class{postfix}"]
+                aux[1] += loss_i[f"loss_bbox{postfix}"]
+                aux[2] += loss_i[f"loss_giou{postfix}"]
+            total_loss.update(
+                {
+                    f"loss_class_aux{postfix}": aux[0],
+                    f"loss_bbox_aux{postfix}": aux[1],
+                    f"loss_giou_aux{postfix}": aux[2],
+                }
+            )
+        return total_loss
+
+    def _forward_group_batched(
+        self,
+        pred_bboxes: torch.Tensor,
+        pred_scores: torch.Tensor,
+        batch: dict[str, Any],
+        postfix: str,
+        layer_match_indices: list[list[tuple[torch.Tensor, torch.Tensor]]],
+    ) -> dict[str, torch.Tensor]:
+        """Batched tensor loss path with serial Hungarian indices."""
+        if len(layer_match_indices) != int(pred_bboxes.shape[0]):
+            return self._forward_group_legacy(
+                pred_bboxes, pred_scores, batch, postfix=postfix, layer_match_indices=layer_match_indices
+            )
+
+        packed_indices = self._pack_layer_indices(layer_match_indices)
+        if packed_indices is None:
+            return self._forward_group_legacy(
+                pred_bboxes, pred_scores, batch, postfix=postfix, layer_match_indices=layer_match_indices
+            )
+
+        gt_cls, gt_bboxes = batch["cls"], batch["bboxes"]
+        num_layers, bs, nq = pred_scores.shape[:3]
+        batch_idx, src_idx, gt_idx = packed_indices
+        match_count = int(batch_idx.shape[1])
+
+        if batch_idx.device != pred_bboxes.device:
+            batch_idx = batch_idx.to(pred_bboxes.device)
+            src_idx = src_idx.to(pred_bboxes.device)
+        gt_idx_box = gt_idx.to(gt_bboxes.device)
+        gt_idx_cls = gt_idx.to(gt_cls.device)
+
+        layer_idx = torch.arange(num_layers, device=pred_bboxes.device, dtype=torch.long).unsqueeze(1).expand(-1, match_count)
+
+        if match_count > 0:
+            pred_match = pred_bboxes[layer_idx, batch_idx, src_idx]
+            gt_match = gt_bboxes[gt_idx_box].to(pred_match.device)
+            iou_match = bbox_iou(pred_match.detach(), gt_match, xywh=True).squeeze(-1)
+        else:
+            pred_match = pred_bboxes.new_zeros((num_layers, 0, 4))
+            gt_match = pred_match
+            iou_match = pred_scores.new_zeros((num_layers, 0))
+
+        if self.fl and match_count > 0 and self.vfl:
+            pred_float = pred_scores.float()
+            pred_prob = pred_float.sigmoid()
+
+            # VFL normalizes by the number of matched targets, so use the all-negative loss as a base term and
+            # correct only the matched positive class locations. This avoids building dense one-hot targets.
+            neg_loss = F.softplus(pred_float) * (self.vfl.alpha * pred_prob.pow(self.vfl.gamma))
+            loss_cls_layer = neg_loss.sum((1, 2, 3))
+
+            target_cls = gt_cls[gt_idx_cls]
+            if target_cls.device != pred_scores.device:
+                target_cls = target_cls.to(pred_scores.device)
+            pred_pos = pred_float[layer_idx, batch_idx, src_idx, target_cls]
+            pos_score = iou_match.to(pred_float.dtype)
+            neg_pos_loss = F.softplus(pred_pos) * (self.vfl.alpha * pred_pos.sigmoid().pow(self.vfl.gamma))
+            pos_loss = (F.softplus(pred_pos) - pred_pos * pos_score) * pos_score
+            loss_cls_layer = (loss_cls_layer + (pos_loss - neg_pos_loss).sum(1)) / match_count
+        else:
+            targets = torch.full((num_layers, bs, nq), self.nc, dtype=gt_cls.dtype, device=pred_scores.device)
+            if match_count > 0:
+                targets[layer_idx, batch_idx, src_idx] = gt_cls[gt_idx_cls]
+
+            gt_score_map = pred_scores.new_zeros((num_layers, bs, nq))
+            if match_count > 0:
+                gt_score_map[layer_idx, batch_idx, src_idx] = iou_match.to(gt_score_map.dtype)
+
+            one_hot = torch.zeros((num_layers, bs, nq, self.nc + 1), dtype=torch.int64, device=pred_scores.device)
+            one_hot.scatter_(3, targets.unsqueeze(-1), 1)
+            one_hot = one_hot[..., :-1]
+            gt_scores = gt_score_map.unsqueeze(-1) * one_hot
+
+            if self.fl:
+                label_float = one_hot.float()
+                pred_prob = pred_scores.sigmoid()
+                p_t = label_float * pred_prob + (1 - label_float) * (1 - pred_prob)
+                modulating_factor = (1.0 - p_t) ** self.fl.gamma
+                loss_cls_layer = F.binary_cross_entropy_with_logits(pred_scores, label_float, reduction="none")
+                loss_cls_layer *= modulating_factor
+                if (self.fl.alpha > 0).any():
+                    alpha = self.fl.alpha.to(device=pred_scores.device, dtype=pred_scores.dtype)
+                    alpha_factor = label_float * alpha + (1 - label_float) * (1 - alpha)
+                    loss_cls_layer *= alpha_factor
+                loss_cls_layer = loss_cls_layer.mean(2).sum((1, 2))
+                loss_cls_layer /= max(match_count, 1) / nq
+            else:
+                loss_cls_layer = F.binary_cross_entropy_with_logits(pred_scores, gt_scores, reduction="none").mean(2).sum((1, 2))
+        loss_cls_layer = loss_cls_layer * self.loss_gain["class"]
+
+        if match_count > 0:
+            loss_bbox_layer = self.loss_gain["bbox"] * F.l1_loss(pred_match, gt_match, reduction="none").sum((1, 2)) / match_count
+            loss_giou_layer = 1.0 - bbox_iou(pred_match, gt_match, xywh=True, GIoU=True).squeeze(-1)
+            loss_giou_layer = self.loss_gain["giou"] * (loss_giou_layer.sum(1) / match_count)
+        else:
+            loss_bbox_layer = pred_bboxes.new_zeros((num_layers,))
+            loss_giou_layer = pred_bboxes.new_zeros((num_layers,))
+
+        total_loss = {
+            f"loss_class{postfix}": loss_cls_layer[-1].squeeze(),
+            f"loss_bbox{postfix}": loss_bbox_layer[-1].squeeze(),
+            f"loss_giou{postfix}": loss_giou_layer[-1].squeeze(),
+        }
+        if self.aux_loss:
+            total_loss.update(
+                {
+                    f"loss_class_aux{postfix}": loss_cls_layer[:-1].sum() if num_layers > 1 else loss_cls_layer.new_tensor(0.0),
+                    f"loss_bbox_aux{postfix}": loss_bbox_layer[:-1].sum() if num_layers > 1 else loss_bbox_layer.new_tensor(0.0),
+                    f"loss_giou_aux{postfix}": loss_giou_layer[:-1].sum() if num_layers > 1 else loss_giou_layer.new_tensor(0.0),
+                }
+            )
+
+        if getattr(self, "_enable_loss_finite_guard", False):
+            if not all(torch.isfinite(v).all() for v in total_loss.values()):
+                return self._forward_group_legacy(
+                    pred_bboxes, pred_scores, batch, postfix=postfix, layer_match_indices=layer_match_indices
+                )
+        return total_loss
+
     @staticmethod
     def _get_index(match_indices: list[tuple]) -> tuple[tuple[torch.Tensor, torch.Tensor], torch.Tensor]:
         """Extract batch indices, source indices, and destination indices from match indices.
@@ -265,9 +521,15 @@ class DETRLoss(nn.Module):
             batch_idx (tuple[torch.Tensor, torch.Tensor]): Tuple containing (batch_idx, src_idx).
             dst_idx (torch.Tensor): Destination indices.
         """
-        batch_idx = torch.cat([torch.full_like(src, i) for i, (src, _) in enumerate(match_indices)])
-        src_idx = torch.cat([src for (src, _) in match_indices])
-        dst_idx = torch.cat([dst for (_, dst) in match_indices])
+        non_empty = [(src, dst) for src, dst in match_indices if src.numel() > 0]
+        if not non_empty:
+            empty = torch.empty(0, dtype=torch.long)
+            return (empty, empty), empty
+
+        src_idx = torch.cat([src for src, _ in non_empty])
+        dst_idx = torch.cat([dst for _, dst in non_empty])
+        lengths = torch.as_tensor([src.numel() for src, _ in match_indices], dtype=torch.long, device=src_idx.device)
+        batch_idx = torch.repeat_interleave(torch.arange(len(match_indices), device=src_idx.device), lengths)
         return (batch_idx, src_idx), dst_idx
 
     def _get_assigned_bboxes(
@@ -375,19 +637,18 @@ class DETRLoss(nn.Module):
         self.device = pred_bboxes.device
         match_indices = kwargs.get("match_indices", None)
         gt_cls, gt_bboxes, gt_groups = batch["cls"], batch["bboxes"], batch["gt_groups"]
+        group_bboxes = pred_bboxes if self.aux_loss else pred_bboxes[-1:]
+        group_scores = pred_scores if self.aux_loss else pred_scores[-1:]
 
-        total_loss = self._get_loss(
-            pred_bboxes[-1], pred_scores[-1], gt_bboxes, gt_cls, gt_groups, postfix=postfix, match_indices=match_indices
-        )
-
-        if self.aux_loss:
-            total_loss.update(
-                self._get_loss_aux(
-                    pred_bboxes[:-1], pred_scores[:-1], gt_bboxes, gt_cls, gt_groups, match_indices, postfix
-                )
+        if getattr(self, "_use_legacy_loss", False):
+            return self._forward_group_legacy(
+                group_bboxes, group_scores, batch, postfix=postfix, match_indices=match_indices
             )
 
-        return total_loss
+        layer_match_indices = self._collect_match_indices_serial(
+            group_bboxes, group_scores, gt_bboxes, gt_cls, gt_groups, match_indices=match_indices
+        )
+        return self._forward_group_batched(group_bboxes, group_scores, batch, postfix, layer_match_indices)
 
 
 class RTDETRDetectionLoss(DETRLoss):
@@ -428,8 +689,13 @@ class RTDETRDetectionLoss(DETRLoss):
             # Get the match indices for denoising
             match_indices = self.get_dn_match_indices(dn_pos_idx, dn_num_group, batch["gt_groups"])
 
-            # Compute the denoising training loss
-            dn_loss = super().forward(dn_bboxes, dn_scores, batch, postfix="_dn", match_indices=match_indices)
+            if getattr(self, "_use_legacy_loss", False):
+                dn_loss = self._forward_group_legacy(
+                    dn_bboxes, dn_scores, batch, postfix="_dn", match_indices=match_indices
+                )
+            else:
+                layer_match_indices = [match_indices for _ in range(int(dn_bboxes.shape[0]))]
+                dn_loss = self._forward_group_batched(dn_bboxes, dn_scores, batch, "_dn", layer_match_indices)
             total_loss.update(dn_loss)
         else:
             # If no denoising metadata is provided, set denoising loss to zero
