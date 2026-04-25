@@ -82,6 +82,29 @@ def test_dataloader_empty_dataset_uses_dataloader_validation():
         build_dataloader([], batch=4, workers=2)
 
 
+@pytest.mark.parametrize(
+    ("dataset_len", "world_size", "batch", "expected"), [(8, 4, 8, 2), (4, 4, 4, 1), (13, 4, 13, 4)]
+)
+def test_distributed_eval_batch_size_keeps_every_possible_rank_nonempty(
+    monkeypatch, dataset_len, world_size, batch, expected
+):
+    """Test eval batch clamping creates at least one sampler batch per rank whenever dataset size permits."""
+    monkeypatch.setattr(data_build.dist, "is_available", lambda: True)
+    monkeypatch.setattr(data_build.dist, "is_initialized", lambda: True)
+    monkeypatch.setattr(data_build.dist, "get_world_size", lambda: world_size)
+
+    adjusted = data_build._adjust_distributed_eval_batch_size(batch, range(dataset_len), rank=0, shuffle=False)
+
+    assert adjusted == expected
+    samplers = [
+        data_build.ContiguousDistributedSampler(
+            range(dataset_len), num_replicas=world_size, rank=rank, batch_size=adjusted
+        )
+        for rank in range(world_size)
+    ]
+    assert all(len(sampler) > 0 for sampler in samplers)
+
+
 def test_cfg_rejects_fuzzed_values():
     """Test invalid overrides fail in config validation."""
     with pytest.raises(TypeError, match="degrees"):

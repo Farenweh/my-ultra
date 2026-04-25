@@ -235,9 +235,7 @@ def _adjust_distributed_eval_batch_size(batch: int, dataset: Dataset, rank: int,
     if world_size <= 1:
         return batch
 
-    max_batch = len(dataset) // world_size + 1
-    if max_batch < 1:
-        return 1
+    max_batch = max((len(dataset) - 1) // (world_size - 1), 1)
 
     adjusted = min(batch, max_batch)
     if adjusted != batch and RANK in {-1, 0}:
