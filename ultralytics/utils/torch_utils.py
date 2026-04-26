@@ -243,17 +243,6 @@ def get_gpu_info(index):
         return f"{properties.name}, {properties.total_memory / (1 << 20):.0f}MiB"
 
 
-def enable_torchvision_npu() -> bool:
-    """Enable torch_npu's torchvision patches when available."""
-    if not IS_ASCEND:
-        return False
-    try:
-        import torch_npu.contrib.transfer_to_npu  # noqa: F401
-    except ImportError:
-        return False
-    return True
-
-
 def parse_device(device: str | int | list | tuple | torch.device = "") -> str:
     """Parse a device request of any form into a canonical device string.
 
@@ -352,8 +341,6 @@ def select_device(device="", newline=False, verbose=True):
         the current device untouched.
     """
     if isinstance(device, torch.device):
-        if device.type == "npu":
-            enable_torchvision_npu()
         if device.type not in {"cuda", "npu", "xpu"}:
             return device  # other torch.device inputs pass through; accelerator inputs canonicalize and validate below
     elif str(device).startswith(("tpu", "intel", "vulkan")):
@@ -390,8 +377,6 @@ def select_device(device="", newline=False, verbose=True):
                 f"Invalid {device_type.upper()} 'device={device}' requested. Only {n} device(s) available."
             )
 
-        if device_type == "npu":
-            enable_torchvision_npu()
         if len(indices) == 1:
             backend.set_device(indices[0])  # multi-device DDP ranks each pin their device in trainer._setup_ddp()
         if verbose:
@@ -443,8 +428,6 @@ def select_device(device="", newline=False, verbose=True):
             current_device = torch.npu.current_device if IS_ASCEND else torch.cuda.current_device
             devices = [str(current_device())]
         space = " " * len(s)
-        if IS_ASCEND:
-            enable_torchvision_npu()
         for i, d in enumerate(devices):
             index = i if IS_ASCEND and device else int(d)
             s += f"{'' if i == 0 else space}{'Ascend' if IS_ASCEND else 'CUDA'}:{d} ({get_gpu_info(index)})\n"

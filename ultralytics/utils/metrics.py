@@ -93,13 +93,15 @@ def box_iou(box1: torch.Tensor, box2: torch.Tensor, eps: float = 1e-7) -> torch.
     References:
         https://github.com/pytorch/vision/blob/main/torchvision/ops/boxes.py
     """
-    # NOTE: Need .float() to get accurate iou values
-    # inter(N,M) = (rb(N,M,2) - lt(N,M,2)).clamp(0).prod(2)
-    (a1, a2), (b1, b2) = box1.float().unsqueeze(1).chunk(2, 2), box2.float().unsqueeze(0).chunk(2, 2)
-    inter = (torch.min(a2, b2) - torch.max(a1, b1)).clamp_(0).prod(2)
-
-    # IoU = inter / (area1 + area2 - inter)
-    return inter / ((a2 - a1).prod(2) + (b2 - b1).prod(2) - inter + eps)
+    # Calculate x/y overlap separately to avoid materializing an (N, M, 2) temporary. Keep FP32 for accuracy.
+    a1, b1, a2, b2 = box1.float().unbind(1)
+    c1, d1, c2, d2 = box2.float().unbind(1)
+    intersection_w = (a2[:, None].minimum(c2[None]) - a1[:, None].maximum(c1[None])).clamp_(0)
+    intersection_h = (b2[:, None].minimum(d2[None]) - b1[:, None].maximum(d1[None])).clamp_(0)
+    intersection = intersection_w * intersection_h
+    area1 = (a2 - a1) * (b2 - b1)
+    area2 = (c2 - c1) * (d2 - d1)
+    return intersection / (area1[:, None] + area2[None] - intersection + eps)
 
 
 def bbox_iou(
@@ -223,14 +225,41 @@ def _get_covariance_matrix(boxes: torch.Tensor, floor: float = 0.0) -> tuple[tor
         (tuple[torch.Tensor, torch.Tensor, torch.Tensor]): Covariance matrix components (a, b, c) where the covariance
             matrix is [[a, c], [c, b]], each of shape (N, 1).
     """
-    # Gaussian bounding boxes, ignore the center points (the first two columns) because they are not needed here.
-    gbbs = torch.cat((boxes[:, 2:4].pow(2) / 12 + floor, boxes[:, 4:]), dim=-1)
-    a, b, c = gbbs.split(1, dim=-1)
-    cos = c.cos()
-    sin = c.sin()
+    # Gaussian bounding boxes, ignoring centers. Keep variances and angles separate to avoid a temporary cat tensor.
+    a, b = (boxes[..., 2:4].square() / 12 + floor).split(1, dim=-1)
+    angle = boxes[..., 4:5]
+    cos = angle.cos()
+    sin = angle.sin()
     cos2 = cos.pow(2)
     sin2 = sin.pow(2)
     return a * cos2 + b * sin2, a * sin2 + b * cos2, (a - b) * cos * sin
+
+
+def _probiou_similarity(
+    x1: torch.Tensor,
+    y1: torch.Tensor,
+    x2: torch.Tensor,
+    y2: torch.Tensor,
+    a1: torch.Tensor,
+    b1: torch.Tensor,
+    c1: torch.Tensor,
+    a2: torch.Tensor,
+    b2: torch.Tensor,
+    c2: torch.Tensor,
+    eps: float,
+) -> torch.Tensor:
+    """Calculate probabilistic IoU while reusing common covariance expressions."""
+    a, b, c = a1 + a2, b1 + b2, c1 + c2
+    dx, dy = x1 - x2, y1 - y2
+    determinant = a * b - c.square()
+    inverse_determinant = (determinant + eps).reciprocal()
+    t1 = (a * dy.square() + b * dx.square()) * inverse_determinant * 0.25
+    t2 = -(c * dx * dy) * inverse_determinant * 0.5
+    determinant1 = (a1 * b1 - c1.square()).clamp_(0)
+    determinant2 = (a2 * b2 - c2.square()).clamp_(0)
+    t3 = (determinant / (4 * (determinant1 * determinant2).sqrt() + eps) + eps).log() * 0.5
+    bd = (t1 + t2 + t3).clamp(eps, 100.0)
+    return 1 - (1.0 - (-bd).exp() + eps).sqrt()
 
 
 def probiou(
@@ -259,18 +288,7 @@ def probiou(
     a1, b1, c1 = _get_covariance_matrix(obb1, floor)
     a2, b2, c2 = _get_covariance_matrix(obb2, floor)
 
-    t1 = (
-        ((a1 + a2) * (y1 - y2).pow(2) + (b1 + b2) * (x1 - x2).pow(2)) / ((a1 + a2) * (b1 + b2) - (c1 + c2).pow(2) + eps)
-    ) * 0.25
-    t2 = (((c1 + c2) * (x2 - x1) * (y1 - y2)) / ((a1 + a2) * (b1 + b2) - (c1 + c2).pow(2) + eps)) * 0.5
-    t3 = (
-        ((a1 + a2) * (b1 + b2) - (c1 + c2).pow(2))
-        / (4 * ((a1 * b1 - c1.pow(2)).clamp_(0) * (a2 * b2 - c2.pow(2)).clamp_(0)).sqrt() + eps)
-        + eps
-    ).log() * 0.5
-    bd = (t1 + t2 + t3).clamp(eps, 100.0)
-    hd = (1.0 - (-bd).exp() + eps).sqrt()
-    iou = 1 - hd
+    iou = _probiou_similarity(x1, y1, x2, y2, a1, b1, c1, a2, b2, c2, eps)
     if CIoU:  # only include the wh aspect ratio part
         w1, h1 = obb1[..., 2:4].split(1, dim=-1)
         w2, h2 = obb2[..., 2:4].split(1, dim=-1)
@@ -303,18 +321,7 @@ def batch_probiou(obb1: torch.Tensor | np.ndarray, obb2: torch.Tensor | np.ndarr
     a1, b1, c1 = _get_covariance_matrix(obb1)
     a2, b2, c2 = (x.squeeze(-1)[None] for x in _get_covariance_matrix(obb2))
 
-    t1 = (
-        ((a1 + a2) * (y1 - y2).pow(2) + (b1 + b2) * (x1 - x2).pow(2)) / ((a1 + a2) * (b1 + b2) - (c1 + c2).pow(2) + eps)
-    ) * 0.25
-    t2 = (((c1 + c2) * (x2 - x1) * (y1 - y2)) / ((a1 + a2) * (b1 + b2) - (c1 + c2).pow(2) + eps)) * 0.5
-    t3 = (
-        ((a1 + a2) * (b1 + b2) - (c1 + c2).pow(2))
-        / (4 * ((a1 * b1 - c1.pow(2)).clamp_(0) * (a2 * b2 - c2.pow(2)).clamp_(0)).sqrt() + eps)
-        + eps
-    ).log() * 0.5
-    bd = (t1 + t2 + t3).clamp(eps, 100.0)
-    hd = (1.0 - (-bd).exp() + eps).sqrt()
-    return 1 - hd
+    return _probiou_similarity(x1, y1, x2, y2, a1, b1, c1, a2, b2, c2, eps)
 
 
 def smooth_bce(eps: float = 0.1) -> tuple[float, float]:

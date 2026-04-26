@@ -24,6 +24,7 @@ from ultralytics.engine.predictor import BasePredictor
 from ultralytics.engine.results import Results
 from ultralytics.utils import DEFAULT_CFG, LOGGER, ops
 from ultralytics.utils.metrics import box_iou, mask_iou
+from ultralytics.utils.nms import TorchNMS
 from ultralytics.utils.torch_utils import autocast, resolve_amp_dtype, select_device, smart_inference_mode
 
 from .amg import (
@@ -370,8 +371,6 @@ class Predictor(BasePredictor):
             >>> im = torch.rand(1, 3, 1024, 1024)  # Example input image
             >>> masks, scores, boxes = predictor.generate(im)
         """
-        import torchvision  # scope for faster 'import ultralytics'
-
         self.segment_all = True
         ih, iw = im.shape[2:]
         crop_regions, layer_idxs = generate_crop_boxes((ih, iw), crop_n_layers, crop_overlap_ratio)
@@ -417,7 +416,7 @@ class Predictor(BasePredictor):
             crop_masks = torch.cat(crop_masks)
             crop_bboxes = torch.cat(crop_bboxes)
             crop_scores = torch.cat(crop_scores)
-            keep = torchvision.ops.nms(crop_bboxes, crop_scores, self.args.iou)  # NMS
+            keep = TorchNMS.nms(crop_bboxes, crop_scores, self.args.iou)
             crop_bboxes = uncrop_boxes_xyxy(crop_bboxes[keep], crop_region)
             crop_masks = uncrop_masks(crop_masks[keep], crop_region, ih, iw)
             crop_scores = crop_scores[keep]
@@ -435,7 +434,7 @@ class Predictor(BasePredictor):
         # Remove duplicate masks between crops
         if len(crop_regions) > 1:
             scores = 1 / region_areas
-            keep = torchvision.ops.nms(pred_bboxes, scores, crop_nms_thresh)
+            keep = TorchNMS.nms(pred_bboxes, scores, crop_nms_thresh)
             pred_masks, pred_bboxes, pred_scores = pred_masks[keep], pred_bboxes[keep], pred_scores[keep]
 
         return pred_masks, pred_scores, pred_bboxes
@@ -629,8 +628,6 @@ class Predictor(BasePredictor):
             >>> print(f"Original masks: {masks.shape}, Processed masks: {new_masks.shape}")
             >>> print(f"Indices of kept masks: {keep}")
         """
-        import torchvision  # scope for faster 'import ultralytics'
-
         if masks.shape[0] == 0:
             return masks
 
@@ -652,7 +649,7 @@ class Predictor(BasePredictor):
         new_masks = torch.cat(new_masks, dim=0)
         # batched_mask_to_box requires bool masks; on uint8 it returns all-zero boxes and the NMS dedup below is a no-op
         boxes = batched_mask_to_box(new_masks.bool())
-        keep = torchvision.ops.nms(boxes.float(), torch.as_tensor(scores), nms_thresh)
+        keep = TorchNMS.nms(boxes.float(), torch.as_tensor(scores), nms_thresh)
 
         return new_masks[keep].to(device=masks.device, dtype=masks.dtype), keep
 
@@ -2318,8 +2315,6 @@ class SAM3SemanticPredictor(SAM3Predictor):
 
     def postprocess(self, preds, img, orig_imgs):
         """Post-process the predictions to apply non-overlapping constraints if required."""
-        import torchvision
-
         pred_boxes = preds["pred_boxes"]  # (nc, num_query, 4)
         pred_logits = preds["pred_logits"]
         pred_masks = preds["pred_masks"]
@@ -2339,7 +2334,7 @@ class SAM3SemanticPredictor(SAM3Predictor):
 
         c = pred_boxes[:, 5:6] * (0 if self.args.agnostic_nms else 7680)  # classes
         nms_boxes = pred_boxes[:, :4] + c  # boxes (offset by class)
-        keep = torchvision.ops.nms(nms_boxes, pred_boxes[:, 4], self.args.iou)  # NMS
+        keep = TorchNMS.nms(nms_boxes, pred_boxes[:, 4], self.args.iou)
         pred_boxes, pred_masks = pred_boxes[keep], pred_masks[keep]
 
         names = getattr(self.model, "names", [str(i) for i in range(pred_scores.shape[0])])
@@ -2394,8 +2389,6 @@ class SAM3SemanticPredictor(SAM3Predictor):
         Notes:
             - The input features is a torch.Tensor of shape (B, C, H, W) if performing on SAM, or a dict[str, Any] if performing on SAM2.
         """
-        import torchvision
-
         prompts = self._prepare_geometric_prompts(src_shape[:2], bboxes, labels)
         preds = self._inference_features(features, *prompts, text=text)
         pred_boxes = preds["pred_boxes"]  # (nc, num_query, 4)
@@ -2417,7 +2410,7 @@ class SAM3SemanticPredictor(SAM3Predictor):
 
         c = pred_boxes[:, 5:6] * (0 if self.args.agnostic_nms else 7680)  # classes
         nms_boxes = pred_boxes[:, :4] + c  # boxes (offset by class)
-        keep = torchvision.ops.nms(nms_boxes, pred_boxes[:, 4], self.args.iou)  # NMS
+        keep = TorchNMS.nms(nms_boxes, pred_boxes[:, 4], self.args.iou)
         pred_boxes, pred_masks = pred_boxes[keep], pred_masks[keep]
 
         if pred_masks.shape[0] == 0:

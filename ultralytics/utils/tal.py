@@ -93,6 +93,9 @@ class TaskAlignedAssigner(nn.Module):
                 torch.zeros_like(pd_scores[..., 0]),
             )
 
+        if pd_scores.device.type == "npu":
+            return self._forward(pd_scores, pd_bboxes, anc_points, gt_labels, gt_bboxes, mask_gt)
+
         try:
             return self._forward(pd_scores, pd_bboxes, anc_points, gt_labels, gt_bboxes, mask_gt)
         except RuntimeError as e:
@@ -164,7 +167,9 @@ class TaskAlignedAssigner(nn.Module):
         target_labels, target_bboxes, target_scores = self.get_targets(gt_labels, gt_bboxes, target_gt_idx, fg_mask)
 
         # Normalize
-        align_metric *= mask_pos
+        mask_pos = mask_pos.bool()
+        align_metric = torch.where(mask_pos & torch.isfinite(align_metric), align_metric, 0)
+        overlaps = torch.where(mask_pos & torch.isfinite(overlaps), overlaps, 0)
         pos_align_metrics = align_metric.amax(dim=-1, keepdim=True)  # b, max_num_obj
         overlaps *= mask_pos
         pos_overlaps = overlaps.amax(dim=-1, keepdim=True)  # b, max_num_obj

@@ -369,7 +369,7 @@ class AutoBackend(nn.Module):
                 self.forward(im)  # warmup model
                 warmup_boxes = torch.rand(1, 84, 16, device=self.device)  # 16 boxes works best empirically
                 warmup_boxes[:, :4] *= im.shape[-1]
-                non_max_suppression(warmup_boxes)  # warmup NMS
+                non_max_suppression(warmup_boxes, max_time_img=None)  # warmup NMS without first-call timeout
 
     @staticmethod
     def _model_type(p: str = "path/to/model.pt", dnn: bool = False) -> str:

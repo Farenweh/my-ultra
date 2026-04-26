@@ -1,6 +1,5 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
-import sys
 import time
 
 import torch
@@ -20,7 +19,7 @@ def non_max_suppression(
     labels=(),
     max_det: int = 300,
     nc: int = 0,  # number of classes (optional)
-    max_time_img: float = 0.05,
+    max_time_img: float | None = 0.05,
     max_nms: int = 30000,
     max_wh: int = 7680,
     rotated: bool = False,
@@ -43,7 +42,7 @@ def non_max_suppression(
         labels (list[torch.Tensor]): A priori labels for each image.
         max_det (int): Maximum number of detections to keep per image.
         nc (int): Number of classes. Indices after this are considered masks.
-        max_time_img (float): Maximum time in seconds for processing one image.
+        max_time_img (float | None): Maximum time in seconds for processing one image, or None for no time limit.
         max_nms (int): Maximum number of boxes for NMS.
         max_wh (int): Maximum box width and height in pixels.
         rotated (bool): Whether to handle Oriented Bounding Boxes (OBB).
@@ -83,7 +82,7 @@ def non_max_suppression(
 
     # Settings
     # min_wh = 2  # (pixels) minimum box width and height
-    time_limit = 2.0 + max_time_img * bs  # seconds to quit after
+    time_limit = float("inf") if max_time_img is None else 2.0 + max_time_img * bs  # seconds to quit after
     multi_label &= nc > 1  # multiple labels per box (adds 0.5ms/img)
 
     prediction = prediction.transpose(-1, -2)  # shape(1,84,6300) to shape(1,6300,84)
@@ -93,7 +92,6 @@ def non_max_suppression(
     t = time.time()
     output = [torch.zeros((0, 6 + extra), device=prediction.device)] * bs
     keepi = [torch.zeros((0, 1), device=prediction.device)] * bs  # to store the kept idxs
-    use_torchvision = prediction.device.type != "xpu" and "torchvision" in sys.modules
     for xi, (x, xk) in enumerate(zip(prediction, xinds)):  # image index, (preds, preds indices)
         # Apply constraints
         # x[((x[:, 2:4] < min_wh) | (x[:, 2:4] > max_wh)).any(1), 4] = 0  # width-height
@@ -153,13 +151,7 @@ def non_max_suppression(
             i = TorchNMS.fast_nms(boxes, scores, iou_thres, iou_func=batch_probiou)
         else:
             boxes = x[:, :4] + c  # boxes (offset by class)
-            # Use torchvision if already imported; it has no XPU NMS kernel, but torch_npu CPU-falls back on NPU.
-            if use_torchvision:
-                import torchvision  # scope as slow import
-
-                i = torchvision.ops.nms(boxes, scores, iou_thres)
-            else:
-                i = TorchNMS.nms(boxes, scores, iou_thres)
+            i = TorchNMS.nms(boxes, scores, iou_thres)
         i = i[:max_det]  # limit detections
 
         output[xi] = x[i]
@@ -244,7 +236,7 @@ class TorchNMS:
 
     @staticmethod
     def nms(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float) -> torch.Tensor:
-        """Optimized NMS with early termination that matches torchvision behavior exactly.
+        """Apply exact NMS with a device-aware backend.
 
         Args:
             boxes (torch.Tensor): Bounding boxes with shape (N, 4) in xyxy format.
@@ -260,6 +252,28 @@ class TorchNMS:
             >>> scores = torch.tensor([0.9, 0.8])
             >>> keep = TorchNMS.nms(boxes, scores, 0.5)
         """
+        if boxes.numel() == 0:
+            return torch.empty((0,), dtype=torch.int64, device=boxes.device)
+
+        if boxes.device.type == "npu":
+            # torchvision has no maintained NPU kernel. Pack the filtered candidates into one D2H transfer, run its
+            # exact and maintained CPU kernel, then return only the small index tensor to the originating NPU.
+            import torchvision  # scope as slow import
+
+            packed = torch.cat((boxes, scores[:, None]), dim=1).to(device="cpu", dtype=torch.float32)
+            keep = torchvision.ops.nms(packed[:, :4], packed[:, 4], iou_threshold)
+            return keep.to(boxes.device)
+
+        if boxes.device.type in {"cpu", "cuda"}:
+            import torchvision  # scope as slow import
+
+            return torchvision.ops.nms(boxes, scores, iou_threshold)
+
+        return TorchNMS._nms_pytorch(boxes, scores, iou_threshold)
+
+    @staticmethod
+    def _nms_pytorch(boxes: torch.Tensor, scores: torch.Tensor, iou_threshold: float) -> torch.Tensor:
+        """Apply the exact pure-PyTorch fallback on devices without a maintained torchvision kernel."""
         if boxes.numel() == 0:
             return torch.empty((0,), dtype=torch.int64, device=boxes.device)
 
@@ -291,8 +305,8 @@ class TorchNMS:
             w = (xx2 - xx1).clamp_(min=0)
             h = (yy2 - yy1).clamp_(min=0)
             inter = w * h
-            # Early exit: skip IoU calculation if no intersection
-            if inter.sum() == 0:
+            # Restrict the scalar early-exit check to CPU so accelerator fallbacks never synchronize each iteration.
+            if boxes.device.type == "cpu" and inter.sum() == 0:
                 # No overlaps with current box, keep all remaining boxes
                 order = rest
                 continue
