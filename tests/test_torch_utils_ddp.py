@@ -21,8 +21,6 @@ def test_select_device_npu_list_uses_visible_device_mapping(monkeypatch):
     monkeypatch.delenv("ASCEND_RT_VISIBLE_DEVICES", raising=False)
     monkeypatch.setattr(torch_utils, "IS_ASCEND", True)
     monkeypatch.setattr(torch_utils.torch, "npu", fake_npu, raising=False)
-    monkeypatch.setattr(torch_utils, "enable_torchvision_npu", lambda: True)
-
     device = torch_utils.select_device([1], verbose=False)
 
     assert os.environ["ASCEND_RT_VISIBLE_DEVICES"] == "1"
@@ -40,8 +38,6 @@ def test_select_device_unprefixed_list_routes_to_npu(monkeypatch, device_request
     monkeypatch.delenv("ASCEND_RT_VISIBLE_DEVICES", raising=False)
     monkeypatch.setattr(torch_utils, "IS_ASCEND", True)
     monkeypatch.setattr(torch_utils.torch, "npu", fake_npu, raising=False)
-    monkeypatch.setattr(torch_utils, "enable_torchvision_npu", lambda: True)
-
     device = torch_utils.select_device(device_request, verbose=False)
 
     assert torch_utils.parse_device(device_request) == "0,1"
