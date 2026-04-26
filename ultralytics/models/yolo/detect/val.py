@@ -169,6 +169,7 @@ class DetectionValidator(BaseValidator):
             multi_label=True,
             agnostic=self.args.single_cls or self.args.agnostic_nms,
             max_det=self.args.max_det,
+            max_time_img=None,
             end2end=self.end2end,
             rotated=self.args.task == "obb",
         )
