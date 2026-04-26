@@ -1,6 +1,7 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
 import sys
+import threading
 from collections import OrderedDict
 from pathlib import Path
 from types import SimpleNamespace
@@ -19,7 +20,16 @@ from ultralytics.models.yolo import classify, depth, detect, obb, pose, segment,
 from ultralytics.nn.distill_model import DistillationModel
 from ultralytics.nn.tasks import DetectionModel, load_checkpoint
 from ultralytics.utils import ASSETS, DEFAULT_CFG, IS_RASPBERRYPI, WEIGHTS_DIR
+from ultralytics.utils.tal import TaskAlignedAssigner
 from ultralytics.utils.torch_utils import unwrap_model
+
+
+def _require_npu_device():
+    """返回 NPU 测试设备；无 NPU 时跳过对应测试。"""
+    if not hasattr(torch, "npu") or not torch.npu.is_available():
+        pytest.skip("NPU is required for this EMA test")
+    torch.npu.set_device(0)
+    return torch.device("npu:0")
 
 
 def test_func(*args, **kwargs):
@@ -35,6 +45,80 @@ def test_export(monkeypatch, tmp_path):
     assert test_func in exporter.callbacks["on_export_start"], "on_export_start callback not registered"
     f = exporter(model=YOLO("yolo26n.yaml").model)
     YOLO(f)(SOURCE)  # exported model inference
+
+
+def test_task_aligned_assigner_masks_invalid_nan_metrics_before_normalization():
+    assigner = TaskAlignedAssigner(topk=1, num_classes=2)
+
+    def get_pos_mask(*args, **kwargs):
+        mask_pos = torch.tensor([[[1.0, 0.0, 0.0]]])
+        align_metric = torch.tensor([[[0.5, float("nan"), float("nan")]]])
+        overlaps = torch.tensor([[[0.7, float("nan"), float("nan")]]])
+        return mask_pos, align_metric, overlaps
+
+    assigner.get_pos_mask = get_pos_mask
+    _, _, target_scores, fg_mask, _ = assigner(
+        torch.zeros(1, 3, 2),
+        torch.zeros(1, 3, 4),
+        torch.zeros(3, 2),
+        torch.zeros(1, 1, 1),
+        torch.tensor([[[0.0, 0.0, 1.0, 1.0]]]),
+        torch.ones(1, 1, 1),
+    )
+
+    assert torch.isfinite(target_scores).all()
+    assert torch.equal(fg_mask, torch.tensor([[True, False, False]]))
+
+
+def test_task_aligned_assigner_cuda_oom_retries_on_cpu(monkeypatch):
+    """确认非 NPU assigner 遇到 CUDA OOM 时保留 CPU 恢复路径。"""
+    assigner = TaskAlignedAssigner(topk=1, num_classes=2)
+    calls = 0
+
+    def retry_on_cpu(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("CUDA out of memory")
+        return args[:5]
+
+    monkeypatch.setattr(assigner, "_forward", retry_on_cpu)
+    result = assigner(
+        torch.zeros(1, 3, 2),
+        torch.zeros(1, 3, 4),
+        torch.zeros(3, 2),
+        torch.zeros(1, 1, 1),
+        torch.tensor([[[0.0, 0.0, 1.0, 1.0]]]),
+        torch.ones(1, 1, 1),
+    )
+
+    assert calls == 2
+    assert all(t.device.type == "cpu" for t in result)
+
+
+def test_task_aligned_assigner_npu_oom_fails_fast(monkeypatch):
+    """确认 NPU assigner 遇到 OOM 时不把整批数据搬到 CPU 重试。"""
+    device = _require_npu_device()
+    assigner = TaskAlignedAssigner(topk=1, num_classes=2)
+    calls = 0
+
+    def fail_on_npu(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("NPU out of memory")
+
+    monkeypatch.setattr(assigner, "_forward", fail_on_npu)
+    with pytest.raises(RuntimeError, match="NPU out of memory"):
+        assigner(
+            torch.zeros(1, 3, 2, device=device),
+            torch.zeros(1, 3, 4, device=device),
+            torch.zeros(3, 2, device=device),
+            torch.zeros(1, 1, 1, device=device),
+            torch.tensor([[[0.0, 0.0, 1.0, 1.0]]], device=device),
+            torch.ones(1, 1, 1, device=device),
+        )
+
+    assert calls == 1
 
 
 def test_build_optimizer_ascend_fused_adamw_missing_fails(monkeypatch):
@@ -91,6 +175,118 @@ def test_optimizer_step_ascend_fused_grad_clip_missing_fails(monkeypatch):
 
     with pytest.raises(RuntimeError, match="clip_grad_norm_fused_"):
         trainer.optimizer_step()
+
+
+def test_save_metrics_includes_fitness_before_lr(tmp_path):
+    """Test that training results CSV includes fitness before learning-rate columns."""
+    trainer = object.__new__(BaseTrainer)
+    trainer.csv = tmp_path / "results.csv"
+    trainer.epoch = 0
+    trainer.train_time_start = 0.0
+    trainer.fitness = 0.75
+
+    trainer.save_metrics({"train/loss": 1.0, "metrics/accuracy_top1": 0.5, "val/loss": 0.8, "lr/pg0": 0.01})
+
+    header, row = [line.split(",") for line in trainer.csv.read_text(encoding="utf-8").splitlines()]
+    assert header == ["epoch", "time", "train/loss", "metrics/accuracy_top1", "val/loss", "fitness", "lr/pg0"]
+    assert row[header.index("fitness")] == "0.75"
+
+
+def test_save_metrics_backfills_legacy_csv_fitness(tmp_path):
+    """Test that appending to a legacy results CSV adds a fitness column with nan history."""
+    trainer = object.__new__(BaseTrainer)
+    trainer.csv = tmp_path / "results.csv"
+    trainer.csv.write_text("epoch,time,train/loss,metrics/accuracy_top1,lr/pg0\n1,1,1,0.2,0.01\n", encoding="utf-8")
+    trainer.epoch = 1
+    trainer.train_time_start = 0.0
+    trainer.fitness = 0.6
+
+    trainer.save_metrics({"train/loss": 0.5, "metrics/accuracy_top1": 0.4, "lr/pg0": 0.02})
+
+    rows = [line.split(",") for line in trainer.csv.read_text(encoding="utf-8").splitlines()]
+    header = rows[0]
+    fitness_index = header.index("fitness")
+    assert header == ["epoch", "time", "train/loss", "metrics/accuracy_top1", "fitness", "lr/pg0"]
+    assert rows[1][fitness_index] == "nan"
+    assert rows[2][fitness_index] == "0.6"
+
+
+def _minimal_plot_trainer(tmp_path):
+    """Create a BaseTrainer shell with only the fields needed by plot_metrics."""
+    trainer = object.__new__(BaseTrainer)
+    trainer.csv = tmp_path / "results.csv"
+    trainer.plots = {}
+    trainer.on_plot = lambda *args, **kwargs: None
+    return trainer
+
+
+def test_plot_metrics_async_coalesces_pending_requests(tmp_path, monkeypatch):
+    """Test threaded plot_metrics keeps a single worker and collapses repeated requests."""
+    trainer = _minimal_plot_trainer(tmp_path)
+    started, release = threading.Event(), threading.Event()
+    calls = []
+
+    def fake_plot_results(file, on_plot):
+        calls.append(file)
+        if len(calls) == 1:
+            started.set()
+            assert release.wait(5)
+
+    monkeypatch.setattr(trainer_module, "plot_results", fake_plot_results)
+
+    thread = trainer.plot_metrics(threaded=True)
+    assert started.wait(5)
+    assert trainer.plot_metrics(threaded=True) is thread
+    assert trainer.plot_metrics(threaded=True) is thread
+    assert len(calls) == 1
+
+    release.set()
+    trainer._wait_for_plot_metrics()
+
+    assert len(calls) == 2
+    assert trainer._plot_thread is None
+
+
+def test_plot_metrics_sync_waits_for_async_then_plots_latest(tmp_path, monkeypatch):
+    """Test synchronous plot_metrics waits for active work and discards queued redraws."""
+    trainer = _minimal_plot_trainer(tmp_path)
+    started, release = threading.Event(), threading.Event()
+    calls = []
+
+    def fake_plot_results(file, on_plot):
+        calls.append(file)
+        if len(calls) == 1:
+            started.set()
+            assert release.wait(5)
+
+    monkeypatch.setattr(trainer_module, "plot_results", fake_plot_results)
+
+    trainer.plot_metrics(threaded=True)
+    assert started.wait(5)
+    trainer.plot_metrics(threaded=True)
+    release.set()
+    trainer.plot_metrics()
+
+    assert len(calls) == 2
+    assert trainer._plot_thread is None
+
+
+def test_plot_metrics_async_warns_on_background_error(tmp_path, monkeypatch):
+    """Test background plotting failures are logged without escaping the worker."""
+    trainer = _minimal_plot_trainer(tmp_path)
+    warnings = []
+
+    def fake_plot_results(file, on_plot):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(trainer_module, "plot_results", fake_plot_results)
+    monkeypatch.setattr(trainer_module.LOGGER, "warning", lambda msg: warnings.append(msg))
+
+    trainer.plot_metrics(threaded=True)
+    trainer._wait_for_plot_metrics()
+
+    assert trainer._plot_thread is None
+    assert any("boom" in str(warning) for warning in warnings)
 
 
 @pytest.mark.parametrize(

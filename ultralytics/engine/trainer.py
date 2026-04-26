@@ -13,6 +13,7 @@ import math
 import os
 import shutil
 import subprocess
+import threading
 import time
 import warnings
 from copy import copy, deepcopy
@@ -247,6 +248,9 @@ class BaseTrainer:
         self._data_cycle_batch = 0
         self._train_cycle_iterator = None
         self._train_cycle_size = None
+        self._plot_thread = None
+        self._plot_pending = False
+        self._plot_lock = threading.Lock()
 
     def add_callback(self, event: str, callback):
         """Append the given callback to the event's callback list."""
@@ -872,7 +876,7 @@ class BaseTrainer:
                     self.run_callbacks("on_model_save")
 
             if self.args.plots:
-                self.plot_metrics()
+                self.plot_metrics(threaded=True)
 
             # Scheduler
             t = time.time()
@@ -1228,17 +1232,90 @@ class BaseTrainer:
 
     def save_metrics(self, metrics):
         """Save training metrics to a CSV file."""
+        metrics = dict(metrics)
+        if "fitness" not in metrics:
+            fitness = 0.0 if getattr(self, "fitness", None) is None else self.fitness
+            metrics_with_fitness, inserted = {}, False
+            for k, v in metrics.items():
+                if not inserted and k.startswith("lr/"):
+                    metrics_with_fitness["fitness"] = fitness
+                    inserted = True
+                metrics_with_fitness[k] = v
+            if not inserted:
+                metrics_with_fitness["fitness"] = fitness
+            metrics = metrics_with_fitness
+
+        self.csv.parent.mkdir(parents=True, exist_ok=True)  # ensure parent directory exists
+        if self.csv.exists():
+            lines = self.csv.read_text(encoding="utf-8").splitlines()
+            if lines:
+                header = lines[0].split(",")
+                if "fitness" not in header:
+                    insert_at = next((i for i, k in enumerate(header) if k.startswith("lr/")), len(header))
+                    header.insert(insert_at, "fitness")
+                    updated = [",".join(header)]
+                    for line in lines[1:]:
+                        row = line.split(",")
+                        row.insert(min(insert_at, len(row)), "nan")
+                        updated.append(",".join(row))
+                    self.csv.write_text("\n".join(updated) + "\n", encoding="utf-8")
+
         keys, vals = list(metrics.keys()), list(metrics.values())
         n = len(metrics) + 2  # number of cols
         t = time.time() - self.train_time_start
-        self.csv.parent.mkdir(parents=True, exist_ok=True)  # ensure parent directory exists
         s = "" if self.csv.exists() else ("%s," * n % ("epoch", "time", *keys)).rstrip(",") + "\n"
         with open(self.csv, "a", encoding="utf-8") as f:
             f.write(s + ("%.6g," * n % (self.epoch + 1, t, *vals)).rstrip(",") + "\n")
 
-    def plot_metrics(self):
+    def _ensure_plot_thread_state(self):
+        """Initialize async plot state for trainers created without __init__ in tests."""
+        if not hasattr(self, "_plot_lock"):
+            self._plot_thread = None
+            self._plot_pending = False
+            self._plot_lock = threading.Lock()
+
+    def _plot_metrics_worker(self):
+        """Run plot_metrics in a single background worker, coalescing pending requests."""
+        while True:
+            try:
+                plot_results(file=self.csv, on_plot=self.on_plot)  # save results.png
+            except Exception as e:
+                LOGGER.warning(f"Plotting error in background thread: {e}")
+            with self._plot_lock:
+                if self._plot_pending:
+                    self._plot_pending = False
+                    continue
+                self._plot_thread = None
+                return
+
+    def _wait_for_plot_metrics(self, discard_pending: bool = False):
+        """Wait for any background metrics plotting to finish."""
+        self._ensure_plot_thread_state()
+        while True:
+            with self._plot_lock:
+                if discard_pending:
+                    self._plot_pending = False
+                thread = self._plot_thread
+            if thread is None:
+                return
+            thread.join()
+
+    def plot_metrics(self, threaded: bool = False):
         """Plot metrics from a CSV file."""
-        plot_results(file=self.csv, on_plot=self.on_plot)  # save results.png
+        self._ensure_plot_thread_state()
+        if not threaded:
+            self._wait_for_plot_metrics(discard_pending=True)
+            plot_results(file=self.csv, on_plot=self.on_plot)  # save results.png
+            return None
+
+        with self._plot_lock:
+            if self._plot_thread and self._plot_thread.is_alive():
+                self._plot_pending = True
+                return self._plot_thread
+            self._plot_pending = False
+            self._plot_thread = threading.Thread(target=self._plot_metrics_worker, daemon=True)
+            self._plot_thread.start()
+            return self._plot_thread
 
     def on_plot(self, name, data=None):
         """Register plots (e.g. to be consumed in callbacks)."""

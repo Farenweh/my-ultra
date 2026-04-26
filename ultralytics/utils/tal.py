@@ -83,7 +83,6 @@ class TaskAlignedAssigner(nn.Module):
         """
         self.bs = pd_scores.shape[0]
         self.n_max_boxes = gt_bboxes.shape[1]
-        device = gt_bboxes.device
 
         if self.n_max_boxes == 0:
             return (
@@ -94,16 +93,18 @@ class TaskAlignedAssigner(nn.Module):
                 torch.zeros_like(pd_scores[..., 0]),
             )
 
+        if pd_scores.device.type == "npu":
+            return self._forward(pd_scores, pd_bboxes, anc_points, gt_labels, gt_bboxes, mask_gt)
+
         try:
             return self._forward(pd_scores, pd_bboxes, anc_points, gt_labels, gt_bboxes, mask_gt)
         except RuntimeError as e:
             if "out of memory" not in str(e).lower():
                 raise
-        # Recover outside the except block: exiting it drops e.__traceback__, releasing the failed attempt's GPU
-        # intermediates back to the allocator so the copy-back below can succeed
+        # Exiting the except block drops the failed attempt's traceback before allocating the CPU retry tensors.
         LOGGER.warning("CUDA OutOfMemoryError in TaskAlignedAssigner, using CPU")
         result = self._forward(*(t.cpu() for t in (pd_scores, pd_bboxes, anc_points, gt_labels, gt_bboxes, mask_gt)))
-        return tuple(t.to(device) for t in result)
+        return tuple(t.to(gt_bboxes.device) for t in result)
 
     def _forward(self, pd_scores, pd_bboxes, anc_points, gt_labels, gt_bboxes, mask_gt):
         """Compute the task-aligned assignment.
@@ -135,9 +136,11 @@ class TaskAlignedAssigner(nn.Module):
         target_labels, target_bboxes, target_scores = self.get_targets(gt_labels, gt_bboxes, target_gt_idx, fg_mask)
 
         # Normalize
-        align_metric *= mask_pos
+        mask_pos = mask_pos.bool()
+        align_metric = torch.where(mask_pos & torch.isfinite(align_metric), align_metric, 0)
+        overlaps = torch.where(mask_pos & torch.isfinite(overlaps), overlaps, 0)
         pos_align_metrics = align_metric.amax(dim=-1, keepdim=True)  # b, max_num_obj
-        pos_overlaps = (overlaps * mask_pos).amax(dim=-1, keepdim=True)  # b, max_num_obj
+        pos_overlaps = overlaps.amax(dim=-1, keepdim=True)  # b, max_num_obj
         norm_align_metric = (align_metric * pos_overlaps / (pos_align_metrics + self.eps)).amax(-2).unsqueeze(-1)
         target_scores = target_scores * norm_align_metric
 

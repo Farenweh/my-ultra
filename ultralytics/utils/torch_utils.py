@@ -5,6 +5,7 @@ from __future__ import annotations
 import functools
 import gc
 import itertools
+import logging
 import math
 import os
 import random
@@ -62,7 +63,29 @@ if WINDOWS and check_version(TORCH_VERSION, "==2.4.0"):  # reject version 2.4.0 
         "https://github.com/ultralytics/ultralytics/issues/15049"
     )
 
+_TORCHVISION_NPU_AVAILABLE: bool | None = None
 _ZERO_FIRST_COUNTER = itertools.count()
+
+
+def _import_torchvision_npu() -> None:
+    """Import torchvision_npu without allowing it to reconfigure global logging."""
+    root_logger = logging.getLogger()
+    root_level = root_logger.level
+    root_handlers = list(root_logger.handlers)
+
+    if "TORCH_NPU_LOGS" not in os.environ:
+        logging.getLogger("torch_npu.env").setLevel(logging.WARNING)
+
+    try:
+        import torchvision_npu  # noqa: F401
+    finally:
+        root_logger.setLevel(root_level)
+        for handler in list(root_logger.handlers):
+            if handler not in root_handlers:
+                root_logger.removeHandler(handler)
+        for handler in root_handlers:
+            if handler not in root_logger.handlers:
+                root_logger.addHandler(handler)
 
 
 def _distributed_backend_name() -> str:
@@ -195,6 +218,28 @@ def autocast(enabled: bool, device: str = "auto"):
         return torch.cuda.amp.autocast(enabled) if not IS_ASCEND else torch.npu.amp.autocast(enabled)
 
 
+def enable_torchvision_npu() -> bool:
+    """在昇腾 NPU 环境中一次性加载 torchvision_npu，使 torchvision.ops 分发到 NPU 算子。"""
+    global _TORCHVISION_NPU_AVAILABLE
+
+    if not (hasattr(torch, "npu") and torch.npu.is_available()):
+        return False
+    if _TORCHVISION_NPU_AVAILABLE is not None:
+        return _TORCHVISION_NPU_AVAILABLE
+
+    try:
+        _import_torchvision_npu()
+    except Exception as e:
+        _TORCHVISION_NPU_AVAILABLE = False
+        LOGGER.warning(
+            "torchvision_npu 加载失败；nms、roi_align 和 roi_pool 的 torchvision.ops NPU 算子不会注册，"
+            f"可能回退到 CPU 执行: {e}"
+        )
+    else:
+        _TORCHVISION_NPU_AVAILABLE = True
+    return _TORCHVISION_NPU_AVAILABLE
+
+
 @functools.lru_cache
 def get_cpu_info():
     """Return a string with system CPU information, i.e. 'Apple M2'."""
@@ -210,17 +255,6 @@ def get_gpu_info(index):
     else:
         properties = torch.cuda.get_device_properties(index)
         return f"{properties.name}, {properties.total_memory / (1 << 20):.0f}MiB"
-
-
-def enable_torchvision_npu() -> bool:
-    """Enable torch_npu's torchvision patches when available."""
-    if not IS_ASCEND:
-        return False
-    try:
-        import torch_npu.contrib.transfer_to_npu  # noqa: F401
-    except ImportError:
-        return False
-    return True
 
 
 def parse_device(device: str | int | list | tuple | torch.device = "") -> str:
@@ -412,8 +446,6 @@ def select_device(device="", newline=False, verbose=True):
             current_device = torch.npu.current_device if IS_ASCEND else torch.cuda.current_device
             devices = [str(current_device())]
         space = " " * len(s)
-        if IS_ASCEND:
-            enable_torchvision_npu()
         for i, d in enumerate(devices):
             index = i if IS_ASCEND and device else int(d)
             s += f"{'' if i == 0 else space}{'Ascend' if IS_ASCEND else 'CUDA'}:{d} ({get_gpu_info(index)})\n"
@@ -430,6 +462,8 @@ def select_device(device="", newline=False, verbose=True):
 
     if arg in {"cpu", "mps"}:
         torch.set_num_threads(NUM_THREADS)  # reset OMP_NUM_THREADS for cpu training
+    elif arg.startswith("npu"):
+        enable_torchvision_npu()
     if verbose:
         LOGGER.info(s if newline else s.rstrip())
     return torch.device(arg)
