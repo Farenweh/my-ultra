@@ -77,6 +77,7 @@ class PoseTrainer(yolo.detect.DetectionTrainer):
                 ch=self.data["channels"],
                 data_kpt_shape=self.data["kpt_shape"],
                 verbose=verbose and RANK == -1,
+                summary=False,
             )
         )
         if weights:

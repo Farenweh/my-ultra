@@ -72,6 +72,7 @@ class YOLOETrainer(DetectionTrainer):
             ch=self.data["channels"],
             nc=min(self.data["nc"], 80),
             verbose=verbose and RANK == -1,
+            summary=False,
         )
         if weights:
             model.load(weights)
@@ -127,6 +128,7 @@ class YOLOEPETrainer(DetectionTrainer):
             ch=self.data["channels"],
             nc=self.data["nc"],
             verbose=verbose and RANK == -1,
+            summary=False,
         )
 
         del model.model[-1].savpe

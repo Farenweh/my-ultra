@@ -636,6 +636,17 @@ def _attention_ops(m, x, y):
     m.total_ops += b * area * m.num_heads * tokens * tokens * (key_dim + m.head_dim)
 
 
+def _get_input_channels(model, p) -> int:
+    """Return model input channels for FLOPs dummy input construction."""
+    channels = getattr(model, "yaml", {}).get("channels") if isinstance(getattr(model, "yaml", None), dict) else None
+    if channels:
+        return int(channels)
+    for m in model.modules():
+        if isinstance(m, nn.Conv2d):
+            return int(m.in_channels)
+    return int(p.shape[1]) if p.ndim > 1 else 3
+
+
 def get_flops(model, imgsz=640):
     """Calculate FLOPs (floating point operations) for a model in GFLOPs.
 
@@ -667,9 +678,10 @@ def get_flops(model, imgsz=640):
             imgsz = [imgsz, imgsz]  # expand if int/float
         attn = tuple(m for m in model.modules() if isinstance(m, (Attention, AAttn)))
         rtdetr = any(isinstance(m, RTDETRDecoder) for m in model.modules())
-        # Attention costs are quadratic in image area, so disable THOP's affine proxy.
-        stride = None if attn else max(int(model.stride.max()), 32) if hasattr(model, "stride") else 32
-        im = torch.empty((1, p.shape[1], *imgsz), device=p.device, dtype=p.dtype)  # input image in BCHW format
+        # attention costs scale with the square of the image area, so a model carrying one is measured at full size;
+        # stride= extrapolates from a stride-sized sample, which is affine in area and would land ~97% low on it.
+        stride = None if attn else max(int(model.stride.max()), 32) if hasattr(model, "stride") else 32  # max stride
+        im = torch.empty((1, _get_input_channels(model, p), *imgsz), device=p.device, dtype=p.dtype)  # BCHW image
         custom_ops = {Attention: _attention_ops, AAttn: _attention_ops} if attn else None
         if rtdetr:  # RT-DETR cannot run the stride-sized proxy input
             return thop.profile(model, inputs=[im], custom_ops=custom_ops, verbose=False)[0] / 1e9 * 2
