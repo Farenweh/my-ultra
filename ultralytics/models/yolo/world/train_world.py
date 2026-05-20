@@ -83,7 +83,7 @@ class WorldTrainerFromScratch(WorldTrainer):
         Returns:
             (YOLOConcatDataset | Dataset): The constructed dataset for training or validation.
         """
-        gs = max(int(unwrap_model(self.model).stride.max() if self.model else 0), 32)
+        gs = int(unwrap_model(self.model).stride.max() if self.model else 32)
         if mode != "train":
             return build_yolo_dataset(self.args, img_path, batch, self.data, mode=mode, rect=False, stride=gs)
         datasets = [
