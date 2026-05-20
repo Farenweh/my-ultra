@@ -299,13 +299,16 @@ class BasePredictor:
         """
         if hasattr(self.model, "imgsz") and not getattr(self.model, "dynamic", False):
             self.args.imgsz = self.model.imgsz  # every run reuses imgsz from export metadata, not just the first
-        self.imgsz = check_imgsz(self.args.imgsz, stride=stride or self.model.stride, min_dim=2)  # check image size
+        source_stride = stride or self.model.stride
+        source_stride = int(source_stride.max() if isinstance(source_stride, torch.Tensor) else source_stride)
+        self.imgsz = check_imgsz(self.args.imgsz, stride=source_stride, min_dim=2)  # check image size
         self.dataset = load_inference_source(
             source=source,
             batch=self.args.batch,
             vid_stride=self.args.vid_stride,
             buffer=self.args.stream_buffer,
             channels=getattr(self.model, "channels", 3),
+            stride=source_stride,
         )
         self.source_type = self.dataset.source_type
         if (
