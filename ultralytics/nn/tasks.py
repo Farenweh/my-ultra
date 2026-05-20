@@ -489,7 +489,7 @@ class DetectionModel(BaseModel):
         >>> results = model.predict(image_tensor)
     """
 
-    def __init__(self, cfg="yolo26n.yaml", ch=3, nc=None, verbose=True):
+    def __init__(self, cfg="yolo26n.yaml", ch=3, nc=None, verbose=True, summary: bool = True, imgsz: int | list = 640):
         """Initialize the YOLO detection model with the given config and parameters.
 
         Args:
@@ -497,6 +497,8 @@ class DetectionModel(BaseModel):
             ch (int): Number of input channels.
             nc (int, optional): Number of classes.
             verbose (bool): Whether to display model information.
+            summary (bool): Whether to print model summary after construction.
+            imgsz (int | list): Image size used for summary FLOPs calculation.
         """
         super().__init__()
         _initialize_yolo_model(self, cfg, ch, nc, verbose)
@@ -525,8 +527,8 @@ class DetectionModel(BaseModel):
 
         # Init weights, biases
         initialize_weights(self)
-        if verbose:
-            self.info()
+        if verbose and summary:
+            self.info(imgsz=imgsz)
             LOGGER.info("")
 
     @property
@@ -638,7 +640,9 @@ class OBBModel(DetectionModel):
         >>> results = model.predict(image_tensor)
     """
 
-    def __init__(self, cfg="yolo26n-obb.yaml", ch=3, nc=None, verbose=True):
+    def __init__(
+        self, cfg="yolo26n-obb.yaml", ch=3, nc=None, verbose=True, summary: bool = True, imgsz: int | list = 640
+    ):
         """Initialize YOLO OBB model with given config and parameters.
 
         Args:
@@ -646,8 +650,10 @@ class OBBModel(DetectionModel):
             ch (int): Number of input channels.
             nc (int, optional): Number of classes.
             verbose (bool): Whether to display model information.
+            summary (bool): Whether to print model summary after construction.
+            imgsz (int | list): Image size used for summary FLOPs calculation.
         """
-        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
+        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose, summary=summary, imgsz=imgsz)
 
     def init_criterion(self):
         """Initialize the loss criterion for the model."""
@@ -670,7 +676,9 @@ class SegmentationModel(DetectionModel):
         >>> results = model.predict(image_tensor)
     """
 
-    def __init__(self, cfg="yolo26n-seg.yaml", ch=3, nc=None, verbose=True):
+    def __init__(
+        self, cfg="yolo26n-seg.yaml", ch=3, nc=None, verbose=True, summary: bool = True, imgsz: int | list = 640
+    ):
         """Initialize Ultralytics YOLO segmentation model with given config and parameters.
 
         Args:
@@ -678,8 +686,10 @@ class SegmentationModel(DetectionModel):
             ch (int): Number of input channels.
             nc (int, optional): Number of classes.
             verbose (bool): Whether to display model information.
+            summary (bool): Whether to print model summary after construction.
+            imgsz (int | list): Image size used for summary FLOPs calculation.
         """
-        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
+        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose, summary=summary, imgsz=imgsz)
 
     def init_criterion(self):
         """Initialize the loss criterion for the SegmentationModel."""
@@ -705,7 +715,9 @@ class SemanticSegmentationModel(BaseModel):
         >>> model = SemanticSegmentationModel("yolo26n-sem.yaml", ch=3, nc=19)
     """
 
-    def __init__(self, cfg="yolo26n-sem.yaml", ch=3, nc=None, verbose=True):
+    def __init__(
+        self, cfg="yolo26n-sem.yaml", ch=3, nc=None, verbose=True, summary: bool = True, imgsz: int | list = 640
+    ):
         """Initialize the YOLO semantic segmentation model.
 
         Args:
@@ -713,6 +725,8 @@ class SemanticSegmentationModel(BaseModel):
             ch (int): Number of input channels.
             nc (int, optional): Number of classes.
             verbose (bool): Whether to display model information.
+            summary (bool): Whether to print model summary after construction.
+            imgsz (int | list): Image size used for summary FLOPs calculation.
         """
         super().__init__()
         _initialize_yolo_model(self, cfg, ch, nc, verbose)
@@ -745,8 +759,8 @@ class SemanticSegmentationModel(BaseModel):
             self.stride = torch.Tensor([32])
 
         initialize_weights(self)
-        if verbose:
-            self.info()
+        if verbose and summary:
+            self.info(imgsz=imgsz)
             LOGGER.info("")
 
     def init_criterion(self):
@@ -781,7 +795,16 @@ class PoseModel(DetectionModel):
         >>> results = model.predict(image_tensor)
     """
 
-    def __init__(self, cfg="yolo26n-pose.yaml", ch=3, nc=None, data_kpt_shape=(None, None), verbose=True):
+    def __init__(
+        self,
+        cfg="yolo26n-pose.yaml",
+        ch=3,
+        nc=None,
+        data_kpt_shape=(None, None),
+        verbose=True,
+        summary: bool = True,
+        imgsz: int | list = 640,
+    ):
         """Initialize Ultralytics YOLO Pose model.
 
         Args:
@@ -790,13 +813,15 @@ class PoseModel(DetectionModel):
             nc (int, optional): Number of classes.
             data_kpt_shape (tuple): Keypoint shape (num_keypoints, num_dims) that overrides the YAML `kpt_shape` if set.
             verbose (bool): Whether to display model information.
+            summary (bool): Whether to print model summary after construction.
+            imgsz (int | list): Image size used for summary FLOPs calculation.
         """
         if not isinstance(cfg, dict):
             cfg = yaml_model_load(cfg)  # load model YAML
         if any(data_kpt_shape) and list(data_kpt_shape) != list(cfg["kpt_shape"]):
             LOGGER.info(f"Overriding model.yaml kpt_shape={cfg['kpt_shape']} with kpt_shape={data_kpt_shape}")
             cfg["kpt_shape"] = data_kpt_shape
-        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
+        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose, summary=summary, imgsz=imgsz)
 
     def init_criterion(self):
         """Initialize the loss criterion for the PoseModel."""
@@ -815,7 +840,9 @@ class DepthModel(DetectionModel):
         >>> results = model(image_tensor)
     """
 
-    def __init__(self, cfg="yolo26n-depth.yaml", ch=3, nc=None, verbose=True):
+    def __init__(
+        self, cfg="yolo26n-depth.yaml", ch=3, nc=None, verbose=True, summary: bool = True, imgsz: int | list = 640
+    ):
         """Initialize YOLO Depth model.
 
         Args:
@@ -823,8 +850,10 @@ class DepthModel(DetectionModel):
             ch (int): Number of input channels.
             nc (int, optional): Number of classes.
             verbose (bool): Whether to display model information.
+            summary (bool): Whether to print the model summary after construction.
+            imgsz (int | list): Image size used to estimate FLOPs in the summary.
         """
-        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
+        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose, summary=summary, imgsz=imgsz)
 
     def init_criterion(self):
         """Initialize the depth loss criterion."""
@@ -855,7 +884,9 @@ class ClassificationModel(BaseModel):
         >>> results = model.predict(image_tensor)
     """
 
-    def __init__(self, cfg="yolo26n-cls.yaml", ch=3, nc=None, verbose=True):
+    def __init__(
+        self, cfg="yolo26n-cls.yaml", ch=3, nc=None, verbose=True, summary: bool = True, imgsz: int | list = 640
+    ):
         """Initialize ClassificationModel with YAML, channels, number of classes, verbose flag.
 
         Args:
@@ -863,11 +894,13 @@ class ClassificationModel(BaseModel):
             ch (int): Number of input channels.
             nc (int, optional): Number of classes.
             verbose (bool): Whether to display model information.
+            summary (bool): Whether to print model summary after construction.
+            imgsz (int | list): Image size used for summary FLOPs calculation.
         """
         super().__init__()
-        self._from_yaml(cfg, ch, nc, verbose)
+        self._from_yaml(cfg, ch, nc, verbose, summary=summary, imgsz=imgsz)
 
-    def _from_yaml(self, cfg, ch, nc, verbose):
+    def _from_yaml(self, cfg, ch, nc, verbose, summary: bool = True, imgsz: int | list = 640):
         """Set Ultralytics YOLO model configurations and define the model architecture.
 
         Args:
@@ -875,6 +908,8 @@ class ClassificationModel(BaseModel):
             ch (int): Number of input channels.
             nc (int, optional): Number of classes.
             verbose (bool): Whether to display model information.
+            summary (bool): Whether to print model summary after construction.
+            imgsz (int | list): Image size used for summary FLOPs calculation.
         """
         self.yaml = cfg if isinstance(cfg, dict) else yaml_model_load(cfg)  # cfg dict
 
@@ -888,7 +923,8 @@ class ClassificationModel(BaseModel):
         self.model, self.save = parse_model(deepcopy(self.yaml), ch=ch, verbose=verbose)  # model, savelist
         self.stride = torch.Tensor([1])  # no stride constraints
         self.names = {i: f"{i}" for i in range(self.yaml["nc"])}  # default names dict
-        self.info()
+        if verbose and summary:
+            self.info(imgsz=imgsz)
 
     @staticmethod
     def reshape_outputs(model, nc):
@@ -946,7 +982,7 @@ class RTDETRDetectionModel(DetectionModel):
         >>> results = model.predict(image_tensor)
     """
 
-    def __init__(self, cfg="rtdetr-l.yaml", ch=3, nc=None, verbose=True):
+    def __init__(self, cfg="rtdetr-l.yaml", ch=3, nc=None, verbose=True, summary: bool = True, imgsz: int | list = 640):
         """Initialize the RTDETRDetectionModel.
 
         Args:
@@ -954,8 +990,10 @@ class RTDETRDetectionModel(DetectionModel):
             ch (int): Number of input channels.
             nc (int, optional): Number of classes.
             verbose (bool): Print additional information during initialization.
+            summary (bool): Whether to print model summary after construction.
+            imgsz (int | list): Image size used for summary FLOPs calculation.
         """
-        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
+        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose, summary=summary, imgsz=imgsz)
 
     def _remap_cls_by_names(self, csd: dict[str, torch.Tensor], src_model: torch.nn.Module, verbose: bool = True):
         """Remap RT-DETR decoder cls-head rows by class name.
@@ -1117,7 +1155,9 @@ class WorldModel(DetectionModel):
         >>> results = model.predict(image_tensor)
     """
 
-    def __init__(self, cfg="yolov8s-world.yaml", ch=3, nc=None, verbose=True):
+    def __init__(
+        self, cfg="yolov8s-world.yaml", ch=3, nc=None, verbose=True, summary: bool = True, imgsz: int | list = 640
+    ):
         """Initialize YOLOv8 world model with given config and parameters.
 
         Args:
@@ -1125,10 +1165,12 @@ class WorldModel(DetectionModel):
             ch (int): Number of input channels.
             nc (int, optional): Number of classes.
             verbose (bool): Whether to display model information.
+            summary (bool): Whether to print model summary after construction.
+            imgsz (int | list): Image size used for summary FLOPs calculation.
         """
         self.txt_feats = torch.randn(1, nc or 80, 512)  # features placeholder
         self.clip_model = None  # CLIP model placeholder
-        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
+        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose, summary=summary, imgsz=imgsz)
 
     def set_classes(self, text, batch=80, cache_clip_model=True):
         """Set classes in advance so that model could do offline-inference without clip model.
@@ -1251,7 +1293,9 @@ class YOLOEModel(DetectionModel):
         >>> results = model.predict(image_tensor, tpe=text_embeddings)
     """
 
-    def __init__(self, cfg="yoloe-v8s.yaml", ch=3, nc=None, verbose=True):
+    def __init__(
+        self, cfg="yoloe-v8s.yaml", ch=3, nc=None, verbose=True, summary: bool = True, imgsz: int | list = 640
+    ):
         """Initialize YOLOE model with given config and parameters.
 
         Args:
@@ -1259,8 +1303,10 @@ class YOLOEModel(DetectionModel):
             ch (int): Number of input channels.
             nc (int, optional): Number of classes.
             verbose (bool): Whether to display model information.
+            summary (bool): Whether to print model summary after construction.
+            imgsz (int | list): Image size used for summary FLOPs calculation.
         """
-        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
+        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose, summary=summary, imgsz=imgsz)
         self.text_model = self.yaml.get("text_model", "mobileclip:blt")
 
     @smart_inference_mode()
@@ -1511,7 +1557,9 @@ class YOLOESegModel(YOLOEModel, SegmentationModel):
         >>> results = model.predict(image_tensor, tpe=text_embeddings)
     """
 
-    def __init__(self, cfg="yoloe-v8s-seg.yaml", ch=3, nc=None, verbose=True):
+    def __init__(
+        self, cfg="yoloe-v8s-seg.yaml", ch=3, nc=None, verbose=True, summary: bool = True, imgsz: int | list = 640
+    ):
         """Initialize YOLOE segmentation model with given config and parameters.
 
         Args:
@@ -1519,8 +1567,10 @@ class YOLOESegModel(YOLOEModel, SegmentationModel):
             ch (int): Number of input channels.
             nc (int, optional): Number of classes.
             verbose (bool): Whether to display model information.
+            summary (bool): Whether to print model summary after construction.
+            imgsz (int | list): Image size used for summary FLOPs calculation.
         """
-        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose)
+        super().__init__(cfg=cfg, ch=ch, nc=nc, verbose=verbose, summary=summary, imgsz=imgsz)
 
     def loss(self, batch, preds=None):
         """Compute loss.

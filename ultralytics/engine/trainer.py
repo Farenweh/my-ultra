@@ -599,6 +599,11 @@ class BaseTrainer:
                 if TORCH_2_4
                 else torch.cuda.amp.GradScaler(enabled=scaler_enabled)
             )
+        if RANK in {-1, 0}:
+            unwrapped_model = unwrap_model(self.model)
+            if hasattr(unwrapped_model, "info"):
+                unwrapped_model.info(imgsz=self.args.imgsz)
+
         # resume training would directly load DistillationModel so check here
         if self.args.distill_model is not None and not isinstance(unwrap_model(self.model), DistillationModel):
             self.model = DistillationModel(student_model=self.model, teacher_model=self.args.distill_model)
