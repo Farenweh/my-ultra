@@ -83,6 +83,7 @@ class WorldTrainer(DetectionTrainer):
             ch=self.data["channels"],
             nc=min(self.data["nc"], 80),
             verbose=verbose and RANK == -1,
+            summary=False,
         )
         if weights:
             model.load(weights)

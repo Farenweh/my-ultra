@@ -40,6 +40,7 @@ class YOLOESegTrainer(YOLOETrainer, SegmentationTrainer):
             ch=self.data["channels"],
             nc=min(self.data["nc"], 80),
             verbose=verbose and RANK == -1,
+            summary=False,
         )
         if weights:
             model.load(weights)
@@ -83,6 +84,7 @@ class YOLOEPESegTrainer(SegmentationTrainer):
             ch=self.data["channels"],
             nc=self.data["nc"],
             verbose=verbose and RANK == -1,
+            summary=False,
         )
 
         del model.model[-1].savpe

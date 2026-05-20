@@ -38,7 +38,11 @@ class DepthTrainer(DetectionTrainer):
     def get_model(self, cfg: str | None = None, weights: str | None = None, verbose: bool = True) -> DepthModel:
         """Return a DepthModel initialized with the given config and weights."""
         model = DepthModel(
-            cfg, ch=self.data.get("channels", 3), nc=self.data["nc"], verbose=verbose and RANK in {-1, 0}
+            cfg,
+            ch=self.data.get("channels", 3),
+            nc=self.data["nc"],
+            verbose=verbose and RANK in {-1, 0},
+            summary=False,
         )
         if weights:
             model.load(weights)
