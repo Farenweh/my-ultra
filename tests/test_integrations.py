@@ -7,6 +7,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import torch
 
 from tests import SOURCE
 from ultralytics import YOLO, download
@@ -154,6 +155,65 @@ def test_tensorboard_callback_records_experiment_details(monkeypatch, tmp_path):
     tb.teardown(trainer)
     assert writer.closed
     assert tb.WRITER is None
+
+
+def test_tensorboard_graph_traces_model_copy(monkeypatch):
+    """确认 graph tracing 不会改变训练模型的 mode、缓存或参数。"""
+    from ultralytics.utils.callbacks import tensorboard as tb
+
+    class CacheModel(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = torch.nn.Linear(3, 3)
+            self.cache = None
+
+        def forward(self, x):
+            return self.linear(x.mean((2, 3)))
+
+    class GraphWriter:
+        def __init__(self):
+            self.graphs = []
+
+        def add_graph(self, graph, inputs):
+            self.graphs.append((graph, inputs))
+
+    model = CacheModel().train()
+    weight = model.linear.weight.detach().clone()
+    writer = GraphWriter()
+    traced = []
+
+    def fake_trace(copied_model, image, strict=False):
+        traced.append(copied_model)
+        copied_model.cache = torch.ones(1)
+        copied_model.linear.weight.add_(1)
+        return copied_model
+
+    monkeypatch.setattr(tb, "WRITER", writer)
+    monkeypatch.setattr(tb.torch.jit, "trace", fake_trace)
+    trainer = SimpleNamespace(model=model, args=SimpleNamespace(imgsz=8), data={"channels": 3})
+
+    tb._log_tensorboard_graph(trainer)
+
+    assert traced and traced[0] is not model
+    assert model.training
+    assert model.cache is None
+    torch.testing.assert_close(model.linear.weight, weight)
+    assert writer.graphs
+
+
+def test_tensorboard_graph_copy_failure_is_nonfatal(monkeypatch):
+    """确认模型副本创建失败时只禁用 graph 记录，不中断训练。"""
+    from ultralytics.utils.callbacks import tensorboard as tb
+
+    warnings = []
+    monkeypatch.setattr(tb, "deepcopy", lambda model: (_ for _ in ()).throw(MemoryError("copy failed")))
+    monkeypatch.setattr(tb.LOGGER, "warning", warnings.append)
+    trainer = SimpleNamespace(model=torch.nn.Linear(3, 3), args=SimpleNamespace(imgsz=8), data={"channels": 3})
+
+    tb._log_tensorboard_graph(trainer)
+
+    assert len(warnings) == 1
+    assert "copy failed" in warnings[0]
 
 
 @pytest.mark.skipif(not check_requirements("ray", install=False), reason="ray[tune] not installed")
