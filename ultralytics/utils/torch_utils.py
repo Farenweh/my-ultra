@@ -722,6 +722,17 @@ def model_info_for_loggers(trainer):
     return results
 
 
+def _get_input_channels(model, p) -> int:
+    """Return model input channels for FLOPs dummy input construction."""
+    channels = getattr(model, "yaml", {}).get("channels") if isinstance(getattr(model, "yaml", None), dict) else None
+    if channels:
+        return int(channels)
+    for m in model.modules():
+        if isinstance(m, nn.Conv2d):
+            return int(m.in_channels)
+    return int(p.shape[1]) if p.ndim > 1 else 3
+
+
 def get_flops(model, imgsz=640):
     """Calculate FLOPs (floating point operations) for a model in GFLOPs.
 
@@ -756,7 +767,7 @@ def get_flops(model, imgsz=640):
         min_cells = max(
             (-(-m.num_queries * 3 // (4**m.nl - 1)) for m in model.modules() if isinstance(m, RTDETRDecoder)), default=1
         )
-        im = torch.empty((1, p.shape[1], *imgsz), device=p.device, dtype=p.dtype)  # input image in BCHW format
+        im = torch.empty((1, _get_input_channels(model, p), *imgsz), device=p.device, dtype=p.dtype)  # input image in BCHW format
         return thop.profile(model, inputs=[im], stride=stride, min_cells=min_cells, verbose=False)[0] / 1e9 * 2
     except Exception:
         return 0.0
