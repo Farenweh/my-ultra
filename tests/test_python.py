@@ -488,6 +488,15 @@ def test_tiled_dataset_targets(tmp_path):
     np.testing.assert_allclose(full["instances"].bboxes, [[0.75, 0.5, 0.25, 0.5]])
 
 
+def test_detection_model_stride_probe_supports_p6():
+    """Test stride probing uses a size divisible by both DINO patch strides and P6's 64-stride head."""
+    from ultralytics.nn.tasks import DetectionModel
+
+    model = DetectionModel("cfg/models/26/yolo26-p6.yaml", verbose=False, summary=False)
+
+    assert model.stride.tolist() == [8.0, 16.0, 32.0, 64.0]
+
+
 def test_model_methods():
     """Test various methods and properties of the YOLO model to ensure correct functionality."""
     model = YOLO(MODEL)
