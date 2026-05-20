@@ -32,6 +32,9 @@ def resolve_dinov3_weights(pretrained: str, filename: str) -> str:
 
 
 class DINOv3ViT(nn.Module):
+    input_size_divisor = 16
+    feature_stride = 16
+
     def __init__(self, scale: str, pretrained: str | bool = "./weights", rescale_coords: None | int = None):
         super(DINOv3ViT, self).__init__()
         scaletable = {

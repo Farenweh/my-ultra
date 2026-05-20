@@ -461,6 +461,7 @@ def load_inference_source(
     vid_stride: int = 1,
     buffer: bool = False,
     channels: int = 3,
+    stride: int = 32,
 ):
     """Load an inference source for object detection and apply necessary transformations.
 
@@ -471,6 +472,7 @@ def load_inference_source(
         vid_stride (int, optional): The frame interval for video sources.
         buffer (bool, optional): Whether stream frames will be buffered.
         channels (int, optional): The number of input channels for the model.
+        stride (int, optional): Model stride for validating torch.Tensor inputs.
 
     Returns:
         (Dataset): A dataset object for the specified input source with attached source_type attribute.
@@ -487,7 +489,7 @@ def load_inference_source(
 
     # DataLoader
     if tensor:
-        dataset = LoadTensor(source)
+        dataset = LoadTensor(source, stride=stride)
     elif in_memory:
         dataset = source
     elif stream:

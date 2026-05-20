@@ -137,7 +137,9 @@ class BaseValidator:
         (self.save_dir / "labels" if self.args.save_txt else self.save_dir).mkdir(parents=True, exist_ok=True)
         if self.args.conf is None:
             self.args.conf = 0.01 if self.args.task == "obb" else 0.001  # reduce OBB val memory usage
-        self.args.imgsz = check_imgsz(self.args.imgsz, max_dim=1)
+        # The model stride is not always known at validator construction time. Training has already aligned imgsz
+        # with trainer.model.stride, while standalone validation checks again after AutoBackend exposes model.stride.
+        self.args.imgsz = check_imgsz(self.args.imgsz, stride=1, max_dim=1)
 
         self.plots = {}
         self.callbacks = _callbacks or callbacks.get_default_callbacks()

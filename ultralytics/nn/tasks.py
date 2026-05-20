@@ -489,7 +489,7 @@ class DetectionModel(BaseModel):
         # Build strides
         m = self.model[-1]  # Detect()
         if isinstance(m, Detect):  # includes all Detect subclasses like Segment, Pose, OBB, YOLOEDetect, YOLOESegment
-            s = 256  # 2x min stride
+            s = 448  # common multiple of DINOv2/3 patch strides and standard P6 (64-stride) heads
             m.inplace = self.inplace
 
             def _forward(x):
@@ -506,7 +506,7 @@ class DetectionModel(BaseModel):
             self.model.train()  # Set model back to training(default) mode
             m.bias_init()  # only run once
         else:
-            self.stride = torch.Tensor([32])  # default stride, e.g., RTDETR
+            self.stride = getattr(self.model, "stride", torch.Tensor([32]))  # default stride, e.g., RTDETR
 
         # Init weights, biases
         initialize_weights(self)
@@ -2020,6 +2020,7 @@ def parse_model(d, ch, verbose=True):
     if verbose:
         LOGGER.info(f"\n{'':>3}{'from':>20}{'n':>3}{'params':>10}  {'module':<45}{'arguments':<30}")
     ch = [ch]
+    strides = [1]
     layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
     base_modules = frozenset(
         {
@@ -2078,7 +2079,28 @@ def parse_model(d, ch, verbose=True):
             A2C2f,
         }
     )
+
+    def input_stride(f):
+        return max(strides[x] for x in f) if isinstance(f, list) else strides[f]
+
+    def stride_arg(value):
+        if isinstance(value, (list, tuple)):
+            return max(int(v) for v in value)
+        return int(value)
+
+    def layer_stride_factor(m, args):
+        if m in frozenset({DINOv3ViT}):
+            return m.feature_stride
+        if m in frozenset({AConv, ADown, Focus}):
+            return 2
+        if m in frozenset({Conv, Conv2, DWConv, GhostConv}):
+            return stride_arg(args[2]) if len(args) > 2 else 1
+        if m is SCDown:
+            return stride_arg(args[2]) if len(args) > 2 else 1
+        return 1
+
     for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
+        cstride = input_stride(f)
         m = (
             getattr(torch.nn, m[3:])
             if m.startswith("nn.")
@@ -2093,6 +2115,7 @@ def parse_model(d, ch, verbose=True):
             if isinstance(a, str):
                 with contextlib.suppress(ValueError):
                     args[j] = locals()[a] if a in locals() else ast.literal_eval(a)
+        stride_factor = layer_stride_factor(m, args)
         n = n_ = max(round(n * depth), 1) if n > 1 else n  # depth gain
         if m in base_modules:
             c1, c2 = ch[f], args[0]
@@ -2188,10 +2211,15 @@ def parse_model(d, ch, verbose=True):
             LOGGER.info(f"{i:>3}{f!s:>20}{n_:>3}{m_.np:10.0f}  {t:<45}{args!s:<30}")  # print
         save.extend(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)  # append to savelist
         layers.append(m_)
+        cstride *= stride_factor
         if i == 0:
             ch = []
+            strides = []
         ch.append(c2)
-    return torch.nn.Sequential(*layers), sorted(save)
+        strides.append(cstride)
+    model = torch.nn.Sequential(*layers)
+    model.stride = torch.tensor([float(strides[-1] if strides else 32.0)])
+    return model, sorted(save)
 
 
 def yaml_model_load(path):

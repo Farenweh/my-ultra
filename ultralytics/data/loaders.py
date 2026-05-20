@@ -595,13 +595,14 @@ class LoadTensor:
         >>> print(f"Processed {len(images)} images")
     """
 
-    def __init__(self, im0: torch.Tensor) -> None:
+    def __init__(self, im0: torch.Tensor, stride: int = 32) -> None:
         """Initialize LoadTensor object for processing torch.Tensor image data.
 
         Args:
             im0 (torch.Tensor): Input tensor with shape (B, C, H, W).
+            stride (int): Model stride required for input height and width.
         """
-        self.im0 = self._single_check(im0)
+        self.im0 = self._single_check(im0, stride=stride)
         self.bs = self.im0.shape[0]
         self.mode = "image"
         self.paths = [f"image{i}.jpg" for i in range(self.bs)]

@@ -95,7 +95,7 @@ class YOLOETrainer(DetectionTrainer):
         Returns:
             (Dataset): YOLO dataset configured for training or validation.
         """
-        gs = max(int(unwrap_model(self.model).stride.max() if self.model else 0), 32)
+        gs = int(unwrap_model(self.model).stride.max() if self.model else 32)
         return build_yolo_dataset(
             self.args, img_path, batch, self.data, mode=mode, rect=mode == "val", stride=gs, multi_modal=mode == "train"
         )
