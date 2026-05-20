@@ -78,6 +78,7 @@ from ultralytics.nn.modules import (
     YOLOESegment,
     YOLOESegment26,
     v10Detect,
+    DINOv2,
     DINOv3ViT,
     RoPEViT,
 )
@@ -2204,7 +2205,7 @@ def parse_model(d, ch, verbose=True):
         return int(value)
 
     def layer_stride_factor(m, args):
-        if m in frozenset({DINOv3ViT}):
+        if m in frozenset({DINOv2, DINOv3ViT}):
             return m.feature_stride
         if m in frozenset({AConv, ADown, Focus}):
             return 2
@@ -2313,7 +2314,7 @@ def parse_model(d, ch, verbose=True):
             c2 = args[0]
             c1 = ch[f]
             args = [*args[1:]]
-        elif m in frozenset({DINOv3ViT}):
+        elif m in frozenset({DINOv2, DINOv3ViT}):
             c1 = ch[f]
             c2 = m.dims(args[0])
         elif m in frozenset({RoPEViT}):
