@@ -3,8 +3,11 @@
 import math
 import time
 from collections.abc import Mapping
+from copy import deepcopy
 from numbers import Number
 from pathlib import Path
+
+import torch
 
 from ultralytics.utils import LOGGER, RANK, SETTINGS, TESTS_RUNNING, colorstr, torch_utils
 from ultralytics.utils.torch_utils import smart_inference_mode
@@ -22,9 +25,6 @@ try:
     assert SETTINGS["tensorboard"] is True  # verify integration is enabled
 
     # Imports below only required if TensorBoard enabled
-    from copy import deepcopy
-
-    import torch
     from torch.utils.tensorboard import SummaryWriter
 
 except (ImportError, AssertionError, TypeError, AttributeError):
@@ -304,19 +304,22 @@ def _log_tensorboard_graph(trainer) -> None:
     imgsz = trainer.args.imgsz
     ch = trainer.data.get("channels", 3)
     imgsz = (imgsz, imgsz) if isinstance(imgsz, int) else imgsz
-    p = next(trainer.model.parameters())  # for device, type
-    im = torch.zeros((1, ch, *imgsz), device=p.device, dtype=p.dtype)  # input image (must be zeros, not empty)
 
     # Try simple method first (YOLO)
     try:
-        trainer.model.eval()  # place in .eval() mode to avoid BatchNorm statistics changes
-        WRITER.add_graph(torch.jit.trace(torch_utils.unwrap_model(trainer.model), im, strict=False), [])
+        model = deepcopy(torch_utils.unwrap_model(trainer.model))
+        p = next(model.parameters())  # for device, type
+        im = torch.zeros((1, ch, *imgsz), device=p.device, dtype=p.dtype)  # input image (must be zeros, not empty)
+        model.eval()  # 仅跟踪副本，避免改变训练模型状态或留下 inference tensor 缓存
+        WRITER.add_graph(torch.jit.trace(model, im, strict=False), [])
         LOGGER.info(f"{PREFIX}model graph visualization added ✅")
         return
     except Exception as e1:
         # Fallback to TorchScript export steps (RTDETR)
         try:
             model = deepcopy(torch_utils.unwrap_model(trainer.model))
+            p = next(model.parameters())
+            im = torch.zeros((1, ch, *imgsz), device=p.device, dtype=p.dtype)
             model.eval()
             model = model.fuse(verbose=False)
             for m in model.modules():
