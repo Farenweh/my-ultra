@@ -4,6 +4,7 @@ import contextlib
 import subprocess
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -19,6 +20,140 @@ def test_tensorboard():
     SETTINGS["tensorboard"] = True
     YOLO("yolo26n-cls.yaml").train(data="imagenet10", imgsz=32, epochs=3, plots=False, device="cpu")
     SETTINGS["tensorboard"] = False
+
+
+class FakeSummaryWriter:
+    """Minimal TensorBoard writer used to test callback behavior without tensorboard installed."""
+
+    def __init__(self):
+        self.scalars = []
+        self.text = []
+        self.hparams = []
+        self.images = []
+        self.flushed = False
+        self.closed = False
+
+    def add_scalar(self, tag, scalar_value, global_step=None):
+        self.scalars.append((tag, scalar_value, global_step))
+
+    def add_text(self, tag, text_string, global_step=None):
+        self.text.append((tag, text_string, global_step))
+
+    def add_hparams(self, hparam_dict, metric_dict, run_name=None):
+        self.hparams.append((hparam_dict, metric_dict, run_name))
+
+    def add_image(self, tag, img_tensor, global_step=None, dataformats="CHW"):
+        self.images.append((tag, img_tensor, global_step, dataformats))
+
+    def flush(self):
+        self.flushed = True
+
+    def close(self):
+        self.closed = True
+
+
+def _write_test_image(path: Path):
+    """Create a tiny image file for TensorBoard image logging tests."""
+    from PIL import Image
+
+    Image.new("RGB", (2, 2), color=(255, 0, 0)).save(path)
+
+
+def _fake_tb_trainer(tmp_path: Path, image_path: Path):
+    """Create a small trainer-like object for TensorBoard callback unit tests."""
+    weights_dir = tmp_path / "weights"
+    weights_dir.mkdir()
+    best, last = weights_dir / "best.pt", weights_dir / "last.pt"
+    best.touch()
+    last.touch()
+    (tmp_path / "args.yaml").write_text("epochs: 2\n", encoding="utf-8")
+    (tmp_path / "results.csv").write_text("epoch,train/loss\n1,0.2\n", encoding="utf-8")
+
+    args = SimpleNamespace(
+        model="yolo26n-cls.yaml",
+        data=tmp_path / "data.yaml",
+        epochs=2,
+        imgsz=32,
+        batch=4,
+        project=None,
+        name="tb_test",
+        augmentations=[{"name": "demo"}],
+        optional=None,
+    )
+    validator = SimpleNamespace(speed={"inference": 2.5}, plots={image_path: {"timestamp": 2.0}})
+    trainer = SimpleNamespace(
+        args=args,
+        save_dir=tmp_path,
+        wdir=weights_dir,
+        best=best,
+        last=last,
+        csv=tmp_path / "results.csv",
+        epoch=0,
+        epoch_time=1.25,
+        train_time_start=time.time() - 3.0,
+        fitness=0.42,
+        best_fitness=0.5,
+        metrics={"metrics/accuracy_top1": 0.8, "metrics/accuracy_top5": 0.95},
+        lr={"lr/pg0": 0.01},
+        tloss=0.2,
+        data={"path": tmp_path, "train": "train", "val": "val", "nc": 2, "names": {0: "cat", 1: "dog"}},
+        plots={image_path: {"timestamp": 1.0}},
+        validator=validator,
+    )
+    trainer.label_loss_items = lambda loss, prefix="train": {f"{prefix}/loss": loss}
+    return trainer
+
+
+def test_tensorboard_callback_records_experiment_details(monkeypatch, tmp_path):
+    """Verify enhanced TensorBoard callbacks record metrics, metadata, hparams, images, and close the writer."""
+    from ultralytics.utils.callbacks import tensorboard as tb
+
+    image_path = tmp_path / "results.png"
+    _write_test_image(image_path)
+    trainer = _fake_tb_trainer(tmp_path, image_path)
+    writer = FakeSummaryWriter()
+
+    monkeypatch.setattr(tb, "WRITER", writer)
+    monkeypatch.setattr(tb, "_MODEL_INFO_LOGGED", False)
+    monkeypatch.setattr(tb, "_PROCESSED_PLOTS", {})
+    monkeypatch.setattr(
+        tb.torch_utils,
+        "model_info_for_loggers",
+        lambda trainer: {"model/parameters": 123, "model/GFLOPs": 1.5, "model/speed_PyTorch(ms)": 2.5},
+    )
+
+    tb.on_train_epoch_end(trainer)
+    scalar_tags = {tag for tag, _, _ in writer.scalars}
+    assert {"train/loss", "lr/pg0"}.issubset(scalar_tags)
+
+    tb.on_fit_epoch_end(trainer)
+    scalar_tags = {tag for tag, _, _ in writer.scalars}
+    assert {
+        "metrics/accuracy_top1",
+        "time/epoch",
+        "time/elapsed",
+        "fitness",
+        "fitness/best",
+        "model/parameters",
+        "model/GFLOPs",
+        "model/speed_PyTorch(ms)",
+    }.issubset(scalar_tags)
+
+    tb.on_train_end(trainer)
+    text_tags = {tag for tag, _, _ in writer.text}
+    assert {"run/args", "run/data", "run/artifacts"}.issubset(text_tags)
+    assert writer.hparams
+    hparams, metrics, run_name = writer.hparams[0]
+    assert hparams["augmentations"].startswith("[{")
+    assert hparams["optional"] == "None"
+    assert metrics["fitness"] == 0.42
+    assert run_name == "hparams"
+    assert writer.images and writer.images[0][3] == "HWC"
+    assert writer.flushed
+
+    tb.teardown(trainer)
+    assert writer.closed
+    assert tb.WRITER is None
 
 
 @pytest.mark.skipif(not check_requirements("ray", install=False), reason="ray[tune] not installed")
