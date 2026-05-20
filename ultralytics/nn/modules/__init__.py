@@ -108,7 +108,7 @@ from .transformer import (
     TransformerLayer,
     RoPEViT,
 )
-from .backbone import DINOv3ViT
+from .backbone import DINOv2, DINOv3ViT
 
 __all__ = (
     "AIFI",
@@ -120,6 +120,7 @@ __all__ = (
     "CBAM",
     "CIB",
     "DFL",
+    "DINOv2",
     "ELAN1",
     "MLP",
     "OBB",
