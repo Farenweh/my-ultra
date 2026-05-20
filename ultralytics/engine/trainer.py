@@ -47,8 +47,9 @@ from ultralytics.utils import (
 )
 from ultralytics.utils.autobatch import check_train_batch_size
 from ultralytics.utils.checks import (
-    IS_ASCEND,
+    AMP_DTYPE,
     EMPTY_VRAM_CACHE,
+    IS_ASCEND,
     PROFILE,
     USE_ASCEND_FUSED_GRAD_CLIP,
     USE_ASCEND_FUSED_OPTIMIZER,
@@ -531,15 +532,16 @@ class BaseTrainer:
             self.amp = self.amp.int()  # gloo errors with boolean
             dist.broadcast(self.amp, src=0)  # broadcast from rank 0 to all other ranks
         self.amp = bool(self.amp)  # as boolean
+        scaler_enabled = self.amp and AMP_DTYPE == torch.float16
         if self.device.type == "npu":
             import torch_npu
 
-            self.scaler = torch_npu.npu.amp.GradScaler(enabled=self.amp)
+            self.scaler = torch_npu.npu.amp.GradScaler(enabled=scaler_enabled)
         else:
             self.scaler = (
-                torch.amp.GradScaler(self.device.type if self.device.type == "xpu" else "cuda", enabled=self.amp)
+                torch.amp.GradScaler(self.device.type if self.device.type == "xpu" else "cuda", enabled=scaler_enabled)
                 if TORCH_2_4
-                else torch.cuda.amp.GradScaler(enabled=self.amp)
+                else torch.cuda.amp.GradScaler(enabled=scaler_enabled)
             )
         # Check imgsz
         gs = max(int(self.model.stride.max() if hasattr(self.model, "stride") else 32), 32)  # grid size (max stride)

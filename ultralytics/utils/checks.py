@@ -921,7 +921,13 @@ def check_amp(model):
         with autocast(enabled=True, device=device.type):
             b = m(batch, imgsz=imgsz, device=device, verbose=False)[0].boxes.data  # AMP inference
         del m
-        return a.shape == b.shape and torch.allclose(a, b.float(), atol=0.5)  # close to 0.5 absolute tolerance
+        if AMP_DTYPE == torch.bfloat16:
+            # BF16 has less mantissa precision than FP16, so boxes near the confidence threshold can flicker after NMS.
+            a, b = a[a[:, 4] >= 0.30], b[b[:, 4] >= 0.30]
+            atol = 2.0
+        else:
+            atol = 0.5
+        return a.shape == b.shape and torch.allclose(a, b.float(), atol=atol)  # absolute tolerance
 
     im = ASSETS / "bus.jpg"  # image to check
     LOGGER.info(f"{prefix}running Automatic Mixed Precision (AMP) checks...")
@@ -1118,6 +1124,7 @@ def _parse_env_bool(name: str, default: bool = False) -> bool:
         return False
     raise ValueError(f"{name}={value!r} 无法解析为布尔值，可选值为 True/False/1/0/空。")
 
+
 def _parse_vram_target(value: str | None) -> float | bool:
     """Parse VRAM_TARGET into a target fraction or False when disabled."""
     if value is None or value.strip() == "":
@@ -1155,7 +1162,7 @@ USE_ASCEND_FUSED_GRAD_CLIP = os.getenv("USE_ASCEND_FUSED_GRAD_CLIP", "0") == "1"
 USE_ASCEND_JIT_COMPILE = os.getenv("USE_ASCEND_JIT_COMPILE", "0") == "1"
 USE_ASCEND_INTERNAL_FORMAT = os.getenv("USE_ASCEND_INTERNAL_FORMAT", "1") == "1"
 
-_amp_dtype = os.getenv("AMP_DTYPE", "bf16")
+_amp_dtype = os.getenv("AMP_DTYPE", "fp16")
 if _amp_dtype in {"float16", "fp16", "half", "FP16"}:
     AMP_DTYPE = torch.float16
 elif _amp_dtype in {"bfloat16", "bf16", "BF16"}:

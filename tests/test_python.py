@@ -194,6 +194,64 @@ def test_select_device(monkeypatch):
     assert torch_utils.parse_device("-1") == "0"  # idle physical GPU 1 found via normalized visible ids
 
 
+@pytest.mark.parametrize(("backend", "torch_1_10"), (("cuda", True), ("npu", False)))
+def test_legacy_autocast_forwards_amp_dtype(monkeypatch, backend, torch_1_10):
+    """Test legacy CUDA and NPU autocast paths receive the configured AMP dtype when supported."""
+    from types import SimpleNamespace
+
+    from ultralytics.utils import torch_utils
+
+    calls = []
+
+    def legacy_autocast(**kwargs):
+        calls.append(kwargs)
+        return "context"
+
+    monkeypatch.setattr(torch_utils, "TORCH_1_13", False)
+    monkeypatch.setattr(torch_utils, "TORCH_1_10", torch_1_10)
+    monkeypatch.setattr(torch_utils, "IS_ASCEND", backend == "npu")
+    monkeypatch.setattr(torch_utils, "AMP_DTYPE", torch.bfloat16)
+    monkeypatch.setattr(
+        torch_utils.torch, backend, SimpleNamespace(amp=SimpleNamespace(autocast=legacy_autocast)), raising=False
+    )
+
+    assert torch_utils.autocast(enabled=True) == "context"
+    assert calls == [{"enabled": True, "dtype": torch.bfloat16}]
+
+
+def test_torch_1_8_cuda_autocast_uses_supported_signature(monkeypatch):
+    """Test torch 1.8 CUDA autocast receives no unsupported dtype keyword."""
+    from ultralytics.utils import torch_utils
+
+    calls = []
+
+    def legacy_autocast(enabled=True):
+        calls.append(enabled)
+        return "context"
+
+    monkeypatch.setattr(torch_utils, "TORCH_1_13", False)
+    monkeypatch.setattr(torch_utils, "TORCH_1_10", False)
+    monkeypatch.setattr(torch_utils, "IS_ASCEND", False)
+    monkeypatch.setattr(torch_utils, "AMP_DTYPE", torch.float16)
+    monkeypatch.setattr(torch_utils.torch.cuda.amp, "autocast", legacy_autocast)
+
+    assert torch_utils.autocast(enabled=True) == "context"
+    assert calls == [True]
+
+
+def test_torch_1_8_cuda_autocast_rejects_bfloat16(monkeypatch):
+    """Test torch 1.8 fails clearly instead of silently running unscaled FP16 for a BF16 request."""
+    from ultralytics.utils import torch_utils
+
+    monkeypatch.setattr(torch_utils, "TORCH_1_13", False)
+    monkeypatch.setattr(torch_utils, "TORCH_1_10", False)
+    monkeypatch.setattr(torch_utils, "IS_ASCEND", False)
+    monkeypatch.setattr(torch_utils, "AMP_DTYPE", torch.bfloat16)
+
+    with pytest.raises(RuntimeError, match="不支持 bfloat16"):
+        torch_utils.autocast(enabled=True)
+
+
 def test_model_forward():
     """Test the forward pass of the YOLO model."""
     model = YOLO(CFG)

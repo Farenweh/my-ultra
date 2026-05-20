@@ -34,7 +34,7 @@ from ultralytics.utils import (
     WINDOWS,
     colorstr,
 )
-from ultralytics.utils.checks import IS_ASCEND, check_version
+from ultralytics.utils.checks import AMP_DTYPE, IS_ASCEND, check_version
 from ultralytics.utils.cpu import CPUInfo
 from ultralytics.utils.patches import torch_load
 
@@ -206,16 +206,17 @@ def autocast(enabled: bool, device: str = "auto"):
     """
     if device == "auto":
         device = "npu" if IS_ASCEND else "cuda"
-    if device == "npu":
-        import torch_npu
-
-        return torch_npu.npu.amp.autocast(enabled=enabled)
     if TORCH_1_13:
         if device == "mps" and not TORCH_2_5:  # MPS autocast added in torch 2.5.0, errors on older versions
             device, enabled = "cpu", False
-        return torch.amp.autocast(device, enabled=enabled)
-    else:
-        return torch.cuda.amp.autocast(enabled) if not IS_ASCEND else torch.npu.amp.autocast(enabled)
+        return torch.amp.autocast(device, enabled=enabled, dtype=AMP_DTYPE)
+    if device == "npu":
+        return torch.npu.amp.autocast(enabled=enabled, dtype=AMP_DTYPE)
+    if TORCH_1_10:
+        return torch.cuda.amp.autocast(enabled=enabled, dtype=AMP_DTYPE)
+    if enabled and AMP_DTYPE != torch.float16:
+        raise RuntimeError("PyTorch <1.10 的 CUDA autocast 不支持 bfloat16，请使用 AMP_DTYPE=fp16 或升级 PyTorch")
+    return torch.cuda.amp.autocast(enabled=enabled)
 
 
 def enable_torchvision_npu() -> bool:
