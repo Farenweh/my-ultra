@@ -55,6 +55,8 @@ from ultralytics.utils.checks import (
     USE_ASCEND_FUSED_OPTIMIZER,
     USE_ASCEND_INTERNAL_FORMAT,
     USE_ASCEND_JIT_COMPILE,
+    VRAM_TARGET,
+    VRAM_TARGET_ENV,
     check_amp,
     check_file,
     check_imgsz,
@@ -252,6 +254,8 @@ class BaseTrainer:
         self._plot_thread = None
         self._plot_pending = False
         self._plot_lock = threading.Lock()
+        self._vram_target_reserve = None
+        self._vram_target_applied = False
 
     def add_callback(self, event: str, callback):
         """Append the given callback to the event's callback list."""
@@ -646,6 +650,7 @@ class BaseTrainer:
         if self.world_size > 1:
             self._setup_ddp()
         self._setup_train()
+        self._log_vram_target_config()
 
         nb = self.iters_per_epoch  # logical batches per epoch
         nw = self._get_warmup_iterations(nb)
@@ -865,6 +870,7 @@ class BaseTrainer:
             if self.args.val or final_epoch or self.stopper.possible_stop or self.stop:
                 self._clear_memory(None if self.device.type == "mps" else 0.5)  # prevent VRAM spike
                 self.metrics, self.fitness = self.validate()
+            self._maybe_apply_vram_target(epoch)
 
             # NaN recovery
             if self._handle_nan_recovery(epoch):
@@ -937,8 +943,41 @@ class BaseTrainer:
             dataset_size=dataset_size,
         )  # returns batch size
 
+    @staticmethod
+    def _format_vram_size(num_bytes: int | float) -> str:
+        """Format VRAM bytes as a compact GiB string."""
+        return f"{float(num_bytes) / 2**30:.3f}GiB"
+
+    def _log_vram_target_config(self):
+        """Log the parsed VRAM_TARGET configuration before training starts."""
+        if RANK not in {-1, 0}:
+            return
+        raw = "未设置" if VRAM_TARGET_ENV is None else ("空字符串" if VRAM_TARGET_ENV == "" else VRAM_TARGET_ENV)
+        actual = "False（关闭）" if VRAM_TARGET is False else f"{VRAM_TARGET:.4g}"
+        LOGGER.info(colorstr("red", f"VRAM_TARGET配置：当前环境变量设置值={raw}，VRAM_TARGET实际数值={actual}。"))
+
+    def _get_vram_reserved_total(self) -> tuple[int, int]:
+        """Return reserved and total VRAM bytes for the current CUDA/NPU device."""
+        accelerator = getattr(self, "accelerator", None)
+        if accelerator is not None:
+            return int(accelerator.memory_reserved()), int(accelerator.get_device_properties(self.device).total_memory)
+        if self.device.type == "cuda":
+            return int(torch.cuda.memory_reserved(self.device)), int(
+                torch.cuda.get_device_properties(self.device).total_memory
+            )
+        if self.device.type == "npu" and hasattr(torch, "npu"):
+            return int(torch.npu.memory_reserved()), int(torch.npu.get_device_properties(self.device).total_memory)
+        return 0, 0
+
     def _sync_vram_device(self):
         """Synchronize the current CUDA/NPU device if available."""
+        accelerator = getattr(self, "accelerator", None)
+        if accelerator is not None and hasattr(accelerator, "synchronize"):
+            try:
+                accelerator.synchronize(self.device)
+            except TypeError:
+                accelerator.synchronize()
+            return
         if self.device.type == "cuda":
             torch.cuda.synchronize(self.device)
         elif self.device.type == "npu" and hasattr(torch, "npu"):
@@ -973,6 +1012,60 @@ class BaseTrainer:
         finally:
             dist.destroy_process_group()
 
+    @staticmethod
+    def _is_vram_oom_error(error: Exception) -> bool:
+        """Return True when an exception looks like an accelerator OOM."""
+        message = str(error).lower()
+        return isinstance(error, torch.cuda.OutOfMemoryError) or "out of memory" in message or "oom" in message
+
+    def _maybe_apply_vram_target(self, epoch: int):
+        """Reserve a uint8 tensor after epoch 3 to make process VRAM usage reach VRAM_TARGET."""
+        if (
+            self._vram_target_applied
+            or VRAM_TARGET is False
+            or epoch + 1 < 3
+            or self.device.type not in {"cuda", "npu"}
+        ):
+            return
+
+        reserved, total = self._get_vram_reserved_total()
+        if total <= 0:
+            self._vram_target_applied = True
+            LOGGER.warning("VRAM_TARGET显存填充跳过：无法获取当前设备的显存总容量。")
+            return
+
+        target_bytes = int(total * float(VRAM_TARGET))
+        fill_bytes = max(target_bytes - reserved, 0)
+        tensor_shape = (fill_bytes,)
+        expected_reserved = reserved + fill_bytes
+
+        try:
+            self._sync_vram_device()
+            if fill_bytes:
+                self._vram_target_reserve = torch.empty(tensor_shape, dtype=torch.uint8, device=self.device)
+            self._sync_vram_device()
+            current_reserved, _ = self._get_vram_reserved_total()
+        except Exception as e:
+            if not self._is_vram_oom_error(e):
+                raise
+            self._vram_target_applied = True
+            LOGGER.warning(f"VRAM_TARGET显存填充失败：准备填充tensor shape={tensor_shape} 时显存不足，错误信息：{e}")
+            return
+
+        self._vram_target_applied = True
+        LOGGER.info(
+            colorstr(
+                "blue",
+                "VRAM_TARGET显存填充完成："
+                f"填充前VRAM占用大小={self._format_vram_size(reserved)}，百分比={reserved / total * 100:.2f}%；"
+                f"预计准备填充的tensor shape={tensor_shape}，dtype=torch.uint8；"
+                f"预计填充完后的VRAM占用大小={self._format_vram_size(expected_reserved)}，"
+                f"百分比={expected_reserved / total * 100:.2f}%；"
+                f"当前VRAM占用大小={self._format_vram_size(current_reserved)}，"
+                f"百分比={current_reserved / total * 100:.2f}%。",
+            )
+        )
+
     def _get_memory(self, fraction=False):
         """Get accelerator memory utilization in GB or as a fraction of total memory."""
         memory, total = 0, 0
@@ -981,9 +1074,7 @@ class BaseTrainer:
             if fraction:
                 return __import__("psutil").virtual_memory().percent / 100
         elif self.device.type != "cpu":
-            memory = self.accelerator.memory_reserved()
-            if fraction:
-                total = self.accelerator.get_device_properties(self.device).total_memory
+            memory, total = self._get_vram_reserved_total()
         return ((memory / total) if total > 0 else 0) if fraction else (memory / 2**30)
 
     def _clear_memory(self, threshold: float | None = None):

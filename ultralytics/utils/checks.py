@@ -1128,10 +1128,10 @@ def _parse_env_bool(name: str, default: bool = False) -> bool:
 def _parse_vram_target(value: str | None) -> float | bool:
     """Parse VRAM_TARGET into a target fraction or False when disabled."""
     if value is None or value.strip() == "":
-        return 0.7
+        return 0.6
     normalized = value.strip().lower()
     if normalized == "true":
-        return 0.7
+        return 0.6
     if normalized == "false":
         return False
     try:
