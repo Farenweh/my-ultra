@@ -2,6 +2,7 @@
 
 import contextlib
 import csv
+import json
 import os
 import shutil
 import tarfile
@@ -1183,6 +1184,243 @@ def test_data_converter(tmp_path):
         labels_dir=tmp_path, save_dir=tmp_path / "yolo_labels", use_segments=True, use_keypoints=False, cls91to80=True
     )
     coco80_to_coco91_class()
+
+
+def _write_coco_json_dataset(tmp_path: Path, categories: list[dict], category_id: int = 1) -> tuple[Path, Path]:
+    """Create a tiny COCO JSON detection dataset with one image and one annotation."""
+    image_dir = tmp_path / "images"
+    image_dir.mkdir()
+    Image.new("RGB", (100, 80), color=(255, 255, 255)).save(image_dir / "0001.jpg")
+    annotations = {
+        "images": [{"file_name": "0001.jpg", "height": 80, "width": 100, "id": 7}],
+        "annotations": [
+            {
+                "area": 1200,
+                "iscrowd": 0,
+                "image_id": 7,
+                "bbox": [10, 20, 30, 40],
+                "category_id": category_id,
+                "id": 1,
+            }
+        ],
+        "categories": categories,
+    }
+    annotation_file = tmp_path / "instances.json"
+    annotation_file.write_text(json.dumps(annotations), encoding="utf-8")
+    return image_dir, annotation_file
+
+
+def _write_coco_json_yaml(tmp_path: Path, image_dir: Path, annotation_file: Path, extra: str = "") -> Path:
+    """Create a data YAML that points train and val at the same COCO JSON split."""
+    data_yaml = tmp_path / "data.yaml"
+    data_yaml.write_text(
+        f"path: {tmp_path}\n"
+        f"train: {image_dir.relative_to(tmp_path)}\n"
+        f"val: {image_dir.relative_to(tmp_path)}\n"
+        f"annotations:\n"
+        f"  train: {annotation_file.relative_to(tmp_path)}\n"
+        f"  val: {annotation_file.relative_to(tmp_path)}\n"
+        f"{extra}",
+        encoding="utf-8",
+    )
+    return data_yaml
+
+
+def _build_coco_json_train_dataset(tmp_path: Path, image_dir: Path, annotation_file: Path):
+    """Build the tiny COCO JSON training dataset."""
+    from ultralytics.data import build_yolo_dataset
+
+    data = check_det_dataset(_write_coco_json_yaml(tmp_path, image_dir, annotation_file))
+    cfg = get_cfg(DEFAULT_CFG)
+    cfg.task = "detect"
+    cfg.imgsz = 64
+    return build_yolo_dataset(cfg, data["train"], batch=1, data=data, mode="train")
+
+
+def test_coco_json_dataset_yaml_infers_names_and_labels(tmp_path):
+    """Verify standard COCO JSON annotations can be read directly without YOLO txt labels."""
+    from ultralytics.data import COCODetectionDataset, build_yolo_dataset
+
+    categories = [{"id": i, "name": f"class_{i}"} for i in range(1, 21)]
+    image_dir, annotation_file = _write_coco_json_dataset(tmp_path, categories, category_id=20)
+    data = check_det_dataset(_write_coco_json_yaml(tmp_path, image_dir, annotation_file))
+
+    assert data["names"][0] == "class_1"
+    assert data["names"][19] == "class_20"
+    assert data["coco_category_ids"] == list(range(1, 21))
+
+    cfg = get_cfg(DEFAULT_CFG)
+    cfg.task = "detect"
+    cfg.imgsz = 64
+    dataset = build_yolo_dataset(cfg, data["train"], batch=1, data=data, mode="train")
+    assert isinstance(dataset, COCODetectionDataset)
+    label = dataset.labels[0]
+    assert label["image_id"] == 7
+    assert label["cls"].tolist() == [[19.0]]
+    assert np.allclose(label["bboxes"], np.array([[0.25, 0.5, 0.3, 0.5]], dtype=np.float32))
+
+
+def test_coco_json_non_contiguous_category_ids_round_trip(tmp_path):
+    """Verify sparse COCO category ids map to contiguous classes and export back to original ids."""
+    from ultralytics.data import build_yolo_dataset
+    from ultralytics.models.yolo.detect.val import DetectionValidator
+
+    categories = [{"id": 10, "name": "ship"}, {"id": 20, "name": "plane"}]
+    image_dir, annotation_file = _write_coco_json_dataset(tmp_path, categories, category_id=20)
+    data = check_det_dataset(_write_coco_json_yaml(tmp_path, image_dir, annotation_file))
+    cfg = get_cfg(DEFAULT_CFG)
+    cfg.task = "detect"
+    cfg.imgsz = 64
+    dataset = build_yolo_dataset(cfg, data["train"], batch=1, data=data, mode="train")
+
+    assert data["coco_category_ids"] == [10, 20]
+    assert dataset.labels[0]["cls"].tolist() == [[1.0]]
+
+    validator = DetectionValidator()
+    validator.class_map = data["coco_category_ids"]
+    validator.jdict = []
+    validator.pred_to_json(
+        {"bboxes": torch.tensor([[0.0, 0.0, 10.0, 20.0]]), "conf": torch.tensor([0.9]), "cls": torch.tensor([1.0])},
+        {"im_file": str(image_dir / "0001.jpg"), "image_id": 7},
+    )
+    assert validator.jdict[0]["image_id"] == 7
+    assert validator.jdict[0]["category_id"] == 20
+
+
+def test_coco_json_yaml_rejects_names_and_mismatched_categories(tmp_path):
+    """Verify COCO JSON datasets derive categories exclusively from JSON and require split consistency."""
+    image_dir, annotation_file = _write_coco_json_dataset(tmp_path, [{"id": 1, "name": "ship"}])
+    with pytest.raises(SyntaxError, match="不得定义 'names' 或 'nc'"):
+        check_det_dataset(_write_coco_json_yaml(tmp_path, image_dir, annotation_file, extra="names:\n  0: ship\n"))
+
+    val_file = tmp_path / "instances_val.json"
+    val_data = json.loads(annotation_file.read_text(encoding="utf-8"))
+    val_data["categories"] = [{"id": 2, "name": "plane"}]
+    val_file.write_text(json.dumps(val_data), encoding="utf-8")
+    data_yaml = tmp_path / "mismatch.yaml"
+    data_yaml.write_text(
+        f"path: {tmp_path}\n"
+        f"train: {image_dir.relative_to(tmp_path)}\n"
+        f"val: {image_dir.relative_to(tmp_path)}\n"
+        f"annotations:\n"
+        f"  train: {annotation_file.relative_to(tmp_path)}\n"
+        f"  val: {val_file.relative_to(tmp_path)}\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(SyntaxError, match="类别.*不一致"):
+        check_det_dataset(data_yaml)
+
+
+def test_coco_json_ignores_unused_dummy_category(tmp_path):
+    """Verify unused DUMMY_CLS sentinel categories do not become model classes."""
+    image_dir, annotation_file = _write_coco_json_dataset(
+        tmp_path, [{"id": 0, "name": "DUMMY_CLS"}, {"id": 1, "name": "ship"}]
+    )
+    data = check_det_dataset(_write_coco_json_yaml(tmp_path, image_dir, annotation_file))
+
+    assert data["names"] == {0: "ship"}
+    assert data["coco_category_ids"] == [1]
+
+
+def test_coco_json_missing_image_writes_chinese_csv(tmp_path, monkeypatch):
+    """Verify missing JSON images fail with a Chinese CSV report."""
+    image_dir, annotation_file = _write_coco_json_dataset(tmp_path, [{"id": 1, "name": "ship"}])
+    (image_dir / "0001.jpg").unlink()
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(RuntimeError, match="缺失图片"):
+        _build_coco_json_train_dataset(tmp_path, image_dir, annotation_file)
+
+    csv_files = list(tmp_path.glob("coco_json_train_instances_*_missing_images.csv"))
+    assert len(csv_files) == 1
+    assert not annotation_file.with_suffix(".cache").exists()
+    with open(csv_files[0], encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+    assert reader.fieldnames == ["数据集划分", "标注文件", "图片ID", "文件名", "期望路径", "问题"]
+    assert rows[0]["数据集划分"] == "train"
+    assert rows[0]["图片ID"] == "7"
+    assert rows[0]["文件名"] == "0001.jpg"
+    assert rows[0]["问题"] == "图片文件不存在"
+
+
+def test_coco_json_unreadable_image_writes_chinese_csv(tmp_path, monkeypatch):
+    """Verify unreadable JSON images fail with a Chinese CSV report."""
+    image_dir, annotation_file = _write_coco_json_dataset(tmp_path, [{"id": 1, "name": "ship"}])
+    (image_dir / "0001.jpg").write_text("not an image", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(RuntimeError, match="不可读或尺寸不一致"):
+        _build_coco_json_train_dataset(tmp_path, image_dir, annotation_file)
+
+    csv_files = list(tmp_path.glob("coco_json_train_instances_*_mismatched_images.csv"))
+    assert len(csv_files) == 1
+    assert not annotation_file.with_suffix(".cache").exists()
+    with open(csv_files[0], encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+    assert reader.fieldnames == [
+        "数据集划分",
+        "标注文件",
+        "图片ID",
+        "文件名",
+        "实际路径",
+        "期望宽度",
+        "期望高度",
+        "实际宽度",
+        "实际高度",
+        "问题",
+    ]
+    assert rows[0]["实际路径"] == str(image_dir / "0001.jpg")
+    assert rows[0]["期望宽度"] == "100"
+    assert rows[0]["期望高度"] == "80"
+    assert rows[0]["实际宽度"] == ""
+    assert rows[0]["实际高度"] == ""
+    assert rows[0]["问题"] == "图片无法读取"
+
+
+def test_coco_json_size_mismatch_writes_chinese_csv(tmp_path, monkeypatch):
+    """Verify JSON image size mismatches fail with a Chinese CSV report."""
+    image_dir, annotation_file = _write_coco_json_dataset(tmp_path, [{"id": 1, "name": "ship"}])
+    Image.new("RGB", (120, 90), color=(255, 255, 255)).save(image_dir / "0001.jpg")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(RuntimeError, match="不可读或尺寸不一致"):
+        _build_coco_json_train_dataset(tmp_path, image_dir, annotation_file)
+
+    csv_files = list(tmp_path.glob("coco_json_train_instances_*_mismatched_images.csv"))
+    assert len(csv_files) == 1
+    assert not annotation_file.with_suffix(".cache").exists()
+    with open(csv_files[0], encoding="utf-8-sig") as f:
+        rows = list(csv.DictReader(f))
+    assert rows[0]["期望宽度"] == "100"
+    assert rows[0]["期望高度"] == "80"
+    assert rows[0]["实际宽度"] == "120"
+    assert rows[0]["实际高度"] == "90"
+    assert rows[0]["问题"] == "图片尺寸与COCO JSON记录不一致"
+
+
+def test_coco_json_extra_yaml_images_are_ignored(tmp_path):
+    """Verify extra images under the YAML image root are ignored when absent from JSON images."""
+    image_dir, annotation_file = _write_coco_json_dataset(tmp_path, [{"id": 1, "name": "ship"}])
+    Image.new("RGB", (100, 80), color=(0, 0, 0)).save(image_dir / "extra.jpg")
+
+    dataset = _build_coco_json_train_dataset(tmp_path, image_dir, annotation_file)
+
+    assert len(dataset.labels) == 1
+    assert Path(dataset.labels[0]["im_file"]).name == "0001.jpg"
+
+
+def test_yolo_yaml_without_annotations_keeps_existing_names_behavior(tmp_path):
+    """Verify datasets without annotations continue to use normal Ultralytics YOLO YAML semantics."""
+    image_dir = tmp_path / "images"
+    image_dir.mkdir()
+    data_yaml = tmp_path / "data.yaml"
+    data_yaml.write_text(f"path: {tmp_path}\ntrain: images\nval: images\nnames:\n  0: item\n", encoding="utf-8")
+    data = check_det_dataset(data_yaml)
+
+    assert data["names"] == {0: "item"}
+    assert data["annotation_formats"] == {}
 
 
 def test_data_annotator(tmp_path):

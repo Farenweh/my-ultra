@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import hashlib
 import json
 from collections import defaultdict
 from itertools import repeat
@@ -35,6 +37,8 @@ from .base import BaseDataset
 from .converter import merge_multi_segment
 from .utils import (
     HELP_URL,
+    IMG_FORMATS,
+    check_image,
     check_file_speeds,
     get_hash,
     img2label_paths,
@@ -49,6 +53,7 @@ from .utils import (
 
 # Ultralytics dataset *.cache version, >= 1.0.0 for Ultralytics YOLO models
 DATASET_CACHE_VERSION = "1.0.4"
+COCO_DATASET_CACHE_VERSION = f"{DATASET_CACHE_VERSION}.coco-json-2"
 
 
 class YOLODataset(BaseDataset):
@@ -529,6 +534,266 @@ class DepthDataset(YOLODataset):
             transforms[-2] = LetterBox(new_shape=(self.imgsz, self.imgsz), scale_fill=True)
         transforms[-1] = DepthFormat()  # replace the last transform with DepthFormat
         return transforms
+
+
+class COCODetectionDataset(YOLODataset):
+    """Dataset class for loading standard COCO instances JSON annotations for detection."""
+
+    def __init__(
+        self, *args, json_file: str = "", data: dict | None = None, task: str = "detect", split: str = "", **kwargs
+    ):
+        """Initialize a COCO detection dataset from image paths and one annotation JSON file."""
+        assert task == "detect", "COCO JSON 标注当前仅支持 detect 任务"
+        self.json_file = str(json_file)
+        self.split = split or "unknown"
+        self.category_id_to_class = (data or {}).get("coco_category_id_to_class", {})
+        super().__init__(*args, data=data, task=task, **kwargs)
+
+    def get_img_files(self, img_path: str) -> list:
+        """Return an empty list as image files are resolved from the COCO JSON."""
+        return []
+
+    def _build_image_lookup(self) -> tuple[list[Path], dict[str, Path]]:
+        """Build image roots and explicit file lookup entries from the split image path."""
+        roots, files = [], {}
+        paths = self.img_path if isinstance(self.img_path, list) else [self.img_path]
+        for p in paths:
+            p = Path(p)
+            if p.is_dir():
+                roots.append(p)
+            elif p.is_file() and p.suffix.lower().lstrip(".") in IMG_FORMATS:
+                files[p.name] = p
+                files[p.as_posix()] = p
+            elif p.is_file():
+                parent = p.parent
+                for line in p.read_text(encoding="utf-8").strip().splitlines():
+                    f = Path(line.replace("./", str(parent) + "/", 1))
+                    files[f.name] = f
+                    files[f.as_posix()] = f
+        return roots, files
+
+    @staticmethod
+    def _cache_hash(json_file: str, labels: list[dict[str, Any]]) -> str:
+        """Return a cache hash for the annotation JSON and resolved image files."""
+        return get_hash([json_file] + [str(label["im_file"]) for label in labels])
+
+    def _resolve_image_file(self, file_name: str, roots: list[Path], files: dict[str, Path]) -> Path | None:
+        """Resolve a COCO image file name against image roots or explicit image lists."""
+        for key in (file_name, Path(file_name).name):
+            if key in files and files[key].exists():
+                return files[key]
+        for root in roots:
+            candidate = root / file_name
+            if candidate.exists():
+                return candidate
+        return None
+
+    @staticmethod
+    def _sanitize_filename_part(value: str) -> str:
+        """Return an ASCII-safe filename segment."""
+        value = "".join(c if c.isascii() and (c.isalnum() or c in "._-") else "_" for c in value)
+        return value.strip("._") or "coco"
+
+    def _report_path(self, suffix: str) -> Path:
+        """Return a collision-resistant report CSV path under the current working directory."""
+        json_path = Path(self.json_file).resolve()
+        hash8 = hashlib.sha256(str(json_path).encode()).hexdigest()[:8]
+        stem = self._sanitize_filename_part(json_path.stem)
+        split = self._sanitize_filename_part(str(self.split))
+        return Path.cwd() / f"coco_json_{split}_{stem}_{hash8}_{suffix}.csv"
+
+    def _write_issue_csv(self, rows: list[dict[str, Any]], suffix: str, fieldnames: list[str]) -> Path:
+        """Write a Chinese CSV validation report and return its path."""
+        report_path = self._report_path(suffix)
+        with open(report_path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+        return report_path
+
+    @staticmethod
+    def _expected_image_paths(file_name: str, roots: list[Path]) -> str:
+        """Return the expected image paths for a missing COCO image record."""
+        return ";".join(str(root / file_name) for root in roots) if roots else file_name
+
+    def cache_labels(self, path: Path = Path("./labels.cache")) -> dict[str, Any]:
+        """Load COCO JSON annotations and cache labels in Ultralytics internal format."""
+        x = {"labels": [], "msgs": []}
+        LOGGER.info(f"{self.prefix}正在读取 COCO JSON 标注文件：{self.json_file}")
+        with open(self.json_file, encoding="utf-8") as f:
+            data = json.load(f)
+
+        category_id_to_class = {int(k): v for k, v in self.category_id_to_class.items()}
+        if not category_id_to_class:
+            used_category_ids = {int(ann["category_id"]) for ann in data["annotations"] if "category_id" in ann}
+            categories = sorted(
+                (
+                    c
+                    for c in data["categories"]
+                    if str(c["name"]) != "DUMMY_CLS" or int(c["id"]) in used_category_ids
+                ),
+                key=lambda c: int(c["id"]),
+            )
+            category_id_to_class = {int(category["id"]): i for i, category in enumerate(categories)}
+
+        img_to_anns = defaultdict(list)
+        for ann in data["annotations"]:
+            img_to_anns[ann.get("image_id")].append(ann)
+
+        roots, files = self._build_image_lookup()
+        missing_rows, mismatched_rows = [], []
+        desc = f"{self.prefix}读取 COCO JSON 标注 {self.json_file}"
+        for img in TQDM(data["images"], desc=desc):
+            h, w, file_name, image_id = int(img["height"]), int(img["width"]), img["file_name"], img["id"]
+            im_file = self._resolve_image_file(file_name, roots, files)
+            if im_file is None:
+                missing_rows.append(
+                    {
+                        "数据集划分": self.split,
+                        "标注文件": self.json_file,
+                        "图片ID": image_id,
+                        "文件名": file_name,
+                        "期望路径": self._expected_image_paths(file_name, roots),
+                        "问题": "图片文件不存在",
+                    }
+                )
+                continue
+
+            try:
+                _, shape = check_image(str(im_file))
+            except Exception:
+                mismatched_rows.append(
+                    {
+                        "数据集划分": self.split,
+                        "标注文件": self.json_file,
+                        "图片ID": image_id,
+                        "文件名": file_name,
+                        "实际路径": str(im_file),
+                        "期望宽度": w,
+                        "期望高度": h,
+                        "实际宽度": "",
+                        "实际高度": "",
+                        "问题": "图片无法读取",
+                    }
+                )
+                continue
+            actual_h, actual_w = shape
+            if (actual_h, actual_w) != (h, w):
+                mismatched_rows.append(
+                    {
+                        "数据集划分": self.split,
+                        "标注文件": self.json_file,
+                        "图片ID": image_id,
+                        "文件名": file_name,
+                        "实际路径": str(im_file),
+                        "期望宽度": w,
+                        "期望高度": h,
+                        "实际宽度": actual_w,
+                        "实际高度": actual_h,
+                        "问题": "图片尺寸与COCO JSON记录不一致",
+                    }
+                )
+                continue
+
+            bboxes = []
+            for ann in img_to_anns.get(image_id, []):
+                if ann.get("iscrowd", False) or ann.get("ignore", False):
+                    continue
+                category_id = int(ann["category_id"])
+                if category_id not in category_id_to_class:
+                    continue
+                box = np.array(ann["bbox"], dtype=np.float32)
+                box[:2] += box[2:] / 2
+                box[[0, 2]] /= float(w)
+                box[[1, 3]] /= float(h)
+                if box[2] <= 0 or box[3] <= 0:
+                    continue
+                label = [category_id_to_class[category_id], *box.tolist()]
+                if label not in bboxes:
+                    bboxes.append(label)
+
+            lb = np.array(bboxes, dtype=np.float32) if bboxes else np.zeros((0, 5), dtype=np.float32)
+            x["labels"].append(
+                {
+                    "im_file": str(im_file),
+                    "shape": (h, w),
+                    "cls": lb[:, 0:1],
+                    "bboxes": lb[:, 1:],
+                    "segments": [],
+                    "normalized": True,
+                    "bbox_format": "xywh",
+                    "image_id": image_id,
+                }
+            )
+
+        if missing_rows or mismatched_rows:
+            reports = []
+            if missing_rows:
+                csv_path = self._write_issue_csv(
+                    missing_rows,
+                    "missing_images",
+                    ["数据集划分", "标注文件", "图片ID", "文件名", "期望路径", "问题"],
+                )
+                reports.append(f"发现 {len(missing_rows)} 张缺失图片，详情见 {csv_path}")
+            if mismatched_rows:
+                csv_path = self._write_issue_csv(
+                    mismatched_rows,
+                    "mismatched_images",
+                    [
+                        "数据集划分",
+                        "标注文件",
+                        "图片ID",
+                        "文件名",
+                        "实际路径",
+                        "期望宽度",
+                        "期望高度",
+                        "实际宽度",
+                        "实际高度",
+                        "问题",
+                    ],
+                )
+                reports.append(f"发现 {len(mismatched_rows)} 张图片不可读或尺寸不一致，详情见 {csv_path}")
+            raise RuntimeError(f"COCO JSON 数据集校验失败：{'；'.join(reports)}")
+
+        x["hash"] = self._cache_hash(self.json_file, x["labels"])
+        if x["labels"]:
+            save_dataset_cache_file(self.prefix, path, x, COCO_DATASET_CACHE_VERSION)
+        return x
+
+    def get_labels(self) -> list[dict]:
+        """Load labels from a COCO JSON cache or generate the cache."""
+        cache_path = Path(self.json_file).with_suffix(".cache")
+        try:
+            cache, exists = load_dataset_cache_file(cache_path), True
+            assert cache["version"] == COCO_DATASET_CACHE_VERSION
+            assert cache["hash"] == self._cache_hash(self.json_file, cache["labels"])
+        except (FileNotFoundError, AssertionError, AttributeError, ModuleNotFoundError):
+            cache, exists = self.cache_labels(cache_path), False
+
+        labels = cache["labels"]
+        if not labels:
+            issues = "\n  ".join(sorted(set(cache.get("msgs", [])))) or "未找到有效的 COCO JSON 图片"
+            raise RuntimeError(f"在 {cache_path} 中未找到有效图片。\n  {issues}\n{HELP_URL}")
+        [cache.pop(k, None) for k in ("hash", "version", "msgs")]
+        if self.fraction < 1:
+            labels = labels[: round(len(labels) * self.fraction)]
+        self.im_files = [lb["im_file"] for lb in labels]
+        if exists and LOCAL_RANK in {-1, 0}:
+            TQDM(
+                None,
+                desc=f"{self.prefix}扫描 {cache_path}... {len(labels)} 张图片",
+                total=len(labels),
+                initial=len(labels),
+            )
+        if LOCAL_RANK in {-1, 0}:
+            LOGGER.info(f"{self.prefix}从缓存文件 {cache_path} 读取 {self.json_file}")
+        return labels
+
+    def update_labels_info(self, label: dict) -> dict:
+        """Drop eval-only image ids during augmentation, then format labels like YOLODataset."""
+        if self.augment:
+            label.pop("image_id", None)
+        return super().update_labels_info(label)
 
 
 class YOLOMultiModalDataset(YOLODataset):

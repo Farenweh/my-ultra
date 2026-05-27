@@ -81,13 +81,20 @@ class DetectionValidator(BaseValidator):
             model (torch.nn.Module): Model to validate.
         """
         val = self.data.get(self.args.split, "")  # validation path
-        self.is_coco = (
+        self.is_coco_json = self.data.get("annotation_formats", {}).get(self.args.split) == "coco_json"
+        self.is_coco = self.is_coco_json or (
             isinstance(val, str)
             and "coco" in val
-            and (val.endswith((f"{os.sep}val2017.txt", f"{os.sep}test-dev2017.txt")))
+            and val.endswith((f"{os.sep}val2017.txt", f"{os.sep}test-dev2017.txt"))
         )  # is COCO
         self.is_lvis = isinstance(val, str) and "lvis" in val and not self.is_coco  # is LVIS
-        self.class_map = converter.coco80_to_coco91_class() if self.is_coco else list(range(1, len(model.names) + 1))
+        self.class_map = (
+            self.data["coco_category_ids"]
+            if self.is_coco_json
+            else converter.coco80_to_coco91_class()
+            if self.is_coco
+            else list(range(1, len(model.names) + 1))
+        )
         self.args.save_json |= self.args.val and (self.is_coco or self.is_lvis) and not self.training  # run final val
         self.names = model.names
         self.nc = len(model.names)
@@ -151,6 +158,7 @@ class DetectionValidator(BaseValidator):
             "imgsz": imgsz,
             "ratio_pad": ratio_pad,
             "im_file": batch["im_file"][si],
+            "image_id": batch["image_id"][si] if "image_id" in batch else None,
         }
 
     def _prepare_pred(self, pred: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
@@ -430,7 +438,13 @@ class DetectionValidator(BaseValidator):
         """
         path = Path(pbatch["im_file"])
         stem = path.stem
-        image_id = int(stem) if stem.isnumeric() else stem
+        image_id = pbatch.get("image_id")
+        if image_id is None:
+            image_id = int(stem) if stem.isnumeric() else stem
+        elif isinstance(image_id, torch.Tensor):
+            image_id = image_id.item()
+        elif isinstance(image_id, np.generic):
+            image_id = image_id.item()
         box = ops.xyxy2xywh(predn["bboxes"])  # xywh
         box[:, :2] -= box[:, 2:] / 2  # xy center to top-left corner
         for b, s, c in zip(box.tolist(), predn["conf"].tolist(), predn["cls"].tolist()):
@@ -466,11 +480,14 @@ class DetectionValidator(BaseValidator):
             (dict[str, Any]): Updated statistics dictionary with COCO/LVIS evaluation results.
         """
         pred_json = self.save_dir / "predictions.json"  # predictions
-        anno_json = (
-            self.data["path"]
-            / "annotations"
-            / ("instances_val2017.json" if self.is_coco else f"lvis_v1_{self.args.split}.json")
-        )  # annotations
+        if self.is_coco_json:
+            anno_json = Path(self.data["annotations"][self.args.split])
+        else:
+            anno_json = (
+                self.data["path"]
+                / "annotations"
+                / ("instances_val2017.json" if self.is_coco else f"lvis_v1_{self.args.split}.json")
+            )  # annotations
         return self.coco_evaluate(stats, pred_json, anno_json)
 
     def coco_evaluate(
@@ -515,7 +532,12 @@ class DetectionValidator(BaseValidator):
                     val = COCOeval_faster(
                         anno, pred, iouType=iou_type, lvis_style=self.is_lvis, print_function=LOGGER.info
                     )
-                    val.params.imgIds = [int(Path(x).stem) for x in self.dataloader.dataset.im_files]  # images to eval
+                    image_ids = [
+                        x["image_id"] for x in getattr(self.dataloader.dataset, "labels", []) if "image_id" in x
+                    ]
+                    val.params.imgIds = (
+                        image_ids if image_ids else [int(Path(x).stem) for x in self.dataloader.dataset.im_files]
+                    )  # images to eval
                     val.evaluate()
                     val.accumulate()
                     val.summarize()

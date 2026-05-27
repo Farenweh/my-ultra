@@ -1,18 +1,12 @@
 # Ultralytics YOLO 🚀, AGPL-3.0 license
-# COCO8 dataset (first 8 images from COCO train2017) by Ultralytics
-# Documentation: https://docs.ultralytics.com/datasets/detect/coco8/
-# Example usage: yolo train data=coco8.yaml
-# parent
-# ├── ultralytics
-# └── datasets
-#     └── coco8  ← downloads here (1 MB)
+# FISH 1-shot CD-FSOD dataset in COCO JSON format
 
-# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
-path: FISH/YOLO_format # dataset root dir
-train: images/1_shot # train images (relative to 'path') 4 images
-val: images/test # val images (relative to 'path') 4 images
-test: # test images (optional)
+path: FISH
+train: train
+val: test
+test: test
 
-# Classes
-names:
-  0: detected
+annotations:
+  train: annotations/1_shot.json
+  val: annotations/test.json
+  test: annotations/test.json

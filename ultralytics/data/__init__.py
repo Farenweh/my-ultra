@@ -3,6 +3,7 @@
 from .base import BaseDataset
 from .build import build_dataloader, build_grounding, build_yolo_dataset, load_inference_source
 from .dataset import (
+    COCODetectionDataset,
     ClassificationDataset,
     GroundingDataset,
     PolygonSemanticDataset,
@@ -14,6 +15,7 @@ from .dataset import (
 
 __all__ = (
     "BaseDataset",
+    "COCODetectionDataset",
     "ClassificationDataset",
     "GroundingDataset",
     "PolygonSemanticDataset",

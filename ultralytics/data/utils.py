@@ -475,6 +475,102 @@ def convert_ndjson_to_yolo_if_needed(data: str | Path) -> str | Path:
     return data
 
 
+def _resolve_dataset_path(path: Path, value: str | Path) -> Path:
+    """Resolve a dataset-relative path, preserving absolute paths."""
+    value = Path(value)
+    return value if value.is_absolute() else (path / value).resolve()
+
+
+def _load_coco_json_categories(json_file: Path) -> list[tuple[int, str]]:
+    """Return COCO categories sorted by original category id, validating the basic instances schema."""
+    try:
+        with open(json_file, encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        raise SyntaxError(f"读取 COCO JSON 标注文件失败：'{json_file}'，原因：{e}") from e
+
+    required = {"images", "annotations", "categories"}
+    if not isinstance(data, dict) or not required.issubset(data):
+        missing = sorted(required - set(data.keys())) if isinstance(data, dict) else sorted(required)
+        raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 缺少必需字段：{missing}")
+    if not all(isinstance(data[k], list) for k in required):
+        raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 的 images、annotations、categories 必须为列表")
+    if not data["categories"]:
+        raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 必须至少包含一个类别")
+
+    categories = []
+    seen_ids = set()
+    used_category_ids = {int(ann["category_id"]) for ann in data["annotations"] if "category_id" in ann}
+    for category in data["categories"]:
+        if not isinstance(category, dict) or "id" not in category or "name" not in category:
+            raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 存在缺少 id 或 name 的类别")
+        category_id = int(category["id"])
+        if category_id in seen_ids:
+            raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 存在重复的类别 id：{category_id}")
+        seen_ids.add(category_id)
+        category_name = str(category["name"])
+        if category_name == "DUMMY_CLS" and category_id not in used_category_ids:
+            continue
+        categories.append((category_id, category_name))
+    if not categories:
+        raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 过滤未使用的 DUMMY_CLS 后没有有效类别")
+    return sorted(categories)
+
+
+def _resolve_coco_annotations(data: dict[str, Any], path: Path, dataset: str) -> None:
+    """Resolve optional COCO JSON annotations and derive class metadata from categories."""
+    annotations = data.get("annotations")
+    if not annotations:
+        data["annotation_formats"] = {}
+        return
+    if not isinstance(annotations, dict):
+        raise SyntaxError(emojis(f"{dataset} 的 'annotations:' 必须是从数据集划分名称到标注路径的映射。"))
+
+    resolved_annotations = {}
+    annotation_formats = {}
+    coco_categories = None
+    coco_splits = []
+
+    for split, annotation in annotations.items():
+        if not annotation:
+            continue
+        annotation_path = _resolve_dataset_path(path, annotation)
+        resolved_annotations[split] = str(annotation_path)
+        if annotation_path.suffix.lower() != ".json":
+            annotation_formats[split] = "yolo"
+            continue
+        if not annotation_path.is_file():
+            raise FileNotFoundError(f"数据集划分 '{split}' 的 COCO JSON 标注文件不存在：{annotation_path}")
+
+        categories = _load_coco_json_categories(annotation_path)
+        if coco_categories is None:
+            coco_categories = categories
+        elif categories != coco_categories:
+            raise SyntaxError(
+                f"数据集划分 '{split}' 的 COCO JSON 类别与第一个 COCO JSON 数据集划分不一致。"
+            )
+        annotation_formats[split] = "coco_json"
+        coco_splits.append(split)
+
+    data["annotations"] = resolved_annotations
+    data["annotation_formats"] = annotation_formats
+    if not coco_splits:
+        return
+    if "names" in data or "nc" in data:
+        raise SyntaxError(
+            emojis(
+                f"{dataset} 使用 COCO JSON 标注时不得定义 'names' 或 'nc'；"
+                "类别名称只能从 JSON 的 'categories' 字段读取。"
+            )
+        )
+
+    data["names"] = check_class_names({i: name for i, (_, name) in enumerate(coco_categories)})
+    data["nc"] = len(coco_categories)
+    data["coco_category_ids"] = [category_id for category_id, _ in coco_categories]
+    data["coco_category_id_to_class"] = {category_id: i for i, (category_id, _) in enumerate(coco_categories)}
+    data["coco_json_splits"] = coco_splits
+
+
 def check_det_dataset(dataset: str, autodownload: bool = True, split: str = "") -> dict[str, Any]:
     """Download, verify, and/or unzip a dataset if not found locally.
 
@@ -519,6 +615,24 @@ def check_det_dataset(dataset: str, autodownload: bool = True, split: str = "") 
             data["val"] = data.pop("validation")  # replace 'validation' key with 'val' key
     if split and not data.get(split):
         raise FileNotFoundError(f"{dataset} '{split}:' images not found ❌")
+    # Resolve paths
+    path = Path(extract_dir or data.get("path") or Path(data.get("yaml_file", "")).parent)  # dataset root
+    if not path.exists() and not path.is_absolute():
+        path = (DATASETS_DIR / path).resolve()  # path relative to DATASETS_DIR
+
+    # Set paths
+    data["path"] = path  # download scripts
+    for k in "train", "val", "test", "minival":
+        if data.get(k):  # prepend path
+            if isinstance(data[k], str):
+                x = (path / data[k]).resolve()
+                if not x.exists() and data[k].startswith("../"):
+                    x = (path / data[k][3:]).resolve()
+                data[k] = str(x)
+            else:
+                data[k] = [str((path / x).resolve()) for x in data[k]]
+
+    _resolve_coco_annotations(data, path, dataset)
     if "names" not in data and "nc" not in data:
         raise SyntaxError(emojis(f"{dataset} key missing ❌.\n either 'names' or 'nc' are required in all data YAMLs."))
     if "nc" in data and not isinstance(data["nc"], int):
@@ -538,23 +652,6 @@ def check_det_dataset(dataset: str, autodownload: bool = True, split: str = "") 
 
     data["names"] = check_class_names(data["names"])
     data["channels"] = data.get("channels", 3)  # get image channels, default to 3
-
-    # Resolve paths
-    path = Path(extract_dir or data.get("path") or Path(data.get("yaml_file", "")).parent)  # dataset root
-    if not path.exists() and not path.is_absolute():
-        path = (DATASETS_DIR / path).resolve()  # path relative to DATASETS_DIR
-
-    # Set paths
-    data["path"] = path  # download scripts
-    for k in "train", "val", "test", "minival":
-        if data.get(k):  # prepend path
-            if isinstance(data[k], str):
-                x = (path / data[k]).resolve()
-                if not x.exists() and data[k].startswith("../"):
-                    x = (path / data[k][3:]).resolve()
-                data[k] = str(x)
-            else:
-                data[k] = [str((path / x).resolve()) for x in data[k]]
 
     # Parse YAML
     val, s = (data.get(x) for x in (split or "val", "download"))
