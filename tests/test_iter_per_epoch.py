@@ -39,6 +39,53 @@ def test_get_cfg_rejects_non_positive_iters_per_epoch():
         get_cfg(DEFAULT_CFG, overrides={"iters_per_epoch": 0})
 
 
+def test_get_cfg_defaults_val_batch_factor_to_none():
+    cfg = get_cfg(DEFAULT_CFG)
+    assert cfg.val_batch_factor is None
+
+
+@pytest.mark.parametrize("val_batch_factor", [1, 2, 4])
+def test_get_cfg_accepts_positive_int_val_batch_factor(val_batch_factor):
+    cfg = get_cfg(DEFAULT_CFG, overrides={"val_batch_factor": val_batch_factor})
+    assert cfg.val_batch_factor == val_batch_factor
+
+
+@pytest.mark.parametrize(
+    ("val_batch_factor", "error_type"),
+    [(0, ValueError), (-1, ValueError), (1.5, TypeError), ("2", TypeError), (True, TypeError)],
+)
+def test_get_cfg_rejects_invalid_val_batch_factor_with_chinese_error(val_batch_factor, error_type):
+    with pytest.raises(error_type, match="无效|正整数"):
+        get_cfg(DEFAULT_CFG, overrides={"val_batch_factor": val_batch_factor})
+
+
+@pytest.mark.parametrize(
+    ("task", "val_batch_factor", "expected_batch_size"),
+    [
+        ("detect", None, 8),
+        ("obb", None, 4),
+        ("semantic", None, 4),
+        ("detect", 3, 12),
+    ],
+)
+def test_resolve_val_batch_size_respects_factor_or_task_defaults(task, val_batch_factor, expected_batch_size):
+    trainer = BaseTrainer.__new__(BaseTrainer)
+    trainer.args = SimpleNamespace(task=task, val_batch_factor=val_batch_factor)
+
+    assert trainer._resolve_val_batch_size(train_batch_size=4) == expected_batch_size
+
+
+def test_resolve_val_batch_size_warns_when_obb_factor_increases_batch(monkeypatch):
+    warnings = []
+    trainer = BaseTrainer.__new__(BaseTrainer)
+    trainer.args = SimpleNamespace(task="obb", val_batch_factor=2)
+    monkeypatch.setattr(trainer_module.LOGGER, "warning", warnings.append)
+
+    assert trainer._resolve_val_batch_size(train_batch_size=4) == 8
+    assert len(warnings) == 1
+    assert "可能增加验证阶段显存占用" in warnings[0]
+
+
 def test_next_train_batch_continues_across_logical_epochs():
     loader = InfiniteDataLoader(RangeDataset(), batch_size=2, shuffle=False, num_workers=0)
     trainer = _make_cycle_trainer(loader)
