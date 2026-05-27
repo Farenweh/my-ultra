@@ -1959,6 +1959,48 @@ def torch_safe_load(weight, safe_only=None):
     return ckpt, file
 
 
+def _infer_legacy_detect_head(head: Detect) -> bool | None:
+    """根据已构造的分类分支推断 Detect head 是否使用 legacy 拓扑。"""
+    for name in ("cv3", "one2one_cv3"):
+        branches = getattr(head, name, None)
+        if not isinstance(branches, (nn.ModuleList, list, tuple)) or not branches:
+            continue
+        branch = branches[0]
+        if not isinstance(branch, nn.Sequential) or not branch:
+            continue
+        first = branch[0]
+        if isinstance(first, Conv):
+            return True
+        if isinstance(first, nn.Sequential):
+            return False
+    return None
+
+
+def _restore_detect_head_legacy(model: nn.Module) -> None:
+    """为旧 checkpoint 补齐实例级 legacy 状态，并以实际分类分支拓扑为准修正不一致元数据。"""
+    yaml = getattr(model, "yaml", None)
+    yaml_legacy = yaml.get("legacy_yolo_head") if isinstance(yaml, dict) else None
+    for head in model.modules():
+        if not isinstance(head, Detect) or isinstance(head, (WorldDetect, v10Detect)):
+            continue
+        inferred = _infer_legacy_detect_head(head)
+        stored = head.__dict__.get("legacy")
+        if inferred is not None:
+            restored = inferred
+            if stored is not None and bool(stored) != inferred:
+                LOGGER.warning(
+                    f"checkpoint 中 {type(head).__name__}.legacy={stored} 与实际 cv3 拓扑不一致，"
+                    f"已按实际结构修正为 {inferred}。"
+                )
+        elif stored is not None:
+            restored = bool(stored)
+        elif yaml_legacy is not None:
+            restored = bool(yaml_legacy)
+        else:
+            restored = bool(type(head).legacy)
+        head.legacy = restored
+
+
 def load_checkpoint(weight, device=None, inplace=True, fuse=False):
     """Load single model weights.
 
@@ -1985,6 +2027,7 @@ def load_checkpoint(weight, device=None, inplace=True, fuse=False):
             )
         )
     model = candidate.float()  # FP32 model
+    _restore_detect_head_legacy(model)
 
     # Model compatibility updates
     model.args = args  # attach args to model
@@ -2104,6 +2147,10 @@ def parse_model(d, ch, verbose=True):
             A2C2f,
         }
     )
+    legacy_head_modules = frozenset(
+        {Detect, YOLOEDetect, Segment, Segment26, YOLOESegment, YOLOESegment26, Pose, Pose26, OBB, OBB26}
+    )
+    detection_head_modules = legacy_head_modules | {WorldDetect}
 
     def input_stride(f):
         return max(strides[x] for x in f) if isinstance(f, list) else strides[f]
@@ -2126,6 +2173,7 @@ def parse_model(d, ch, verbose=True):
 
     for i, (f, n, m, args) in enumerate(d["backbone"] + d["head"]):  # from, number, module, args
         cstride = input_stride(f)
+        module_kwargs = {}
         m = (
             getattr(torch.nn, m[3:])
             if m.startswith("nn.")
@@ -2184,26 +2232,13 @@ def parse_model(d, ch, verbose=True):
             args = [ch[f]]
         elif m is Concat:
             c2 = sum(ch[x] for x in f)
-        elif m in frozenset(
-            {
-                Detect,
-                WorldDetect,
-                YOLOEDetect,
-                Segment,
-                Segment26,
-                YOLOESegment,
-                YOLOESegment26,
-                Pose,
-                Pose26,
-                OBB,
-                OBB26,
-            }
-        ):
+        elif m in detection_head_modules:
             args.extend([reg_max, end2end, [ch[x] for x in f]])
             if m is Segment or m is YOLOESegment or m is Segment26 or m is YOLOESegment26:
                 args[2] = make_divisible(min(args[2], max_channels) * width, 8)
-            if m in {Detect, YOLOEDetect, Segment, Segment26, YOLOESegment, YOLOESegment26, Pose, Pose26, OBB, OBB26}:
-                m.legacy = legacy
+            if m in legacy_head_modules:
+                head_legacy = legacy or bool(d.get("legacy_yolo_head", False))
+                module_kwargs["legacy"] = head_legacy
         elif m is Depth:
             args = [*args[:1], [ch[x] for x in f]]  # c_mid, ch tuple; drops the legacy mode arg old checkpoints store
         elif m is SemanticSegment:
@@ -2234,7 +2269,9 @@ def parse_model(d, ch, verbose=True):
         else:
             c2 = ch[f]
 
-        m_ = torch.nn.Sequential(*(m(*args) for _ in range(n))) if n > 1 else m(*args)  # module
+        m_ = (
+            torch.nn.Sequential(*(m(*args, **module_kwargs) for _ in range(n))) if n > 1 else m(*args, **module_kwargs)
+        )  # module
         t = str(m)[8:-2].replace("__main__.", "")  # module type
         m_.np = sum(x.numel() for x in m_.parameters())  # number params
         m_.i, m_.f, m_.type = i, f, t  # attach index, 'from' index, type
