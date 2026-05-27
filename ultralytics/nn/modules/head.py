@@ -105,7 +105,15 @@ class Detect(nn.Module):
         """Select index (batch, k) rows of x (batch, n, channels) along dim 1."""
         return x.gather(1, index if x.ndim == 2 else index[..., None].expand(-1, -1, x.shape[-1]))
 
-    def __init__(self, nc: int = 80, reg_max: int = 16, end2end: bool = False, ch: list[int] | tuple[int, ...] = ()):
+    def __init__(
+        self,
+        nc: int = 80,
+        reg_max: int = 16,
+        end2end: bool = False,
+        ch: list[int] | tuple[int, ...] = (),
+        *,
+        legacy: bool | None = None,
+    ):
         """Initialize the YOLO detection layer with specified number of classes and channels.
 
         Args:
@@ -113,8 +121,11 @@ class Detect(nn.Module):
             reg_max (int): Maximum number of DFL channels.
             end2end (bool): Whether to use end-to-end NMS-free detection.
             ch (list[int] | tuple[int, ...]): Channel sizes from backbone feature maps.
+            legacy (bool, optional): 是否构建 legacy 卷积分类分支。None 表示沿用类默认值，以兼容历史上直接设置
+                ``Detect.legacy`` 的调用方。
         """
         super().__init__()
+        self.legacy = type(self).legacy if legacy is None else bool(legacy)
         self.nc = nc  # number of classes
         self.nl = len(ch)  # number of detection layers
         self.reg_max = reg_max  # DFL channels
@@ -324,6 +335,8 @@ class Segment(Detect):
         reg_max: int = 16,
         end2end: bool = False,
         ch: list[int] | tuple[int, ...] = (),
+        *,
+        legacy: bool | None = None,
     ):
         """Initialize the YOLO model attributes such as the number of masks, prototypes, and the convolution layers.
 
@@ -334,8 +347,9 @@ class Segment(Detect):
             reg_max (int): Maximum number of DFL channels.
             end2end (bool): Whether to use end-to-end NMS-free detection.
             ch (list[int] | tuple[int, ...]): Channel sizes from backbone feature maps.
+            legacy (bool, optional): 是否构建 legacy 卷积分类分支。
         """
-        super().__init__(nc, reg_max, end2end, ch)
+        super().__init__(nc, reg_max, end2end, ch, legacy=legacy)
         self.nm = nm  # number of masks
         self.npr = npr  # number of protos
         self.proto = Proto(ch[0], self.npr, self.nm)  # protos
@@ -419,6 +433,8 @@ class Segment26(Segment):
         reg_max: int = 16,
         end2end: bool = False,
         ch: list[int] | tuple[int, ...] = (),
+        *,
+        legacy: bool | None = None,
     ):
         """Initialize the YOLO model attributes such as the number of masks, prototypes, and the convolution layers.
 
@@ -429,8 +445,9 @@ class Segment26(Segment):
             reg_max (int): Maximum number of DFL channels.
             end2end (bool): Whether to use end-to-end NMS-free detection.
             ch (list[int] | tuple[int, ...]): Channel sizes from backbone feature maps.
+            legacy (bool, optional): 是否构建 legacy 卷积分类分支。
         """
-        super().__init__(nc, nm, npr, reg_max, end2end, ch)
+        super().__init__(nc, nm, npr, reg_max, end2end, ch, legacy=legacy)
         self.proto = Proto26(ch, self.npr, self.nm, nc)  # protos
 
     def forward(self, x: list[torch.Tensor]) -> tuple | list[torch.Tensor] | dict[str, torch.Tensor]:
@@ -482,7 +499,14 @@ class OBB(Detect):
     """
 
     def __init__(
-        self, nc: int = 80, ne: int = 1, reg_max: int = 16, end2end: bool = False, ch: list[int] | tuple[int, ...] = ()
+        self,
+        nc: int = 80,
+        ne: int = 1,
+        reg_max: int = 16,
+        end2end: bool = False,
+        ch: list[int] | tuple[int, ...] = (),
+        *,
+        legacy: bool | None = None,
     ):
         """Initialize OBB with number of classes `nc` and layer channels `ch`.
 
@@ -492,8 +516,9 @@ class OBB(Detect):
             reg_max (int): Maximum number of DFL channels.
             end2end (bool): Whether to use end-to-end NMS-free detection.
             ch (list[int] | tuple[int, ...]): Channel sizes from backbone feature maps.
+            legacy (bool, optional): 是否构建 legacy 卷积分类分支。
         """
-        super().__init__(nc, reg_max, end2end, ch)
+        super().__init__(nc, reg_max, end2end, ch, legacy=legacy)
         self.ne = ne  # number of extra parameters
 
         c4 = max(ch[0] // 4, self.ne)
@@ -597,6 +622,8 @@ class Pose(Detect):
         reg_max: int = 16,
         end2end: bool = False,
         ch: list[int] | tuple[int, ...] = (),
+        *,
+        legacy: bool | None = None,
     ):
         """Initialize YOLO network with default parameters and Convolutional Layers.
 
@@ -606,8 +633,9 @@ class Pose(Detect):
             reg_max (int): Maximum number of DFL channels.
             end2end (bool): Whether to use end-to-end NMS-free detection.
             ch (list[int] | tuple[int, ...]): Channel sizes from backbone feature maps.
+            legacy (bool, optional): 是否构建 legacy 卷积分类分支。
         """
-        super().__init__(nc, reg_max, end2end, ch)
+        super().__init__(nc, reg_max, end2end, ch, legacy=legacy)
         self.kpt_shape = kpt_shape  # number of keypoints, number of dims (2 for x,y or 3 for x,y,visible)
         self.nk = kpt_shape[0] * kpt_shape[1]  # number of keypoints total
 
@@ -688,6 +716,8 @@ class Pose26(Pose):
         reg_max: int = 16,
         end2end: bool = False,
         ch: list[int] | tuple[int, ...] = (),
+        *,
+        legacy: bool | None = None,
     ):
         """Initialize YOLO network with default parameters and Convolutional Layers.
 
@@ -697,8 +727,9 @@ class Pose26(Pose):
             reg_max (int): Maximum number of DFL channels.
             end2end (bool): Whether to use end-to-end NMS-free detection.
             ch (list[int] | tuple[int, ...]): Channel sizes from backbone feature maps.
+            legacy (bool, optional): 是否构建 legacy 卷积分类分支。
         """
-        super().__init__(nc, kpt_shape, reg_max, end2end, ch)
+        super().__init__(nc, kpt_shape, reg_max, end2end, ch, legacy=legacy)
         self.flow_model = RealNVP()
 
         c4 = max(ch[0] // 4, kpt_shape[0] * (kpt_shape[1] + 2))
@@ -1127,6 +1158,8 @@ class YOLOEDetect(Detect):
         reg_max: int = 16,
         end2end: bool = False,
         ch: list[int] | tuple[int, ...] = (),
+        *,
+        legacy: bool | None = None,
     ):
         """Initialize YOLO detection layer with nc classes and layer channels ch.
 
@@ -1137,8 +1170,9 @@ class YOLOEDetect(Detect):
             reg_max (int): Maximum number of DFL channels.
             end2end (bool): Whether to use end-to-end NMS-free detection.
             ch (list[int] | tuple[int, ...]): Channel sizes from backbone feature maps.
+            legacy (bool, optional): 是否构建 legacy 卷积分类分支。
         """
-        super().__init__(nc, reg_max, end2end, ch)
+        super().__init__(nc, reg_max, end2end, ch, legacy=legacy)
         c3 = max(ch[0], min(self.nc, 100))
         assert c3 <= embed
         assert with_bn
@@ -1365,6 +1399,8 @@ class YOLOESegment(YOLOEDetect):
         reg_max: int = 16,
         end2end: bool = False,
         ch: list[int] | tuple[int, ...] = (),
+        *,
+        legacy: bool | None = None,
     ):
         """Initialize YOLOESegment with class count, mask parameters, and embedding dimensions.
 
@@ -1377,8 +1413,9 @@ class YOLOESegment(YOLOEDetect):
             reg_max (int): Maximum number of DFL channels.
             end2end (bool): Whether to use end-to-end NMS-free detection.
             ch (list[int] | tuple[int, ...]): Channel sizes from backbone feature maps.
+            legacy (bool, optional): 是否构建 legacy 卷积分类分支。
         """
-        super().__init__(nc, embed, with_bn, reg_max, end2end, ch)
+        super().__init__(nc, embed, with_bn, reg_max, end2end, ch, legacy=legacy)
         self.nm = nm
         self.npr = npr
         self.proto = Proto(ch[0], self.npr, self.nm)
@@ -1489,9 +1526,11 @@ class YOLOESegment26(YOLOESegment):
         reg_max: int = 16,
         end2end: bool = False,
         ch: list[int] | tuple[int, ...] = (),
+        *,
+        legacy: bool | None = None,
     ):
         """Initialize YOLOESegment26 with class count, mask parameters, and embedding dimensions."""
-        YOLOEDetect.__init__(self, nc, embed, with_bn, reg_max, end2end, ch)
+        YOLOEDetect.__init__(self, nc, embed, with_bn, reg_max, end2end, ch, legacy=legacy)
         self.nm = nm
         self.npr = npr
         self.proto = Proto26(ch, self.npr, self.nm, nc)  # protos
