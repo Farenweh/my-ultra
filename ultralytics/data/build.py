@@ -19,6 +19,7 @@ from torch.utils.data import Dataset, dataloader, distributed
 
 from ultralytics.cfg import IterableSimpleNamespace
 from ultralytics.data.dataset import (
+    COCODetectionDataset,
     DepthDataset,
     GroundingDataset,
     PolygonSemanticDataset,
@@ -259,6 +260,25 @@ def seed_worker(worker_id: int) -> None:
     random.seed(worker_seed)
 
 
+def _same_dataset_path(a: Any, b: Any) -> bool:
+    """Return True when two dataset path values resolve to the same string representation."""
+    if isinstance(a, list) or isinstance(b, list):
+        return isinstance(a, list) and isinstance(b, list) and [str(x) for x in a] == [str(x) for x in b]
+    return str(a) == str(b)
+
+
+def _get_dataset_split(data: dict[str, Any], mode: str, img_path: str) -> str:
+    """Infer the dataset split used to build a dataloader."""
+    if mode == "train":
+        return "train"
+    if mode in data and _same_dataset_path(data.get(mode), img_path):
+        return mode
+    for split in ("val", "test", "minival", "train"):
+        if split in data and _same_dataset_path(data.get(split), img_path):
+            return split
+    return mode
+
+
 def build_yolo_dataset(
     cfg: IterableSimpleNamespace,
     img_path: str | list[str],
@@ -289,6 +309,8 @@ def build_yolo_dataset(
     """
     pad = 0.0 if mode == "train" else 0.5
     rect = cfg.rect or rect
+    split = _get_dataset_split(data, mode, img_path)
+    annotation_format = data.get("annotation_formats", {}).get(split)
     if cfg.task == "depth":
         dataset = DepthDataset
         pad, rect = 0.0, rect and mode == "train"  # depth val letterbox stretches, so pad and rect_shape are ignored
@@ -299,14 +321,18 @@ def build_yolo_dataset(
         pad = 0.0  # no pad for semantic
     elif multi_modal:
         dataset = YOLOMultiModalDataset
+    elif annotation_format == "coco_json":
+        if cfg.task != "detect":
+            raise ValueError("COCO JSON 标注当前仅支持 detect 任务")
+        dataset = COCODetectionDataset
     else:
         dataset = YOLODataset
 
     if data.get("complete"):
         fraction = 1.0  # already limited during dataset download
     elif fraction is None:
-        fraction = get_split_fraction(cfg.fraction, "train" if mode == "train" else cfg.split)
-    return dataset(
+        fraction = get_split_fraction(cfg.fraction, split)
+    kwargs = dict(
         img_path=img_path,
         imgsz=cfg.imgsz,
         batch_size=batch,
@@ -324,6 +350,10 @@ def build_yolo_dataset(
         fraction=fraction,
         tile=cfg.tile,
     )
+    if dataset is COCODetectionDataset:
+        kwargs["json_file"] = data["annotations"][split]
+        kwargs["split"] = split
+    return dataset(**kwargs)
 
 
 def build_grounding(
