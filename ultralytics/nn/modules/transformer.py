@@ -19,6 +19,8 @@ from .utils import _get_clones, inverse_sigmoid, multi_scale_deformable_attn_pyt
 __all__ = (
     "AIFI",
     "MLP",
+    "DeformableTransformerEncoder",
+    "DeformableTransformerEncoderLayer",
     "DeformableTransformerDecoder",
     "DeformableTransformerDecoderLayer",
     "LayerNorm2d",
@@ -546,8 +548,9 @@ class MSDeformAttn(nn.Module):
 
         Args:
             query (torch.Tensor): Query tensor with shape [bs, query_length, C].
-            refer_bbox (torch.Tensor): Reference bounding boxes with shape [bs, query_length, 1, 2 or 4], range in [0,
-                1], top-left (0,0), bottom-right (1, 1). The size-1 axis broadcasts across n_levels.
+            refer_bbox (torch.Tensor): Reference points or boxes with shape [bs, query_length, 1, 2 or 4] for decoder
+                use, or [bs, query_length, n_levels, 2] for encoder use. Values are in [0, 1] with top-left (0, 0)
+                and bottom-right (1, 1). The size-1 level axis broadcasts across n_levels.
             value (torch.Tensor): Value tensor with shape [bs, value_length, C].
             value_shapes (list): List with shape [n_levels, 2], [(H_0, W_0), (H_1, W_1), ..., (H_{L-1}, W_{L-1})].
             value_mask (torch.Tensor, optional): Mask tensor with shape [bs, value_length], True for padding elements,
@@ -568,13 +571,18 @@ class MSDeformAttn(nn.Module):
             value = value.masked_fill(value_mask[..., None], float(0))
         value = value.view(bs, len_v, self.n_heads, self.d_model // self.n_heads)
         # Fold (n_levels, n_points) into one axis so every traced tensor stays at rank <= 5 (required for CoreML
-        # export); refer_bbox arrives as (bs, len_q, 1, 2 or 4) and its size-1 axis broadcasts implicitly.
+        # export). Decoder reference points use one level axis, while encoder reference points provide n_levels.
         n_total_points = self.n_levels * self.n_points
         sampling_offsets = self.sampling_offsets(query).view(bs, len_q, self.n_heads, n_total_points, 2)
         attention_weights = self.attention_weights(query).view(bs, len_q, self.n_heads, n_total_points)
         attention_weights = F.softmax(attention_weights, -1)
         num_points = refer_bbox.shape[-1]
         if num_points == 2:
+            num_reference_levels = refer_bbox.shape[-2]
+            if num_reference_levels not in {1, self.n_levels}:
+                raise ValueError(
+                    f"Reference points must have 1 or {self.n_levels} levels, but got {num_reference_levels}."
+                )
             value_shapes_tuple = tuple((int(h), int(w)) for h, w in value_shapes)
             if (
                 self._cached_value_shapes != value_shapes_tuple
@@ -587,7 +595,16 @@ class MSDeformAttn(nn.Module):
                     value_shapes_tuple, dtype=query.dtype, device=query.device
                 ).flip(-1)[:, None, :].expand(-1, self.n_points, -1).reshape(n_total_points, 2)
             offset_normalizer = self._cached_offset_normalizer
-            sampling_locations = refer_bbox[:, :, None, :, :] + sampling_offsets / offset_normalizer
+            sampling_offsets = sampling_offsets / offset_normalizer
+            if num_reference_levels == 1:
+                sampling_locations = refer_bbox[:, :, None, :, :] + sampling_offsets
+            else:
+                reference_points = (
+                    refer_bbox[:, :, None, :, None, :]
+                    .expand(-1, -1, self.n_heads, -1, self.n_points, -1)
+                    .reshape(bs, len_q, self.n_heads, n_total_points, 2)
+                )
+                sampling_locations = reference_points + sampling_offsets
         elif num_points == 4:
             sampling_locations = (
                 refer_bbox[:, :, None, :, :2] + sampling_offsets / self.n_points * refer_bbox[:, :, None, :, 2:] * 0.5
@@ -596,6 +613,136 @@ class MSDeformAttn(nn.Module):
             raise ValueError(f"Last dim of reference_points must be 2 or 4, but got {num_points}.")
         output = multi_scale_deformable_attn_pytorch(value, value_shapes, sampling_locations, attention_weights)
         return self.output_proj(output)
+
+
+class DeformableTransformerEncoderLayer(nn.Module):
+    """Single multiscale deformable transformer encoder layer."""
+
+    def __init__(
+        self,
+        d_model: int = 256,
+        n_heads: int = 8,
+        d_ffn: int = 1024,
+        dropout: float = 0.0,
+        act: nn.Module = nn.ReLU(),
+        n_levels: int = 4,
+        n_points: int = 4,
+    ):
+        """Initialize a deformable encoder layer."""
+        super().__init__()
+        self.self_attn = MSDeformAttn(d_model, n_levels, n_heads, n_points)
+        self.dropout1 = nn.Dropout(dropout)
+        self.norm1 = nn.LayerNorm(d_model)
+
+        self.linear1 = nn.Linear(d_model, d_ffn)
+        self.act = act
+        self.dropout2 = nn.Dropout(dropout)
+        self.linear2 = nn.Linear(d_ffn, d_model)
+        self.dropout3 = nn.Dropout(dropout)
+        self.norm2 = nn.LayerNorm(d_model)
+
+    @staticmethod
+    def with_pos_embed(tensor: torch.Tensor, pos: torch.Tensor | None) -> torch.Tensor:
+        """Add positional embeddings to the input tensor, if provided."""
+        return tensor if pos is None else tensor + pos
+
+    def forward_ffn(self, src: torch.Tensor) -> torch.Tensor:
+        """Run the feed-forward network."""
+        src2 = self.linear2(self.dropout2(self.act(self.linear1(src))))
+        src = src + self.dropout3(src2)
+        return self.norm2(src)
+
+    def forward(
+        self,
+        src: torch.Tensor,
+        shapes: list,
+        reference_points: torch.Tensor,
+        pos: torch.Tensor | None = None,
+        padding_mask: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        """Run deformable self-attention followed by FFN."""
+        src2 = self.self_attn(self.with_pos_embed(src, pos), reference_points, src, shapes, padding_mask)
+        src = self.norm1(src + self.dropout1(src2))
+        return self.forward_ffn(src)
+
+
+class DeformableTransformerEncoder(nn.Module):
+    """Multiscale deformable transformer encoder for BCHW feature map lists."""
+
+    def __init__(
+        self,
+        ch: list[int],
+        hidden_dim: int = 256,
+        num_layers: int = 6,
+        n_heads: int = 8,
+        d_ffn: int = 1024,
+        dropout: float = 0.0,
+        n_points: int = 4,
+        act: nn.Module = nn.ReLU(),
+    ):
+        """Initialize the encoder with per-level input projections and deformable encoder layers."""
+        super().__init__()
+        if not isinstance(ch, (list, tuple)):
+            raise TypeError(f"DeformableTransformerEncoder expects a list of input channels, but got {type(ch)}.")
+        self.hidden_dim = hidden_dim
+        self.n_levels = len(ch)
+        self.input_proj = nn.ModuleList(
+            nn.Sequential(nn.Conv2d(c, hidden_dim, 1, bias=False), nn.BatchNorm2d(hidden_dim)) for c in ch
+        )
+        encoder_layer = DeformableTransformerEncoderLayer(
+            hidden_dim, n_heads, d_ffn, dropout, act, self.n_levels, n_points
+        )
+        self.layers = _get_clones(encoder_layer, num_layers)
+
+    @staticmethod
+    def _get_reference_points(
+        shapes: list[list[int]], dtype: torch.dtype, device: torch.device
+    ) -> torch.Tensor:
+        """Build normalized per-level grid reference points with shape (1, total_tokens, n_levels, 2)."""
+        reference_points = []
+        for h, w in shapes:
+            ref_y, ref_x = torch.meshgrid(
+                torch.linspace(0.5, h - 0.5, h, dtype=dtype, device=device),
+                torch.linspace(0.5, w - 0.5, w, dtype=dtype, device=device),
+                indexing="ij",
+            ) if TORCH_1_11 else torch.meshgrid(
+                torch.linspace(0.5, h - 0.5, h, dtype=dtype, device=device),
+                torch.linspace(0.5, w - 0.5, w, dtype=dtype, device=device),
+            )
+            reference_points.append(torch.stack((ref_x.reshape(-1) / w, ref_y.reshape(-1) / h), -1))
+        return torch.cat(reference_points, 0)[None, :, None, :].expand(-1, -1, len(shapes), -1)
+
+    def _flatten_features(self, x: list[torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor, list[list[int]]]:
+        """Project feature maps and flatten them into source and position token sequences."""
+        srcs, pos_embeds, shapes = [], [], []
+        for proj, feat in zip(self.input_proj, x):
+            src = proj(feat)
+            h, w = src.shape[-2:]
+            shapes.append([h, w])
+            srcs.append(src.flatten(2).permute(0, 2, 1))
+            pos = AIFI.build_2d_sincos_position_embedding(w, h, self.hidden_dim)
+            pos_embeds.append(pos.to(device=src.device, dtype=src.dtype))
+        return torch.cat(srcs, 1), torch.cat(pos_embeds, 1), shapes
+
+    def forward(self, x: list[torch.Tensor]) -> list[torch.Tensor]:
+        """Encode a list of multiscale feature maps and return feature maps with unchanged spatial shapes."""
+        if not isinstance(x, list):
+            raise TypeError(f"DeformableTransformerEncoder expects a list of feature maps, but got {type(x)}.")
+        if len(x) != self.n_levels:
+            raise ValueError(f"Expected {self.n_levels} feature levels, but got {len(x)}.")
+
+        src, pos, shapes = self._flatten_features(x)
+        reference_points = self._get_reference_points(shapes, src.dtype, src.device).expand(src.shape[0], -1, -1, -1)
+        for layer in self.layers:
+            src = layer(src, shapes, reference_points, pos)
+
+        outputs, start = [], 0
+        for h, w in shapes:
+            tokens = h * w
+            output = src[:, start : start + tokens].transpose(1, 2).reshape(src.shape[0], self.hidden_dim, h, w)
+            outputs.append(output.contiguous())
+            start += tokens
+        return outputs
 
 
 class DeformableTransformerDecoderLayer(nn.Module):

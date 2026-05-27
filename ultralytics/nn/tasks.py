@@ -48,6 +48,7 @@ from ultralytics.nn.modules import (
     ConvTranspose,
     Depth,
     Detect,
+    DeformableTransformerEncoder,
     DWConv,
     DWConvTranspose2d,
     Focus,
@@ -1115,7 +1116,13 @@ class RTDETRDetectionModel(DetectionModel):
                 if m.i == max_idx:
                     return torch.unbind(torch.cat(embeddings, 1), dim=0)
         head = self.model[-1]
-        x = head([y[j] for j in head.f], batch)  # head inference
+        if head.f == -1:
+            x = x if isinstance(x, list) else [x]
+        elif isinstance(head.f, int):
+            x = [y[head.f]]
+        else:
+            x = [x if j == -1 else y[j] for j in head.f]
+        x = head(x, batch)  # head inference
         return x
 
 
@@ -2084,6 +2091,13 @@ def parse_model(d, ch, verbose=True):
     def input_stride(f):
         return max(strides[x] for x in f) if isinstance(f, list) else strides[f]
 
+    def input_channels(f):
+        channels = [ch[x] for x in f] if isinstance(f, list) else [ch[f]]
+        flattened = []
+        for channel in channels:
+            flattened.extend(channel if isinstance(channel, (list, tuple)) else [channel])
+        return flattened
+
     def stride_arg(value):
         if isinstance(value, (list, tuple)):
             return max(int(v) for v in value)
@@ -2182,8 +2196,13 @@ def parse_model(d, ch, verbose=True):
             args.append([ch[x] for x in f])
         elif m is ImagePoolingAttn:
             args.insert(1, [ch[x] for x in f])  # channels as second arg
+        elif m is DeformableTransformerEncoder:
+            input_ch = input_channels(f)
+            hidden_dim = args[0] if args else 256
+            args = [input_ch, *args]
+            c2 = [hidden_dim] * len(input_ch)
         elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
-            args.insert(1, [ch[x] for x in f])
+            args.insert(1, input_channels(f))
         elif m is CBLinear:
             c2 = args[0]
             c1 = ch[f]
