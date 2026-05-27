@@ -9,9 +9,9 @@ import torch
 from ultralytics.data.utils import get_split_fraction
 from ultralytics.models.yolo.detect import DetectionTrainer
 from ultralytics.nn.tasks import RTDETRDetectionModel
-from ultralytics.utils import RANK, colorstr
+from ultralytics.utils import RANK
 
-from .val import RTDETRDataset, RTDETRValidator
+from .val import RTDETRValidator, build_rtdetr_dataset
 
 
 class RTDETRTrainer(DetectionTrainer):
@@ -75,22 +75,7 @@ class RTDETRTrainer(DetectionTrainer):
         Returns:
             (RTDETRDataset): Dataset object for the specific mode.
         """
-        return RTDETRDataset(
-            img_path=img_path,
-            imgsz=self.args.imgsz,
-            batch_size=batch,
-            augment=mode == "train",
-            hyp=self.args,
-            rect=False,
-            cache=self.args.cache or None,
-            single_cls=self.args.single_cls or False,
-            prefix=colorstr(f"{mode}: "),
-            classes=self.args.classes,
-            data=self.data,
-            fraction=1.0
-            if self.data.get("complete")
-            else get_split_fraction(self.args.fraction, "train" if mode == "train" else self.args.split),
-        )
+        return build_rtdetr_dataset(self.args, img_path, batch, self.data, mode)
 
     def get_validator(self):
         """Return an RTDETRValidator suitable for RT-DETR model validation."""
