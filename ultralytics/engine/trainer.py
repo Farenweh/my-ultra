@@ -380,6 +380,16 @@ class BaseTrainer:
             world_size=self.world_size,
         )
 
+    def _resolve_val_batch_size(self, train_batch_size: int) -> int:
+        """解析训练期间验证 dataloader 的 batch size。"""
+        factor = getattr(self.args, "val_batch_factor", None)
+        if factor is None:
+            # OBB/semantic/depth 的验证样本显存波动更大，默认保持原有 1 倍行为。
+            return train_batch_size if self.args.task in {"obb", "semantic", "depth"} else train_batch_size * 2
+        if self.args.task in {"obb", "semantic", "depth"} and factor > 1:
+            LOGGER.warning(f"task={self.args.task} 时设置 val_batch_factor={factor} 可能增加验证阶段显存占用。")
+        return train_batch_size * factor
+
     def _build_train_pipeline(self):
         """Build dataloaders, optimizer, and scheduler for current batch size."""
         batch_size = self.batch_size // max(self.world_size, 1)
@@ -393,10 +403,10 @@ class BaseTrainer:
                 f"final batch=1 training at imgsz={self.args.imgsz} gives BatchNorm a single value per channel; "
                 f"change batch or use imgsz >= {2 * self.stride}"
             )
-        # Note: When training DOTA dataset, double batch size could get OOM on images with >2000 objects.
+        val_batch_size = self._resolve_val_batch_size(batch_size)
         self.test_loader = self.get_dataloader(
             self.data.get("val") or self.data.get("test"),
-            batch_size=batch_size if self.args.task in {"obb", "semantic", "depth"} else batch_size * 2,
+            batch_size=val_batch_size,
             rank=dataloader_rank,
             mode="val",
         )

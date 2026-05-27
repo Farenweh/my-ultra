@@ -423,7 +423,12 @@ def check_cfg(cfg: dict, hard: bool = True) -> None:
         if v is None and DEFAULT_CFG_DICT.get(k) is not None and k in typed_keys and k != "auto_augment":
             raise TypeError(f"'{k}=None' is invalid. '{k}' must not be None.")
         if v is not None:  # None values may be from optional args
-            if k in CFG_FLOAT_KEYS and not isinstance(v, FLOAT_OR_INT):
+            if k == "val_batch_factor":
+                if isinstance(v, bool) or not isinstance(v, int):
+                    raise TypeError(f"'{k}={v}' 的类型 {type(v).__name__} 无效。'{k}' 必须是正整数。")
+                if v <= 0:
+                    raise ValueError(f"'{k}={v}' 的取值无效。'{k}' 必须是正整数。")
+            elif k in CFG_FLOAT_KEYS and not isinstance(v, FLOAT_OR_INT):
                 if hard:
                     raise TypeError(
                         f"'{k}={v}' is of invalid type {type(v).__name__}. "
