@@ -7,7 +7,8 @@ from typing import Any
 
 import torch
 
-from ultralytics.data import YOLODataset
+from ultralytics.data import COCODetectionDataset, YOLODataset
+from ultralytics.data.build import _get_dataset_split
 from ultralytics.data.utils import get_split_fraction
 from ultralytics.models.yolo.detect import DetectionValidator
 from ultralytics.utils import colorstr, ops
@@ -71,6 +72,34 @@ class RTDETRDataset(YOLODataset):
         return super().load_image(i=i, rect_mode=rect_mode)
 
 
+class RTDETRCOCODataset(RTDETRDataset, COCODetectionDataset):
+    """使用 COCO JSON 标注并保持 RT-DETR 方形缩放行为的数据集。"""
+
+
+def build_rtdetr_dataset(args, img_path: str, batch: int | None, data: dict[str, Any], mode: str):
+    """根据当前划分的标注格式构建 RT-DETR 数据集。"""
+    split = _get_dataset_split(data, mode, img_path)
+    dataset_class = RTDETRCOCODataset if data.get("annotation_formats", {}).get(split) == "coco_json" else RTDETRDataset
+    kwargs = {
+        "img_path": img_path,
+        "imgsz": args.imgsz,
+        "batch_size": batch,
+        "augment": mode == "train",
+        "hyp": args,
+        "rect": False,
+        "cache": args.cache or None,
+        "single_cls": args.single_cls or False,
+        "prefix": colorstr(f"{mode}: "),
+        "classes": args.classes,
+        "data": data,
+        "fraction": 1.0 if data.get("complete") else get_split_fraction(args.fraction, split),
+    }
+    if dataset_class is RTDETRCOCODataset:
+        kwargs["json_file"] = data["annotations"][split]
+        kwargs["split"] = split
+    return dataset_class(**kwargs)
+
+
 class RTDETRValidator(DetectionValidator):
     """RTDETRValidator extends the DetectionValidator class to provide validation capabilities specifically tailored for
     the RT-DETR (Real-Time DETR) object detection model.
@@ -109,22 +138,7 @@ class RTDETRValidator(DetectionValidator):
         Returns:
             (RTDETRDataset): Dataset configured for RT-DETR validation.
         """
-        return RTDETRDataset(
-            img_path=img_path,
-            imgsz=self.args.imgsz,
-            batch_size=batch,
-            augment=False,  # no augmentation
-            hyp=self.args,
-            rect=False,  # no rect
-            cache=self.args.cache or None,
-            single_cls=self.args.single_cls or False,
-            prefix=colorstr(f"{mode}: "),
-            classes=self.args.classes,
-            data=self.data,
-            fraction=1.0
-            if self.data.get("complete")
-            else get_split_fraction(self.args.fraction, self.args.split or "val"),
-        )
+        return build_rtdetr_dataset(self.args, img_path, batch, self.data, mode)
 
     def scale_preds(self, predn: dict[str, torch.Tensor], pbatch: dict[str, Any]) -> dict[str, torch.Tensor]:
         """Return predictions unchanged as RT-DETR handles scaling in postprocessing."""

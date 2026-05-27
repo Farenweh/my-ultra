@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -120,13 +121,20 @@ class DetectionValidator(BaseValidator):
         if not self.training:
             self._check_max_det(self.args, {self.args.split or "val": self.dataloader.dataset})
         val = self.data.get(self.args.split, "")  # validation path
-        self.is_coco = (
+        self.is_coco_json = self.data.get("annotation_formats", {}).get(self.args.split) == "coco_json"
+        self.is_coco = self.is_coco_json or (
             isinstance(val, str)
             and "coco" in val
             and (val.endswith((f"{os.sep}val2017.txt", f"{os.sep}test-dev2017.txt")))
         )
         self.is_lvis = isinstance(val, str) and "lvis" in val and not self.is_coco  # is LVIS
-        self.class_map = converter.coco80_to_coco91_class() if self.is_coco else list(range(1, len(model.names) + 1))
+        self.class_map = (
+            self.data["coco_category_ids"]
+            if self.is_coco_json
+            else converter.coco80_to_coco91_class()
+            if self.is_coco
+            else list(range(1, len(model.names) + 1))
+        )
         self.args.save_json |= self.args.val and (self.is_coco or self.is_lvis) and not self.training  # run final val
         self.names = model.names
         self.nc = len(model.names)
@@ -201,6 +209,7 @@ class DetectionValidator(BaseValidator):
             "imgsz": imgsz,
             "ratio_pad": ratio_pad,
             "im_file": batch["im_file"][si],
+            "image_id": batch["image_id"][si] if "image_id" in batch else None,
         }
 
     def _prepare_pred(self, pred: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
@@ -509,7 +518,13 @@ class DetectionValidator(BaseValidator):
         """
         path = Path(pbatch["im_file"])
         stem = path.stem
-        image_id = int(stem) if stem.isnumeric() else stem
+        image_id = pbatch.get("image_id")
+        if image_id is None:
+            image_id = int(stem) if stem.isnumeric() else stem
+        elif isinstance(image_id, torch.Tensor):
+            image_id = image_id.item()
+        elif isinstance(image_id, np.generic):
+            image_id = image_id.item()
         box = ops.xyxy2xywh(predn["bboxes"])  # xywh
         box[:, :2] -= box[:, 2:] / 2  # xy center to top-left corner
         for b, s, c in zip(box.tolist(), predn["conf"].tolist(), predn["cls"].tolist()):
@@ -553,12 +568,88 @@ class DetectionValidator(BaseValidator):
             ]
         else:
             pred_json = self.jdict if self.training else self.save_dir / "predictions.json"
-        anno_json = self.gdict or (
-            self.data["path"]
-            / "annotations"
-            / ("instances_val2017.json" if self.is_coco else f"lvis_v1_{self.args.split}.json")
-        )
+        if self.gdict:
+            anno_json = self.gdict
+        elif self.is_coco_json:
+            anno_json = Path(self.data["annotations"][self.args.split])
+        else:
+            anno_json = (
+                self.data["path"]
+                / "annotations"
+                / ("instances_val2017.json" if self.is_coco else f"lvis_v1_{self.args.split}.json")
+            )  # annotations
         return self.coco_evaluate(stats, pred_json, anno_json)
+
+    @staticmethod
+    def _coco_image_id_key(image_id: Any) -> tuple[str, int | str]:
+        """为支持的 COCO image id 生成类型安全的映射键。"""
+        if type(image_id) not in {int, str}:
+            raise TypeError(f"COCO image_id 必须是整数或字符串，实际为 {type(image_id).__name__}: {image_id!r}")
+        return type(image_id).__name__, image_id
+
+    def _prepare_coco_eval_inputs(
+        self, pred_json: Path | list[dict[str, Any]], anno_json: Path
+    ) -> tuple[
+        dict[str, Any],
+        Path | list[dict[str, Any]],
+        dict[tuple[str, int | str], int],
+        Path | None,
+    ]:
+        """在内存中将非整数 COCO image id 稳定映射为评估器支持的整数。"""
+        with open(anno_json, encoding="utf-8") as f:
+            annotations = json.load(f)
+        images = annotations.get("images", [])
+        if all(type(image.get("id")) is int for image in images):
+            return annotations, pred_json, {}, None
+
+        image_id_map = {}
+        mapping_records = []
+        for evaluation_image_id, image in enumerate(images, 1):
+            source_image_id = image.get("id")
+            key = self._coco_image_id_key(source_image_id)
+            if key in image_id_map:
+                raise ValueError(f"COCO annotations.images 存在重复 image_id: {source_image_id!r}")
+            image_id_map[key] = evaluation_image_id
+            mapping_records.append({"evaluation_image_id": evaluation_image_id, "source_image_id": source_image_id})
+            image["id"] = evaluation_image_id
+
+        def remap(items: list[dict[str, Any]], source: str) -> None:
+            for item in items:
+                source_image_id = item.get("image_id")
+                key = self._coco_image_id_key(source_image_id)
+                if key not in image_id_map:
+                    raise ValueError(f"{source} 引用了 annotations.images 中不存在的 image_id: {source_image_id!r}")
+                item["image_id"] = image_id_map[key]
+
+        remap(annotations.get("annotations", []), "COCO annotations")
+        if isinstance(pred_json, (str, Path)):
+            with open(pred_json, encoding="utf-8") as f:
+                predictions = json.load(f)
+        else:
+            predictions = [dict(prediction) for prediction in pred_json]
+        if not isinstance(predictions, list):
+            raise TypeError(f"COCO predictions 顶层必须是列表，实际为 {type(predictions).__name__}")
+        remap(predictions, "COCO predictions")
+
+        mapping_file = self.save_dir / "coco_eval_image_id_map.json"
+        mapping_file.write_text(
+            json.dumps(
+                {
+                    "annotations": str(anno_json),
+                    "predictions": str(pred_json),
+                    "images": mapping_records,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        LOGGER.info(
+            f"faster-coco-eval 不支持非整数 image_id，已在内存中稳定映射 {len(image_id_map)} 张图片；"
+            f"映射见 {mapping_file}"
+        )
+        return annotations, predictions, image_id_map, mapping_file
 
     def coco_evaluate(
         self,
@@ -591,18 +682,36 @@ class DetectionValidator(BaseValidator):
                 check_requirements("faster-coco-eval>=1.6.7")
                 from faster_coco_eval import COCO, COCOeval_faster
 
-                anno = getattr(self, "_coco_api", None) or COCO(anno_json)
-                self._coco_api = anno
-                pred = anno.loadRes(pred_json)
+                if self.gdict:
+                    anno = getattr(self, "_coco_api", None) or COCO(anno_json)
+                    self._coco_api = anno
+                    pred = anno.loadRes(pred_json)
+                    image_ids = anno.getImgIds()
+                elif self.is_coco_json:
+                    image_ids = [
+                        x["image_id"] for x in getattr(self.dataloader.dataset, "labels", []) if "image_id" in x
+                    ]
+                    anno_input, pred_input, image_id_map, _ = self._prepare_coco_eval_inputs(pred_json, Path(anno_json))
+                    if image_id_map:
+                        image_ids = (
+                            [image_id_map[self._coco_image_id_key(image_id)] for image_id in image_ids]
+                            if image_ids
+                            else [image["id"] for image in anno_input["images"]]
+                        )
+                    elif not image_ids:
+                        image_ids = [image["id"] for image in anno_input["images"]]
+                    anno = COCO(anno_input)
+                    pred = anno.loadRes(pred_input)
+                else:
+                    anno = getattr(self, "_coco_api", None) or COCO(anno_json)
+                    self._coco_api = anno
+                    pred = anno.loadRes(pred_json)
+                    image_ids = [int(Path(x).stem) for x in self.dataloader.dataset.im_files]
                 for i, iou_type in enumerate(iou_types):
                     val = COCOeval_faster(
                         anno, pred, iouType=iou_type, lvis_style=self.is_lvis, print_function=LOGGER.info
                     )
-                    val.params.imgIds = (
-                        anno.getImgIds()
-                        if self.gdict
-                        else [int(Path(x).stem) for x in self.dataloader.dataset.im_files]
-                    )
+                    val.params.imgIds = image_ids  # images to eval
                     val.evaluate()
                     val.accumulate()
                     val.summarize()
