@@ -98,6 +98,8 @@ from .head import (
 from .transformer import (
     AIFI,
     MLP,
+    DeformableTransformerEncoder,
+    DeformableTransformerEncoderLayer,
     DeformableTransformerDecoder,
     DeformableTransformerDecoderLayer,
     LayerNorm2d,
@@ -154,6 +156,8 @@ __all__ = (
     "ConvTranspose",
     "DWConv",
     "DWConvTranspose2d",
+    "DeformableTransformerEncoder",
+    "DeformableTransformerEncoderLayer",
     "DeformableTransformerDecoder",
     "DeformableTransformerDecoderLayer",
     "Depth",
