@@ -14,6 +14,7 @@ iters_per_epoch: # (int, optional) logical train iterations per epoch; when set,
 time: # (float, optional) max hours to train; overrides epochs if set
 patience: 100 # (int) early stop after N epochs without val improvement
 batch: 16 # (int | float) batch size as int (e.g. 16), or float 0.0–1.0 for AutoBatch fraction of GPU memory
+val_batch_factor: # (int, optional) 训练期间验证 batch 相对训练 batch 的倍率；留空保持各任务默认行为
 imgsz: 640 # (int | list) train/val use int (square); predict/export may use [h,w]
 save: True # (bool) save train checkpoints and predict results
 save_period: -1 # (int) save checkpoint every N epochs; disabled if < 1
