@@ -142,15 +142,29 @@ def check_file_speeds(
 
 def get_hash(paths: list[str]) -> str:
     """Return a single hash value of a list of paths (files or dirs)."""
-    size = 0
-    for p in paths:
-        try:
-            size += os.stat(p).st_size
-        except OSError:
-            continue
+    paths = list(paths)
+    with ThreadPool(_get_hash_threads(len(paths))) as pool:
+        size = sum(pool.imap(_stat_size, paths, chunksize=256))
     h = __import__("hashlib").sha256(str(size).encode())  # hash sizes
     h.update("".join(paths).encode())  # hash paths
     return h.hexdigest()  # return hash
+
+
+def _get_hash_threads(num_paths: int) -> int:
+    """Return half of the visible CPU threads, capped by the number of paths."""
+    try:
+        cpu_threads = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        cpu_threads = os.cpu_count() or 1
+    return min(max(1, num_paths), max(1, cpu_threads // 2))
+
+
+def _stat_size(path: str) -> int:
+    """Return file size for dataset cache hashing, or zero when the path is unavailable."""
+    try:
+        return os.stat(path).st_size
+    except OSError:
+        return 0
 
 
 def exif_size(img: Image.Image) -> tuple[int, int]:
