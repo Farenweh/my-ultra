@@ -8,6 +8,7 @@ import random
 import subprocess
 import time
 import zipfile
+from multiprocessing.pool import ThreadPool
 from pathlib import Path
 from tarfile import is_tarfile
 from typing import Any
@@ -223,18 +224,33 @@ def check_file_speeds(
 
 def get_hash(paths: list[str]) -> str:
     """Return a hash of paths and their file sizes and modification times."""
+    paths = list(paths)
     h = __import__("hashlib").sha256()
-    for p in paths:
-        h.update(p.encode())
-        h.update(b"\0")
-        try:
-            stat = os.stat(p)
-        except OSError:
+    with ThreadPool(_get_hash_threads(len(paths))) as pool:
+        for path, metadata in zip(paths, pool.imap(_stat_metadata, paths, chunksize=256)):
+            h.update(path.encode())
             h.update(b"\0")
-            continue
-        h.update(f"{stat.st_size}:{stat.st_mtime_ns}".encode())
-        h.update(b"\0")
+            h.update(metadata.encode())
+            h.update(b"\0")
     return h.hexdigest()
+
+
+def _get_hash_threads(num_paths: int) -> int:
+    """Return half of the visible CPU threads, capped by the number of paths."""
+    try:
+        cpu_threads = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        cpu_threads = os.cpu_count() or 1
+    return min(max(1, num_paths), max(1, cpu_threads // 2))
+
+
+def _stat_metadata(path: str) -> str:
+    """Return file size and modification time for dataset cache hashing, or empty text when unavailable."""
+    try:
+        stat = os.stat(path)
+        return f"{stat.st_size}:{stat.st_mtime_ns}"
+    except OSError:
+        return ""
 
 
 def exif_size(img: Image.Image) -> tuple[int, int]:
