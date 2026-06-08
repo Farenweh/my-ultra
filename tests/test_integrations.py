@@ -3,6 +3,7 @@
 import contextlib
 import subprocess
 import time
+import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -26,7 +27,8 @@ def test_tensorboard():
 class FakeSummaryWriter:
     """Minimal TensorBoard writer used to test callback behavior without tensorboard installed."""
 
-    def __init__(self):
+    def __init__(self, log_dir=None):
+        self.log_dir = log_dir
         self.scalars = []
         self.text = []
         self.hparams = []
@@ -214,6 +216,295 @@ def test_tensorboard_graph_copy_failure_is_nonfatal(monkeypatch):
 
     assert len(warnings) == 1
     assert "copy failed" in warnings[0]
+
+
+class FakeTensorBoardProcess:
+    """用于测试 TensorBoard 子进程生命周期的假进程。"""
+
+    def __init__(self, command):
+        self.command = command
+        self.returncode = None
+        self.terminated = False
+        self.killed = False
+
+    def poll(self):
+        return self.returncode
+
+    def terminate(self):
+        self.terminated = True
+        self.returncode = 0
+
+    def wait(self, timeout=None):
+        self.returncode = 0
+        return 0
+
+    def kill(self):
+        self.killed = True
+        self.returncode = -9
+
+
+def _tb_environment(logdir: Path | str):
+    """生成 TensorBoard /data/environment 风格响应。"""
+    return {"data_location": str(logdir), "debug": {"flags": {"logdir": str(logdir)}}}
+
+
+def _reset_tb_server_state(monkeypatch, tb):
+    """重置 TensorBoard 服务相关全局状态。"""
+    monkeypatch.setattr(tb, "_TENSORBOARD_PROCESS", None)
+    monkeypatch.setattr(tb, "_TENSORBOARD_PORT", None)
+    monkeypatch.setattr(tb, "_TENSORBOARD_LOGDIR", None)
+    monkeypatch.setattr(tb, "WRITER", None)
+
+
+def test_tensorboard_callback_starts_server_on_free_default_port(monkeypatch, tmp_path):
+    """6006 空闲时应直接使用当前训练目录启动 TensorBoard。"""
+    from ultralytics.utils.callbacks import tensorboard as tb
+
+    _reset_tb_server_state(monkeypatch, tb)
+    environments, commands = {}, []
+
+    def fake_popen(command, stdout=None, stderr=None):
+        commands.append(command)
+        port = int(command[command.index("--port") + 1])
+        logdir = command[command.index("--logdir") + 1]
+        environments[port] = _tb_environment(logdir)
+        return FakeTensorBoardProcess(command)
+
+    monkeypatch.setattr(tb, "SummaryWriter", FakeSummaryWriter)
+    monkeypatch.setattr(tb, "_tensorboard_environment", lambda port, timeout=1.0: environments.get(port))
+    monkeypatch.setattr(tb, "_port_is_free", lambda port: port == 6006 and port not in environments)
+    monkeypatch.setattr(tb.subprocess, "Popen", fake_popen)
+
+    trainer = _fake_tb_trainer(tmp_path, tmp_path / "missing.png")
+    tb.on_pretrain_routine_start(trainer)
+
+    assert tb.WRITER.log_dir == str(tmp_path)
+    assert commands[0][commands[0].index("-m") + 1] == "ultralytics.utils.tensorboard_launcher"
+    assert commands and commands[0][commands[0].index("--logdir") + 1] == str(tmp_path.resolve())
+    assert commands[0][commands[0].index("--port") + 1] == "6006"
+    assert commands[0][commands[0].index("--reload_interval") + 1] == "5"
+    assert commands[0][commands[0].index("--reload_multifile") + 1] == "true"
+    assert tb._TENSORBOARD_PORT == 6006
+
+
+def test_tensorboard_launcher_patches_frontend_defaults():
+    """仓库内 TensorBoard launcher 应提供自动刷新、零 smoothing 和亮蓝曲线默认值。"""
+    pytest.importorskip("tensorboard")
+    from ultralytics.utils import tensorboard_launcher as tbl
+
+    provider = tbl.get_assets_zip_provider()
+    assert provider is not None
+
+    with provider() as assets_zip:
+        with zipfile.ZipFile(assets_zip) as zf:
+            index_js = zf.read("index.js").decode("utf-8")
+            index_html = zf.read("index.html").decode("utf-8")
+
+    assert "scalarSmoothing:0" in index_js
+    assert "reloadPeriodInMs:5000,reloadEnabled:!0" in index_js
+    assert 'colorPalette:{id:"ultralytics-bright-blue"' in index_js
+    assert "#009dff" in index_js
+    assert "v.scalarSmoothing=0" in index_html
+    assert "v.autoReload=true" in index_html
+    assert "v.autoReloadPeriodInMs=5000" in index_html
+
+
+def test_tensorboard_callback_reuses_matching_default_port(monkeypatch, tmp_path):
+    """6006 已指向当前训练目录时不重复启动服务。"""
+    from ultralytics.utils.callbacks import tensorboard as tb
+
+    _reset_tb_server_state(monkeypatch, tb)
+    monkeypatch.setattr(tb, "SummaryWriter", FakeSummaryWriter)
+    monkeypatch.setattr(tb, "_tensorboard_environment", lambda port, timeout=1.0: _tb_environment(tmp_path))
+    monkeypatch.setattr(tb.subprocess, "Popen", lambda *a, **k: pytest.fail("不应启动新的 TensorBoard 进程"))
+
+    trainer = _fake_tb_trainer(tmp_path, tmp_path / "missing.png")
+    tb.on_pretrain_routine_start(trainer)
+
+    assert tb.WRITER.log_dir == str(tmp_path)
+    assert tb._TENSORBOARD_PROCESS is None
+
+
+def test_tensorboard_callback_restarts_wrong_default_port(monkeypatch, tmp_path):
+    """6006 指向错误目录时应先尝试终止可见进程再重启 6006。"""
+    from ultralytics.utils.callbacks import tensorboard as tb
+
+    _reset_tb_server_state(monkeypatch, tb)
+    environments = {6006: _tb_environment("/tmp")}
+    terminated_ports, commands = [], []
+
+    def fake_popen(command, stdout=None, stderr=None):
+        commands.append(command)
+        port = int(command[command.index("--port") + 1])
+        logdir = command[command.index("--logdir") + 1]
+        environments[port] = _tb_environment(logdir)
+        return FakeTensorBoardProcess(command)
+
+    monkeypatch.setattr(tb, "SummaryWriter", FakeSummaryWriter)
+    monkeypatch.setattr(tb, "_tensorboard_environment", lambda port, timeout=1.0: environments.get(port))
+    monkeypatch.setattr(tb, "_terminate_visible_tensorboard", lambda port: terminated_ports.append(port) or [1234])
+    monkeypatch.setattr(tb, "_port_is_free", lambda port: port == 6006)
+    monkeypatch.setattr(tb.subprocess, "Popen", fake_popen)
+
+    trainer = _fake_tb_trainer(tmp_path, tmp_path / "missing.png")
+    tb.on_pretrain_routine_start(trainer)
+
+    assert terminated_ports == [6006]
+    assert commands[0][commands[0].index("--port") + 1] == "6006"
+    assert commands[0][commands[0].index("--logdir") + 1] == str(tmp_path.resolve())
+
+
+def test_tensorboard_callback_falls_back_when_default_port_stays_busy(monkeypatch, tmp_path):
+    """6006 无法释放时应使用后续空闲端口。"""
+    from ultralytics.utils.callbacks import tensorboard as tb
+
+    _reset_tb_server_state(monkeypatch, tb)
+    environments = {6006: _tb_environment("/tmp")}
+    commands = []
+
+    def fake_popen(command, stdout=None, stderr=None):
+        commands.append(command)
+        port = int(command[command.index("--port") + 1])
+        logdir = command[command.index("--logdir") + 1]
+        environments[port] = _tb_environment(logdir)
+        return FakeTensorBoardProcess(command)
+
+    monkeypatch.setattr(tb, "SummaryWriter", FakeSummaryWriter)
+    monkeypatch.setattr(tb, "_tensorboard_environment", lambda port, timeout=1.0: environments.get(port))
+    monkeypatch.setattr(tb, "_terminate_visible_tensorboard", lambda port: [])
+    monkeypatch.setattr(tb, "_port_is_free", lambda port: port == 6007)
+    monkeypatch.setattr(tb.subprocess, "Popen", fake_popen)
+
+    trainer = _fake_tb_trainer(tmp_path, tmp_path / "missing.png")
+    tb.on_pretrain_routine_start(trainer)
+
+    assert commands[0][commands[0].index("--port") + 1] == "6007"
+    assert tb._TENSORBOARD_PORT == 6007
+
+
+def test_tensorboard_callback_reuses_matching_fallback_port(monkeypatch, tmp_path):
+    """6006 忙且 6007 已指向当前训练目录时应复用 6007。"""
+    from ultralytics.utils.callbacks import tensorboard as tb
+
+    _reset_tb_server_state(monkeypatch, tb)
+    environments = {6007: _tb_environment(tmp_path)}
+    terminated_ports = []
+
+    monkeypatch.setattr(tb, "SummaryWriter", FakeSummaryWriter)
+    monkeypatch.setattr(tb, "_tensorboard_environment", lambda port, timeout=1.0: environments.get(port))
+    monkeypatch.setattr(tb, "_terminate_visible_tensorboard", lambda port: terminated_ports.append(port) or [])
+    monkeypatch.setattr(tb, "_port_is_free", lambda port: False)
+    monkeypatch.setattr(tb.subprocess, "Popen", lambda *a, **k: pytest.fail("不应启动新的 TensorBoard 进程"))
+
+    trainer = _fake_tb_trainer(tmp_path, tmp_path / "missing.png")
+    tb.on_pretrain_routine_start(trainer)
+
+    assert tb.WRITER.log_dir == str(tmp_path)
+    assert tb._TENSORBOARD_PROCESS is None
+    assert terminated_ports == []
+
+
+def test_tensorboard_callback_restarts_wrong_fallback_port(monkeypatch, tmp_path):
+    """6007 指向错误目录且可释放时应在 6007 重启。"""
+    from ultralytics.utils.callbacks import tensorboard as tb
+
+    _reset_tb_server_state(monkeypatch, tb)
+    environments = {6007: _tb_environment("/tmp/old-run")}
+    terminated_ports, commands = [], []
+
+    def fake_popen(command, stdout=None, stderr=None):
+        commands.append(command)
+        port = int(command[command.index("--port") + 1])
+        logdir = command[command.index("--logdir") + 1]
+        environments[port] = _tb_environment(logdir)
+        return FakeTensorBoardProcess(command)
+
+    monkeypatch.setattr(tb, "SummaryWriter", FakeSummaryWriter)
+    monkeypatch.setattr(tb, "_tensorboard_environment", lambda port, timeout=1.0: environments.get(port))
+    monkeypatch.setattr(tb, "_terminate_visible_tensorboard", lambda port: terminated_ports.append(port) or [4321])
+    monkeypatch.setattr(tb, "_port_is_free", lambda port: port == 6007)
+    monkeypatch.setattr(tb.subprocess, "Popen", fake_popen)
+
+    trainer = _fake_tb_trainer(tmp_path, tmp_path / "missing.png")
+    tb.on_pretrain_routine_start(trainer)
+
+    assert terminated_ports == [6007]
+    assert commands[0][commands[0].index("--port") + 1] == "6007"
+    assert commands[0][commands[0].index("--logdir") + 1] == str(tmp_path.resolve())
+
+
+def test_tensorboard_callback_skips_unreleased_wrong_fallback_port(monkeypatch, tmp_path):
+    """6007 指向错误目录但无法释放时应继续尝试 6008。"""
+    from ultralytics.utils.callbacks import tensorboard as tb
+
+    _reset_tb_server_state(monkeypatch, tb)
+    environments = {6007: _tb_environment("/tmp/old-run")}
+    terminated_ports, commands = [], []
+
+    def fake_popen(command, stdout=None, stderr=None):
+        commands.append(command)
+        port = int(command[command.index("--port") + 1])
+        logdir = command[command.index("--logdir") + 1]
+        environments[port] = _tb_environment(logdir)
+        return FakeTensorBoardProcess(command)
+
+    monkeypatch.setattr(tb, "SummaryWriter", FakeSummaryWriter)
+    monkeypatch.setattr(tb, "_tensorboard_environment", lambda port, timeout=1.0: environments.get(port))
+    monkeypatch.setattr(tb, "_terminate_visible_tensorboard", lambda port: terminated_ports.append(port) or [])
+    monkeypatch.setattr(tb, "_port_is_free", lambda port: port == 6008)
+    monkeypatch.setattr(tb.subprocess, "Popen", fake_popen)
+
+    trainer = _fake_tb_trainer(tmp_path, tmp_path / "missing.png")
+    tb.on_pretrain_routine_start(trainer)
+
+    assert terminated_ports == [6007]
+    assert commands[0][commands[0].index("--port") + 1] == "6008"
+
+
+def test_tensorboard_callback_skips_non_tensorboard_busy_port(monkeypatch, tmp_path):
+    """非 TensorBoard 服务占用端口时应跳过且不尝试终止。"""
+    from ultralytics.utils.callbacks import tensorboard as tb
+
+    _reset_tb_server_state(monkeypatch, tb)
+    environments = {}
+    terminated_ports, commands = [], []
+
+    def fake_popen(command, stdout=None, stderr=None):
+        commands.append(command)
+        port = int(command[command.index("--port") + 1])
+        logdir = command[command.index("--logdir") + 1]
+        assert port == 6007
+        environments[port] = _tb_environment(logdir)
+        return FakeTensorBoardProcess(command)
+
+    monkeypatch.setattr(tb, "SummaryWriter", FakeSummaryWriter)
+    monkeypatch.setattr(tb, "_tensorboard_environment", lambda port, timeout=1.0: environments.get(port))
+    monkeypatch.setattr(tb, "_terminate_visible_tensorboard", lambda port: terminated_ports.append(port) or [])
+    monkeypatch.setattr(tb, "_port_is_free", lambda port: port == 6007 and port not in environments)
+    monkeypatch.setattr(tb.subprocess, "Popen", fake_popen)
+
+    trainer = _fake_tb_trainer(tmp_path, tmp_path / "missing.png")
+    tb.on_pretrain_routine_start(trainer)
+
+    assert terminated_ports == []
+    assert commands[0][commands[0].index("--port") + 1] == "6007"
+
+
+def test_tensorboard_callback_keeps_writer_when_server_start_fails(monkeypatch, tmp_path):
+    """自动启动服务失败时不应影响 SummaryWriter 初始化。"""
+    from ultralytics.utils.callbacks import tensorboard as tb
+
+    _reset_tb_server_state(monkeypatch, tb)
+    monkeypatch.setattr(tb, "SummaryWriter", FakeSummaryWriter)
+    monkeypatch.setattr(tb, "_tensorboard_environment", lambda port, timeout=1.0: None)
+    monkeypatch.setattr(tb, "_port_is_free", lambda port: port == 6006)
+    monkeypatch.setattr(tb.subprocess, "Popen", lambda *a, **k: (_ for _ in ()).throw(OSError("启动失败")))
+
+    trainer = _fake_tb_trainer(tmp_path, tmp_path / "missing.png")
+    tb.on_pretrain_routine_start(trainer)
+
+    assert tb.WRITER.log_dir == str(tmp_path)
+    assert tb._TENSORBOARD_PROCESS is None
 
 
 @pytest.mark.skipif(not check_requirements("ray", install=False), reason="ray[tune] not installed")
