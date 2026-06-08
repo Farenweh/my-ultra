@@ -816,3 +816,22 @@ def test_setup_model_respects_pretrained_arg_for_pt_models(monkeypatch, pretrain
 
     assert captured["cfg"] == checkpoint_model.yaml, "Checkpoint config was not used"
     assert captured["weights"] is (checkpoint_model if uses_weights else None), "Unexpected weights loaded"
+
+
+def test_train_without_saving_skips_checkpoint_reload(tmp_path, monkeypatch):
+    """save=False 的训练无需存在 checkpoint，直接返回训练器指标。"""
+    model = YOLO("yolo11n.yaml")
+    metrics = {"验证指标": 0.5}
+
+    class NoSaveTrainer:
+        def __init__(self, overrides=None, _callbacks=None):
+            self.args = SimpleNamespace(save=False)
+            self.validator = SimpleNamespace(metrics=metrics)
+            self.best = tmp_path / "best.pt"
+            self.last = tmp_path / "last.pt"
+
+        def train(self):
+            return None
+
+    monkeypatch.setattr("ultralytics.engine.model.checks.check_pip_update_available", lambda: None)
+    assert model.train(trainer=NoSaveTrainer, data="coco8.yaml", save=False) == metrics
