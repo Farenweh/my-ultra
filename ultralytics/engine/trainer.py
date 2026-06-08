@@ -404,6 +404,19 @@ class BaseTrainer:
             world_size=self.world_size,
         )
 
+    @staticmethod
+    def _resolve_ddp_find_unused_parameters(model: nn.Module) -> bool:
+        """解析 DDP 是否查找未使用参数。"""
+        override = os.getenv("ULTRALYTICS_DDP_FIND_UNUSED_PARAMETERS")
+        if override is not None:
+            return override == "1"
+        return model.__class__.__name__ != "RTDETRDetectionModel"
+
+    @staticmethod
+    def _resolve_ddp_gradient_as_bucket_view() -> bool:
+        """解析 DDP 梯度是否可以复用通信 bucket view。"""
+        return not (IS_ASCEND and USE_ASCEND_FUSED_OPTIMIZER is not False)
+
     def _resolve_val_batch_size(self, train_batch_size: int) -> int:
         """解析训练期间验证 dataloader 的 batch size。"""
         factor = getattr(self.args, "val_batch_factor", None)
@@ -624,12 +637,15 @@ class BaseTrainer:
         if self.world_size > 1:
             # static_graph=True permits params used >1 time per forward (e.g. flow_model in
             # o2m+o2o pose loss branches) under torch.compile.
-            ddp_kwargs = {"static_graph": bool(self.args.compile)} if TORCH_1_11 else {}
+            compiled = bool(self.args.compile)
+            ddp_kwargs = {"static_graph": compiled} if TORCH_1_11 else {}
             ddp_kwargs["forward_sync_buffers" if TORCH_2_13 else "broadcast_buffers"] = False
             self.model = nn.parallel.DistributedDataParallel(
                 self.model,
                 device_ids=[self.device.index],
-                find_unused_parameters=not bool(self.args.compile),
+                find_unused_parameters=False if compiled else self._resolve_ddp_find_unused_parameters(self.model),
+                # Ascend 融合优化器会改写 p.grad data pointer，不能接收 DDP bucket view 梯度。
+                gradient_as_bucket_view=self._resolve_ddp_gradient_as_bucket_view(),
                 **ddp_kwargs,
             )
 
