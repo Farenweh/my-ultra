@@ -380,6 +380,19 @@ class BaseTrainer:
             world_size=self.world_size,
         )
 
+    @staticmethod
+    def _resolve_ddp_find_unused_parameters(model: nn.Module) -> bool:
+        """解析 DDP 是否查找未使用参数。"""
+        override = os.getenv("ULTRALYTICS_DDP_FIND_UNUSED_PARAMETERS")
+        if override is not None:
+            return override == "1"
+        return model.__class__.__name__ != "RTDETRDetectionModel"
+
+    @staticmethod
+    def _resolve_ddp_gradient_as_bucket_view() -> bool:
+        """解析 DDP 梯度是否可以复用通信 bucket view。"""
+        return not (IS_ASCEND and USE_ASCEND_FUSED_OPTIMIZER)
+
     def _resolve_val_batch_size(self, train_batch_size: int) -> int:
         """解析训练期间验证 dataloader 的 batch size。"""
         factor = getattr(self.args, "val_batch_factor", None)
@@ -499,8 +512,7 @@ class BaseTrainer:
             LOGGER.warning(f"'channels_last=True' is only supported on CUDA, ignoring on '{self.device.type}'.")
         self.set_model_attributes()
 
-        # Compile model (knowledge distillation runs the wrapped model eagerly and relies on
-        # find_unused_parameters under DDP for the frozen teacher, so disable compilation when distilling)
+        # 知识蒸馏以 eager mode 运行包装后的模型，因此蒸馏时禁用 compile。
         if self.args.distill_model is not None and self.args.compile:
             LOGGER.warning("'compile' is not supported with knowledge distillation and will be disabled.")
             self.args.compile = False
@@ -570,14 +582,15 @@ class BaseTrainer:
         if self.args.distill_model is not None and not isinstance(unwrap_model(self.model), DistillationModel):
             self.model = DistillationModel(student_model=self.model, teacher_model=self.args.distill_model)
         if self.world_size > 1:
-            # static_graph=True permits params used >1 time per forward (e.g. flow_model in
-            # o2m+o2o pose loss branches) under torch.compile.
-            ddp_kwargs = {"static_graph": bool(self.args.compile)} if TORCH_1_11 else {}
+            compiled = bool(self.args.compile)
+            ddp_kwargs = {"static_graph": compiled} if TORCH_1_11 else {}
             self.model = nn.parallel.DistributedDataParallel(
                 self.model,
                 device_ids=[self.device.index],
                 broadcast_buffers=False,
-                find_unused_parameters=not bool(self.args.compile),
+                find_unused_parameters=False if compiled else self._resolve_ddp_find_unused_parameters(self.model),
+                # Ascend 融合优化器会改写 p.grad data pointer，不能接收 DDP bucket view 梯度。
+                gradient_as_bucket_view=self._resolve_ddp_gradient_as_bucket_view(),
                 **ddp_kwargs,
             )
 
