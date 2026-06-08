@@ -1,7 +1,16 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
+import contextlib
+import json
 import math
+import os
+import signal
+import socket
+import subprocess
+import sys
 import time
+import urllib.error
+import urllib.request
 from collections.abc import Mapping
 from copy import deepcopy
 from numbers import Number
@@ -19,6 +28,16 @@ _PROCESSED_PLOTS = {}
 _MAX_SAMPLE_IMAGES = 6
 _TEXT_VALUE_LIMIT = 1000
 _HPARAM_VALUE_LIMIT = 250
+_TENSORBOARD_PROCESS = None
+_TENSORBOARD_PORT = None
+_TENSORBOARD_LOGDIR = None
+_TENSORBOARD_HOST = "0.0.0.0"
+_TENSORBOARD_CHECK_HOST = "127.0.0.1"
+_TENSORBOARD_DEFAULT_PORT = 6006
+_TENSORBOARD_MAX_PORT = 6020
+_TENSORBOARD_START_TIMEOUT = 5.0
+_TENSORBOARD_REQUEST_TIMEOUT = 1.0
+_TENSORBOARD_RELOAD_INTERVAL = 5
 
 try:
     assert not TESTS_RUNNING  # do not log pytest
@@ -283,6 +302,222 @@ def _close_writer() -> None:
     _PROCESSED_PLOTS = {}
 
 
+def _normalize_logdir(logdir) -> str:
+    """返回可比较的 TensorBoard 日志路径。"""
+    if not logdir:
+        return ""
+    try:
+        return str(Path(str(logdir)).expanduser().resolve())
+    except (OSError, TypeError, ValueError):
+        return str(logdir)
+
+
+def _tensorboard_environment(port: int, timeout: float = _TENSORBOARD_REQUEST_TIMEOUT) -> dict | None:
+    """读取指定端口 TensorBoard 的环境信息。"""
+    url = f"http://{_TENSORBOARD_CHECK_HOST}:{port}/data/environment"
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            data = json.load(response)
+        return data if isinstance(data, dict) else None
+    except (OSError, json.JSONDecodeError, urllib.error.URLError, TimeoutError):
+        return None
+
+
+def _environment_logdir(environment: dict | None) -> str:
+    """从 TensorBoard 环境信息中提取 logdir。"""
+    if not isinstance(environment, dict):
+        return ""
+    debug = environment.get("debug")
+    flags = debug.get("flags", {}) if isinstance(debug, dict) else {}
+    for value in (environment.get("data_location"), flags.get("logdir")):
+        if value:
+            return str(value)
+    return ""
+
+
+def _logdir_matches(actual, expected) -> bool:
+    """判断两个 logdir 是否指向同一目录。"""
+    return _normalize_logdir(actual) == _normalize_logdir(expected)
+
+
+def _port_is_free(port: int) -> bool:
+    """判断端口是否可以用于启动新的 TensorBoard。"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        try:
+            sock.bind(("", port))
+            return True
+        except OSError:
+            return False
+
+
+def _is_tensorboard_args(args: list[str]) -> bool:
+    """判断进程命令是否像 TensorBoard。"""
+    if not args:
+        return False
+    command = " ".join(args).lower()
+    return "tensorboard" in command
+
+
+def _args_use_port(args: list[str], port: int) -> bool:
+    """判断 TensorBoard 命令是否使用目标端口。"""
+    explicit_port = None
+    for i, arg in enumerate(args):
+        if arg == "--port" and i + 1 < len(args):
+            explicit_port = args[i + 1]
+            break
+        if arg.startswith("--port="):
+            explicit_port = arg.split("=", 1)[1]
+            break
+    return explicit_port == str(port) if explicit_port is not None else port == _TENSORBOARD_DEFAULT_PORT
+
+
+def _visible_tensorboard_pids(port: int) -> list[int]:
+    """返回当前命名空间内可见且可能占用目标端口的 TensorBoard 进程。"""
+    proc_root = Path("/proc")
+    if not proc_root.exists():
+        return []
+
+    pids = []
+    current_pid = os.getpid()
+    for proc_dir in proc_root.iterdir():
+        if not proc_dir.name.isdigit():
+            continue
+        pid = int(proc_dir.name)
+        if pid == current_pid:
+            continue
+        try:
+            raw = (proc_dir / "cmdline").read_bytes().rstrip(b"\0")
+        except OSError:
+            continue
+        if not raw:
+            continue
+        args = [part.decode("utf-8", "replace") for part in raw.split(b"\0") if part]
+        if _is_tensorboard_args(args) and _args_use_port(args, port):
+            pids.append(pid)
+    return pids
+
+
+def _terminate_visible_tensorboard(port: int, timeout: float = 3.0) -> list[int]:
+    """终止当前命名空间内可见的目标端口 TensorBoard 进程。"""
+    pids = _visible_tensorboard_pids(port)
+    for pid in pids:
+        with contextlib.suppress(OSError):
+            os.kill(pid, signal.SIGTERM)
+
+    deadline = time.time() + timeout
+    while pids and time.time() < deadline:
+        if _port_is_free(port):
+            break
+        time.sleep(0.1)
+
+    if pids and not _port_is_free(port):
+        for pid in pids:
+            with contextlib.suppress(OSError):
+                os.kill(pid, signal.SIGKILL)
+        deadline = time.time() + 1.0
+        while time.time() < deadline and not _port_is_free(port):
+            time.sleep(0.1)
+    return pids
+
+
+def _stop_tensorboard_process() -> None:
+    """关闭本训练进程启动的 TensorBoard 子进程。"""
+    global _TENSORBOARD_PROCESS, _TENSORBOARD_PORT, _TENSORBOARD_LOGDIR
+    process = _TENSORBOARD_PROCESS
+    if process is not None and process.poll() is None:
+        with contextlib.suppress(OSError):
+            process.terminate()
+        try:
+            process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            with contextlib.suppress(OSError):
+                process.kill()
+            with contextlib.suppress(Exception):
+                process.wait(timeout=1)
+    _TENSORBOARD_PROCESS = None
+    _TENSORBOARD_PORT = None
+    _TENSORBOARD_LOGDIR = None
+
+
+def _start_tensorboard_server(logdir: Path, port: int) -> str:
+    """使用当前 Python 环境启动 TensorBoard 服务。"""
+    global _TENSORBOARD_PROCESS, _TENSORBOARD_PORT, _TENSORBOARD_LOGDIR
+    _stop_tensorboard_process()
+
+    command = [
+        sys.executable,
+        "-m",
+        "ultralytics.utils.tensorboard_launcher",
+        "--logdir",
+        str(logdir),
+        "--host",
+        _TENSORBOARD_HOST,
+        "--port",
+        str(port),
+        "--reload_interval",
+        str(_TENSORBOARD_RELOAD_INTERVAL),
+        "--reload_multifile",
+        "true",
+    ]
+    process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _TENSORBOARD_PROCESS = process
+    _TENSORBOARD_PORT = port
+    _TENSORBOARD_LOGDIR = str(logdir)
+
+    deadline = time.time() + _TENSORBOARD_START_TIMEOUT
+    while time.time() < deadline:
+        if process.poll() is not None:
+            _TENSORBOARD_PROCESS = None
+            _TENSORBOARD_PORT = None
+            _TENSORBOARD_LOGDIR = None
+            raise RuntimeError(f"TensorBoard 进程提前退出，命令：{' '.join(command)}")
+        environment = _tensorboard_environment(port)
+        if _logdir_matches(_environment_logdir(environment), logdir):
+            return f"http://localhost:{port}/"
+        time.sleep(0.25)
+
+    LOGGER.warning(f"{PREFIX}TensorBoard 已启动但暂未完成环境确认，端口={port}，logdir={logdir}")
+    return f"http://localhost:{port}/"
+
+
+def _ensure_tensorboard_server(logdir: Path) -> None:
+    """确保 TensorBoard 服务读取当前训练目录。"""
+    expected_logdir = Path(logdir).expanduser().resolve()
+    for port in range(_TENSORBOARD_DEFAULT_PORT, _TENSORBOARD_MAX_PORT + 1):
+        environment = _tensorboard_environment(port)
+        actual_logdir = _environment_logdir(environment)
+
+        if environment is not None:
+            if actual_logdir and _logdir_matches(actual_logdir, expected_logdir):
+                LOGGER.info(f"{PREFIX}TensorBoard 已指向当前训练目录：{expected_logdir}，访问 http://localhost:{port}/")
+                return
+
+            LOGGER.warning(
+                f"{PREFIX}端口 {port} 当前 TensorBoard logdir={actual_logdir or '<unknown>'}，"
+                f"将尝试重启到 {expected_logdir}"
+            )
+            killed_pids = _terminate_visible_tensorboard(port)
+            if killed_pids:
+                LOGGER.info(f"{PREFIX}已终止端口 {port} 的可见 TensorBoard 进程：{killed_pids}")
+
+            if _port_is_free(port):
+                url = _start_tensorboard_server(expected_logdir, port)
+                LOGGER.info(f"{PREFIX}已在端口 {port} 重启 TensorBoard，logdir={expected_logdir}，访问 {url}")
+                return
+
+            LOGGER.warning(f"{PREFIX}端口 {port} 的 TensorBoard 无法释放，继续查找其他端口。")
+            continue
+
+        if _port_is_free(port):
+            url = _start_tensorboard_server(expected_logdir, port)
+            LOGGER.info(f"{PREFIX}已启动 TensorBoard，logdir={expected_logdir}，访问 {url}")
+            return
+
+        LOGGER.warning(f"{PREFIX}端口 {port} 已被非 TensorBoard 服务占用，跳过。")
+
+    raise RuntimeError(f"未找到可用端口启动 TensorBoard，logdir={expected_logdir}")
+
+
 @smart_inference_mode()
 def _log_tensorboard_graph(trainer) -> None:
     """Log model graph to TensorBoard.
@@ -344,9 +579,15 @@ def on_pretrain_routine_start(trainer) -> None:
             _MODEL_INFO_LOGGED = False
             _PROCESSED_PLOTS = {}
             WRITER = SummaryWriter(str(trainer.save_dir))
-            LOGGER.info(f"{PREFIX}Start with 'tensorboard --logdir {trainer.save_dir}', view at http://localhost:6006/")
         except Exception as e:
             LOGGER.warning(f"{PREFIX}TensorBoard not initialized correctly, not logging this run. {e}")
+            return
+        try:
+            _ensure_tensorboard_server(Path(trainer.save_dir))
+        except Exception as e:
+            LOGGER.warning(
+                f"{PREFIX}TensorBoard 服务未自动启动，请手动运行 'tensorboard --logdir {trainer.save_dir}'。错误：{e}"
+            )
 
 
 def on_train_start(trainer) -> None:
@@ -394,6 +635,7 @@ def on_train_end(trainer) -> None:
 def teardown(trainer) -> None:
     """Close TensorBoard writer at the end of a run."""
     _close_writer()
+    _stop_tensorboard_process()
 
 
 callbacks = (
