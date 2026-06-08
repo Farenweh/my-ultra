@@ -870,16 +870,17 @@ class Model(torch.nn.Module):
         self.trainer.train()
         # Update model and cfg after training
         if RANK in {-1, 0}:
-            ckpt = self.trainer.best if self.trainer.best.exists() else self.trainer.last
-            if not ckpt.exists():
-                raise FileNotFoundError(
-                    f"Training completed but no checkpoint was saved. Expected {self.trainer.best} or {self.trainer.last}."
-                )
-            self.model, self.ckpt = load_checkpoint(ckpt)
-            self.overrides = self._reset_ckpt_args(self.model.args)
             self.metrics = getattr(self.trainer.validator, "metrics", None)
-            if self.metrics is None and self.ckpt:  # recover from checkpoint under DDP (validator runs in subprocess)
-                self.metrics = self.ckpt.get("train_metrics")
+            if getattr(getattr(self.trainer, "args", None), "save", True):
+                ckpt = self.trainer.best if self.trainer.best.exists() else self.trainer.last
+                if not ckpt.exists():
+                    raise FileNotFoundError(
+                        f"Training completed but no checkpoint was saved. Expected {self.trainer.best} or {self.trainer.last}."
+                    )
+                self.model, self.ckpt = load_checkpoint(ckpt)
+                self.overrides = self._reset_ckpt_args(self.model.args)
+                if self.metrics is None and self.ckpt:  # recover from checkpoint under DDP (validator runs in subprocess)
+                    self.metrics = self.ckpt.get("train_metrics")
         return self.metrics
 
     def tune(

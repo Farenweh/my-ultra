@@ -585,6 +585,7 @@ def test_train_reuses_loaded_checkpoint_model(monkeypatch, kwargs, uses_weights)
             self.overrides = overrides
             self.callbacks = _callbacks
             self.model = None
+            self.args = SimpleNamespace(save=False)
             self.validator = SimpleNamespace(metrics=None)
             self.best = MODEL.parent / "nonexistent-best.pt"
             self.last = MODEL
