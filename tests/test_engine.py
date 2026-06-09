@@ -20,8 +20,9 @@ from ultralytics.models.yolo import classify, depth, detect, obb, pose, segment,
 from ultralytics.nn.distill_model import DistillationModel
 from ultralytics.nn.tasks import DetectionModel, load_checkpoint
 from ultralytics.utils import ASSETS, DEFAULT_CFG, IS_RASPBERRYPI, WEIGHTS_DIR
+from ultralytics.utils.patches import torch_load
 from ultralytics.utils.tal import TaskAlignedAssigner
-from ultralytics.utils.torch_utils import unwrap_model
+from ultralytics.utils.torch_utils import strip_optimizer, unwrap_model
 
 
 def _require_npu_device():
@@ -563,6 +564,173 @@ def test_checkpoint_nonfinite_ema_and_model_sanitized():
     assert all(torch.isfinite(v).all() for v in model.state_dict().values() if isinstance(v, torch.Tensor)), (
         "saved checkpoint contains NaN/Inf"
     )
+
+
+def test_save_model_checkpoint_saves_raw_model_and_ema(tmp_path):
+    """验证训练中 checkpoint 同时保留原始 FP32 model 和 EMA 权重。"""
+    raw_model = torch.nn.Linear(1, 1, bias=False)
+    ema_model = torch.nn.Linear(1, 1, bias=False)
+    with torch.no_grad():
+        raw_model.weight.fill_(1.25)
+        ema_model.weight.fill_(2.5)
+    raw_model.args = {"task": "classify"}
+    ema_model.args = {"task": "classify"}
+
+    trainer = object.__new__(BaseTrainer)
+    trainer.model = raw_model
+    trainer.ema = SimpleNamespace(ema=ema_model, updates=7)
+    trainer.optimizer = torch.optim.SGD(trainer.model.parameters(), lr=0.1)
+    trainer.scaler = SimpleNamespace(state_dict=lambda: {})
+    trainer.args = SimpleNamespace(task="classify", imgsz=32)
+    trainer.metrics = {}
+    trainer.fitness = trainer.best_fitness = 0.1
+    trainer.epoch = trainer.global_step = trainer.data_cycle = trainer._data_cycle_batch = 0
+    trainer.wdir = tmp_path
+    trainer.last = tmp_path / "last.pt"
+    trainer.best = tmp_path / "best.pt"
+    trainer.save_period = -1
+    trainer.read_results_csv = lambda: {}
+
+    assert trainer.save_model() is True
+
+    ckpt = torch_load(trainer.last, map_location="cpu")
+    assert ckpt["model"] is not None, "checkpoint 应包含原始 model 权重"
+    assert ckpt["ema"] is not None, "checkpoint 应包含 EMA 权重"
+    assert next(ckpt["model"].parameters()).dtype == torch.float32, "原始 model checkpoint 应保持 FP32"
+    assert next(ckpt["ema"].parameters()).dtype == torch.float16, "EMA checkpoint 应保持现有 FP16 格式"
+    assert next(ckpt["model"].parameters()).item() == pytest.approx(1.25)
+    assert next(ckpt["ema"].parameters()).item() == pytest.approx(2.5)
+    raw_param = next(raw_model.parameters())
+    ema_param = next(ema_model.parameters())
+    assert raw_param.dtype == torch.float32 and raw_param.item() == pytest.approx(1.25)
+    assert ema_param.dtype == torch.float32 and ema_param.item() == pytest.approx(2.5)
+
+    loaded_model, loaded_ckpt = load_checkpoint(trainer.last)
+    loaded_param = next(loaded_model.parameters()).detach().cpu()
+    ema_param = next(loaded_ckpt["ema"].float().parameters()).detach().cpu()
+    assert torch.allclose(loaded_param, ema_param), "load_checkpoint 应继续优先使用 EMA 权重"
+
+
+def test_strip_optimizer_saves_raw_sidecar(tmp_path):
+    """验证 strip_optimizer 在 EMA 覆盖 model 前单独保存原始 model 权重。"""
+    ckpt_path = tmp_path / "best.pt"
+    raw_path = tmp_path / "best_raw.pt"
+    raw_model = torch.nn.Linear(1, 1, bias=False)
+    ema_model = torch.nn.Linear(1, 1, bias=False)
+    with torch.no_grad():
+        raw_model.weight.fill_(1.25)
+        ema_model.weight.fill_(2.5)
+    raw_model.criterion = torch.nn.MSELoss()
+    ema_model.criterion = torch.nn.MSELoss()
+    torch.save(
+        {
+            "epoch": 3,
+            "model": raw_model,
+            "ema": ema_model,
+            "optimizer": {"state": {}},
+            "best_fitness": 0.5,
+            "updates": 7,
+            "scaler": {"scale": 1.0},
+            "train_args": {"imgsz": 32},
+        },
+        ckpt_path,
+    )
+
+    strip_optimizer(ckpt_path)
+
+    assert raw_path.exists(), "raw sidecar checkpoint 未保存"
+    stripped = torch_load(ckpt_path, map_location="cpu")
+    raw = torch_load(raw_path, map_location="cpu")
+    assert next(stripped["model"].parameters()).dtype == torch.float16
+    assert next(raw["model"].parameters()).dtype == torch.float32
+    assert next(stripped["model"].parameters()).item() == pytest.approx(2.5)
+    assert next(raw["model"].parameters()).item() == pytest.approx(1.25)
+    for ckpt in (stripped, raw):
+        assert ckpt["epoch"] == -1
+        assert all(ckpt[k] is None for k in ("optimizer", "best_fitness", "ema", "updates", "scaler"))
+        assert getattr(ckpt["model"], "criterion", None) is None
+        assert all(not p.requires_grad for p in ckpt["model"].parameters())
+
+
+def test_strip_optimizer_raw_sidecar_uses_output_path(tmp_path):
+    """验证传入 s 时 raw sidecar 基于输出路径命名。"""
+    ckpt_path = tmp_path / "source.pt"
+    output_path = tmp_path / "export.pt"
+    raw_path = tmp_path / "export_raw.pt"
+    raw_model = torch.nn.Linear(1, 1, bias=False)
+    ema_model = torch.nn.Linear(1, 1, bias=False)
+    torch.save(
+        {
+            "epoch": 3,
+            "model": raw_model,
+            "ema": ema_model,
+            "optimizer": {"state": {}},
+            "best_fitness": 0.5,
+            "updates": 7,
+            "scaler": {"scale": 1.0},
+            "train_args": {"imgsz": 32},
+        },
+        ckpt_path,
+    )
+
+    strip_optimizer(ckpt_path, s=output_path)
+
+    assert output_path.exists()
+    assert raw_path.exists()
+    assert not (tmp_path / "source_raw.pt").exists()
+
+
+def test_strip_optimizer_skips_raw_sidecar_for_legacy_ema_checkpoint(tmp_path):
+    """验证 model=None 的旧 checkpoint 不会生成 raw sidecar。"""
+    ckpt_path = tmp_path / "last.pt"
+    raw_path = tmp_path / "last_raw.pt"
+    ema_model = torch.nn.Linear(1, 1, bias=False)
+    with torch.no_grad():
+        ema_model.weight.fill_(3.0)
+    torch.save(
+        {
+            "epoch": 3,
+            "model": None,
+            "ema": ema_model,
+            "optimizer": {"state": {}},
+            "best_fitness": 0.5,
+            "updates": 7,
+            "scaler": {"scale": 1.0},
+            "train_args": {"imgsz": 32},
+        },
+        ckpt_path,
+    )
+
+    strip_optimizer(ckpt_path)
+
+    stripped = torch_load(ckpt_path, map_location="cpu")
+    assert not raw_path.exists(), "旧 checkpoint 不应生成 raw sidecar"
+    assert stripped["ema"] is None
+    assert next(stripped["model"].parameters()).dtype == torch.float16
+    assert next(stripped["model"].parameters()).item() == pytest.approx(3.0)
+
+
+def test_strip_optimizer_unwraps_distillation_ema(tmp_path):
+    """验证最终 checkpoint 将 DistillationModel EMA 解包为纯 student model。"""
+    ckpt_path = tmp_path / "best.pt"
+    student = torch.nn.Linear(1, 1, bias=False)
+    distillation = DistillationModel.__new__(DistillationModel)
+    torch.nn.Module.__init__(distillation)
+    distillation.teacher_model = None
+    distillation.student_model = student
+    distillation.feats_idx = []
+    distillation._teacher_feats = {}
+    distillation._student_feats = {}
+    distillation._teacher_hooks = []
+    distillation._student_hooks = []
+    torch.save({"model": None, "ema": distillation, "train_args": {}}, ckpt_path)
+
+    strip_optimizer(ckpt_path)
+
+    stripped = torch_load(ckpt_path, map_location="cpu")
+    assert type(stripped["model"]) is torch.nn.Linear
+    assert next(stripped["model"].parameters()).dtype == torch.float16
+    assert stripped["ema"] is None
 
 
 @pytest.mark.parametrize(

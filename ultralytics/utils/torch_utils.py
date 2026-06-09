@@ -904,6 +904,24 @@ class ModelEMA:
             copy_attr(self.ema, model, include, exclude)
 
 
+def _strip_checkpoint_model(model: nn.Module, half: bool = True) -> nn.Module:
+    """为最终序列化清理 checkpoint model。"""
+    from ultralytics.nn.distill_model import DistillationModel
+
+    if isinstance(model, DistillationModel):
+        model._remove_feature_hooks()
+        model = model.student_model
+    if hasattr(model, "args"):
+        model.args = dict(model.args)  # convert from IterableSimpleNamespace to dict
+    if hasattr(model, "criterion"):
+        model.criterion = None  # strip loss criterion
+    if half:
+        model.half()
+    for p in model.parameters():
+        p.requires_grad = False
+    return model
+
+
 def strip_optimizer(f: str | Path = "best.pt", s: str = "", updates: dict[str, Any] | None = None) -> dict[str, Any]:
     """Strip optimizer from 'f' to finalize training, optionally save as 's'.
 
@@ -937,28 +955,27 @@ def strip_optimizer(f: str | Path = "best.pt", s: str = "", updates: dict[str, A
         "docs": "https://docs.ultralytics.com",
     }
 
-    # Update model
-    if x.get("ema"):
-        x["model"] = x["ema"]  # replace model with EMA
-
-    # Unwrap DistillationModel to save only the student model
-    from ultralytics.nn.distill_model import DistillationModel
-
-    if isinstance(x["model"], DistillationModel):
-        x["model"]._remove_feature_hooks()
-        x["model"] = x["model"].student_model
-
-    if hasattr(x["model"], "args"):
-        x["model"].args = dict(x["model"].args)  # convert from IterableSimpleNamespace to dict
-    if hasattr(x["model"], "criterion"):
-        x["model"].criterion = None  # strip loss criterion
-    x["model"].half()  # to FP16
-    for p in x["model"].parameters():
-        p.requires_grad = False
-
-    # Update other keys
     args = {**DEFAULT_CFG_DICT, **x.get("train_args", {})}  # combine args
-    for k in "optimizer", "best_fitness", "ema", "updates", "scaler":  # keys
+    stripped_keys = ("optimizer", "best_fitness", "ema", "updates", "scaler")
+
+    # 在主 checkpoint 被 EMA 权重覆盖前，先保存原始训练模型。
+    if x.get("model") is not None and x.get("ema") is not None:
+        raw_output = Path(s or f)
+        raw_output = raw_output.with_name(f"{raw_output.stem}_raw{raw_output.suffix}")
+        raw = {**x, "model": _strip_checkpoint_model(x["model"], half=False)}
+        for k in stripped_keys:
+            raw[k] = None
+        raw["epoch"] = -1
+        raw["train_args"] = {k: v for k, v in args.items() if k in DEFAULT_CFG_KEYS}
+        torch.save({**metadata, **raw, **(updates or {})}, raw_output)
+
+    # 更新模型
+    if x.get("ema") is not None:
+        x["model"] = x["ema"]  # replace model with EMA
+    x["model"] = _strip_checkpoint_model(x["model"], half=True)
+
+    # 更新其他键
+    for k in stripped_keys:
         x[k] = None
     x["epoch"] = -1
     x["train_args"] = {k: v for k, v in args.items() if k in DEFAULT_CFG_KEYS}  # strip non-default keys

@@ -1137,10 +1137,12 @@ class BaseTrainer:
         """Save model training checkpoints with additional metadata."""
         import io
 
-        # A transient NaN/Inf permanently poisons the EMA running average (ema = decay*ema + (1-decay)*model), so
-        # save_model would otherwise skip every epoch and the run would finish with no checkpoint on valid input.
-        # Resync each poisoned EMA tensor from the live model where finite; any tensor that is non-finite in both is
-        # left for the nan_to_num_ pass below, so a usable checkpoint is always written.
+        model = deepcopy(unwrap_model(self.model)).float()
+        for v in model.state_dict().values():
+            if isinstance(v, torch.Tensor) and v.is_floating_point():
+                torch.nan_to_num_(v)
+
+        # 临时 NaN/Inf 会永久污染 EMA，先用有限的实时模型张量回填，再在序列化副本上做兜底清理。
         ema = unwrap_model(self.ema.ema)
         if not all(torch.isfinite(v).all() for v in ema.state_dict().values() if isinstance(v, torch.Tensor)):
             model_sd = unwrap_model(self.model).state_dict()
@@ -1166,7 +1168,7 @@ class BaseTrainer:
                 "data_cycle": self.data_cycle,
                 "data_cycle_batch": self._data_cycle_batch,
                 "best_fitness": self.best_fitness,
-                "model": None,  # resume and final checkpoints derive from EMA
+                "model": model,
                 "ema": ema,
                 "updates": self.ema.updates,
                 "optimizer": convert_optimizer_state_dict_to_fp16(deepcopy(self.optimizer.state_dict())),
