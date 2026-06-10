@@ -1045,9 +1045,9 @@ def plot_images(
 
 @plt_settings()
 def plot_results(file: str = "path/to/results.csv", dir: str = "", on_plot: Callable | None = None):
-    """Plot training results from a results CSV file. The function supports various types of data including instance
-    segmentation, semantic segmentation, pose estimation, and classification. Plots are saved as 'results.png' in
-    the directory where the CSV is located.
+    """Plot training results from a results CSV file. The function supports various types of data including
+    instance segmentation, semantic segmentation, pose estimation, and classification. Plots are saved as 'results.png'
+    and individual high-resolution plots in a 'results' subdirectory where the CSV is located.
 
     Args:
         file (str, optional): Path to the CSV file containing the training results.
@@ -1058,45 +1058,321 @@ def plot_results(file: str = "path/to/results.csv", dir: str = "", on_plot: Call
         >>> from ultralytics.utils.plotting import plot_results
         >>> plot_results("path/to/results.csv")
     """
+    import re
+
     import matplotlib.pyplot as plt  # scope for faster 'import ultralytics'
     import polars as pl
+    from adjustText import adjust_text
+    from matplotlib.patches import FancyArrowPatch
+
+    def sanitize_filename(name: str) -> str:
+        """Return a filesystem-friendly lowercase filename stem."""
+        for prefix in ("train/", "val/", "metrics/"):
+            name = name.replace(prefix, "")
+        name = re.sub(r"\(([Bb])\)", "_box", name)
+        name = re.sub(r"\(([Mm])\)", "_mask", name)
+        return re.sub(r"[^a-zA-Z0-9]+", "_", name).strip("_").lower() or "plot"
+
+    def loss_name(column: str) -> str | None:
+        """Return the train/val loss name portion for a results.csv column."""
+        if "/" not in column:
+            return None
+        prefix, name = column.split("/", 1)
+        return name if prefix in {"train", "val"} and name.endswith("loss") else None
+
+    def smooth_nan_safe(y: np.ndarray) -> np.ndarray:
+        """Smooth finite contiguous y-value segments while preserving NaN gaps."""
+        y = np.asarray(y, dtype=float)
+        smoothed = np.full_like(y, np.nan, dtype=float)
+        finite = np.isfinite(y)
+        if not finite.any():
+            return smoothed
+        indices = np.flatnonzero(finite)
+        for segment in np.split(indices, np.flatnonzero(np.diff(indices) > 1) + 1):
+            values = y[segment]
+            smoothed[segment] = _gaussian_filter1d(values, sigma=3) if len(values) > 1 else values
+        return smoothed
+
+    def column_array(data: pl.DataFrame, column: str) -> np.ndarray:
+        """Return a results.csv column as a flattened float array."""
+        return data.select(column).to_numpy().flatten().astype(float)
+
+    def finite_argmax(values: np.ndarray) -> int | None:
+        """Return the index of the largest finite value, if one exists."""
+        finite = np.isfinite(values)
+        return int(np.where(finite, values, -np.inf).argmax()) if finite.any() else None
+
+    def best_row_index(data: pl.DataFrame) -> int | None:
+        """Infer the best row from CSV fitness, falling back to task-specific metrics for legacy files."""
+        if "fitness" in data.columns:
+            return finite_argmax(column_array(data, "fitness"))
+
+        fallback_columns = (
+            ("metrics/mAP50-95(B)", "metrics/mAP50-95(M)"),  # segment
+            ("metrics/mAP50-95(B)", "metrics/mAP50-95(P)"),  # pose
+            ("metrics/accuracy_top1", "metrics/accuracy_top5"),  # classify
+            ("metrics/mAP50-95(B)",),  # detect, RT-DETR, OBB, YOLOE
+        )
+        for columns in fallback_columns:
+            if all(c in data.columns for c in columns):
+                values = np.vstack([np.nan_to_num(column_array(data, c), nan=0.0) for c in columns]).sum(axis=0)
+                return finite_argmax(values)
+
+        map_columns = [c for c in data.columns if c.startswith("metrics/mAP50-95")]
+        return finite_argmax(np.nan_to_num(column_array(data, map_columns[0]), nan=0.0)) if map_columns else None
+
+    def checkpoint_rows(data: pl.DataFrame) -> dict[str, int]:
+        """Return inferred best.pt and last.pt row indices from CSV data."""
+        rows = {}
+        best = best_row_index(data)
+        if best is not None:
+            rows["best"] = best
+        if data.height:
+            rows["last"] = data.height - 1
+        return rows
+
+    def plot_series(ax, x: np.ndarray, y: np.ndarray, label: str):
+        """Plot raw and smoothed series using one color."""
+        (line,) = ax.plot(x, y, marker=".", label=label, linewidth=2, markersize=8)
+        ax.plot(x, smooth_nan_safe(y), ":", label=f"{label} smooth", linewidth=2, color=line.get_color())
+
+    def annotate_checkpoints(ax, x: np.ndarray, y: np.ndarray, rows: dict[str, int], series: str = ""):
+        """Annotate best.pt and last.pt points on a raw result series."""
+        styles = {
+            "best": {"color": "#2ca02c", "marker": "*"},
+            "last": {"color": "#d62728", "marker": "D"},
+        }
+        seen_lines = getattr(ax, "_ultralytics_checkpoint_lines", set())
+        checkpoint_labels = getattr(ax, "_ultralytics_checkpoint_labels", [])
+        for name, row in rows.items():
+            if row >= len(x) or row >= len(y):
+                continue
+            xi, yi = float(x[row]), float(y[row])
+            if not (np.isfinite(xi) and np.isfinite(yi)):
+                continue
+            style = styles[name]
+            line_key = (name, xi)
+            if line_key not in seen_lines:
+                label = f"{name}.pt" if not any(k[0] == name for k in seen_lines) else "_nolegend_"
+                ax.axvline(xi, color=style["color"], linestyle="--", linewidth=1.4, alpha=0.7, label=label)
+                seen_lines.add(line_key)
+            ax.scatter([xi], [yi], color=style["color"], marker=style["marker"], s=90, zorder=5)
+            text = f"{name} {series} {yi:.4g}".strip()
+            label = ax.text(
+                xi,
+                yi,
+                text,
+                color=style["color"],
+                fontsize=9,
+                ha="center",
+                va="center",
+                zorder=6,
+                bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": style["color"], "alpha": 0.75},
+            )
+            checkpoint_labels.append((label, xi, yi))
+        ax._ultralytics_checkpoint_lines = seen_lines
+        ax._ultralytics_checkpoint_labels = checkpoint_labels
+
+    def adjust_checkpoint_labels(ax, legend, legend_loc: str):
+        """自动避让 checkpoint 标签和图例，同时保留标签与原始数据点的对应关系。"""
+        labels = getattr(ax, "_ultralytics_checkpoint_labels", [])
+        if not labels:
+            return
+        texts, target_x, target_y = zip(*labels)
+        ax.figure.canvas.draw()
+        renderer = ax.figure.canvas.get_renderer()
+        axes_window = ax.get_window_extent(renderer)
+        legend_window = legend.get_window_extent(renderer)
+        padding = 4
+        legend_avoidance_window = legend_window.padded(padding)
+        # 先将越界或压住图例的标签放入可用区域，避免迭代器优先把它们推向更近的坐标轴边界。
+        for text in texts:
+            text_box = text.get_bbox_patch().get_window_extent(renderer)
+            half_width, half_height = text_box.width / 2, text_box.height / 2
+            center_x = np.clip(text_box.x0 + half_width, axes_window.x0 + half_width, axes_window.x1 - half_width)
+            center_y = np.clip(text_box.y0 + half_height, axes_window.y0 + half_height, axes_window.y1 - half_height)
+            if text_box.overlaps(legend_avoidance_window):
+                center_y = (
+                    legend_avoidance_window.y1 + half_height
+                    if legend_loc.startswith("lower")
+                    else legend_avoidance_window.y0 - half_height
+                )
+                center_y = np.clip(center_y, axes_window.y0 + half_height, axes_window.y1 - half_height)
+            text.set_position(ax.transData.inverted().transform((center_x, center_y)))
+        # adjustText 会用文本的数据变换处理障碍物，因此需把图例的像素包围盒转换回数据坐标。
+        legend_box = legend_avoidance_window.transformed(ax.transData.inverted())
+        legend_direction = "y+" if legend_loc.startswith("lower") else "y-"
+        adjusted_texts, _ = adjust_text(
+            list(texts),
+            x=target_x,
+            y=target_y,
+            target_x=target_x,
+            target_y=target_y,
+            objects=[legend_box],
+            ax=ax,
+            ensure_inside_axes=True,
+            expand_axes=False,
+            prevent_crossings=True,
+            only_move={"text": "xy", "static": legend_direction, "explode": "xy", "pull": "xy"},
+            force_text=(0.05, 0.5),
+            force_explode=(0.05, 0.5),
+            expand=(1.08, 1.5),
+            iter_lim=200,
+        )
+        ax.figure.canvas.draw()
+        renderer = ax.figure.canvas.get_renderer()
+        axes_window = ax.get_window_extent(renderer)
+        # prevent_crossings 可能交换不同宽度标签的位置；按真实文本框再次夹紧后再创建引导线。
+        for text, xi, yi in zip(adjusted_texts, target_x, target_y):
+            text_box = text.get_bbox_patch().get_window_extent(renderer)
+            shift_x = max(axes_window.x0 - text_box.x0, 0) + min(axes_window.x1 - text_box.x1, 0)
+            shift_y = max(axes_window.y0 - text_box.y0, 0) + min(axes_window.y1 - text_box.y1, 0)
+            text_position = ax.transData.transform(text.get_position()) + (shift_x, shift_y)
+            text.set_position(ax.transData.inverted().transform(text_position))
+            target_position = ax.transData.transform((xi, yi))
+            if np.linalg.norm(text_position - target_position) >= 5:
+                ax.add_patch(
+                    FancyArrowPatch(
+                        posA=text.get_position(),
+                        posB=(xi, yi),
+                        patchA=text,
+                        transform=ax.transData,
+                        arrowstyle="-",
+                        color="#666666",
+                        linewidth=0.8,
+                        alpha=0.7,
+                        zorder=4,
+                    )
+                )
+
+    def finish_single_plot(fig, ax, title: str, ylabel: str, filename: str, legend_loc: str):
+        """Style and save an individual high-resolution result plot."""
+        ax.set_title(title, fontsize=16)
+        ax.set_xlabel("epoch")
+        ax.set_ylabel(ylabel)
+        ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.4)
+        legend = ax.legend(loc=legend_loc)
+        adjust_checkpoint_labels(ax, legend, legend_loc)
+        fname = results_dir / filename
+        fig.savefig(fname, dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        if on_plot:
+            on_plot(fname)
 
     save_dir = Path(file).parent if file else Path(dir)
     files = list(save_dir.glob("results*.csv"))
     assert len(files), f"No results.csv files found in {save_dir.resolve()}, nothing to plot."
 
-    loss_keys, metric_keys = [], []
-    fig, ax = None, None
-    for i, f in enumerate(files):
+    results_dir = save_dir / "results"
+    records = []
+    for f in files:
         try:
             data = pl.read_csv(f, infer_schema_length=None)
-            if i == 0:
-                for c in data.columns:
-                    if "loss" in c:
-                        loss_keys.append(c)
-                    elif "metric" in c:
-                        metric_keys.append(c)
-                loss_mid, metric_mid = len(loss_keys) // 2, len(metric_keys) // 2
-                columns = (
-                    loss_keys[:loss_mid] + metric_keys[:metric_mid] + loss_keys[loss_mid:] + metric_keys[metric_mid:]
-                )
-                fig, ax = plt.subplots(2, len(columns) // 2, figsize=(len(columns) + 2, 6), tight_layout=True)
-                ax = ax.ravel()
+            records.append((f, data, checkpoint_rows(data)))
+        except Exception as e:
+            LOGGER.error(f"Plotting error for {f}: {e}")
+    if not records:
+        return
+
+    loss_keys, metric_keys = [], []
+    fig, ax = None, None
+    first_data = records[0][1]
+    for c in first_data.columns:
+        if "loss" in c:
+            loss_keys.append(c)
+        elif "metric" in c:
+            metric_keys.append(c)
+    loss_mid, metric_mid = len(loss_keys) // 2, len(metric_keys) // 2
+    columns = loss_keys[:loss_mid] + metric_keys[:metric_mid] + loss_keys[loss_mid:] + metric_keys[metric_mid:]
+
+    if columns:
+        fig, ax = plt.subplots(2, max(math.ceil(len(columns) / 2), 1), figsize=(len(columns) + 2, 6), tight_layout=True)
+        ax = ax.ravel()
+    for f, data, _ in records:
+        try:
             x = data.select(data.columns[0]).to_numpy().flatten()
             for i, j in enumerate(columns):
+                if j not in data.columns:
+                    continue
                 y = data.select(j).to_numpy().flatten().astype("float")
                 ax[i].plot(x, y, marker=".", label=f.stem, linewidth=2, markersize=8)  # actual results
-                ax[i].plot(x, _gaussian_filter1d(y, sigma=3), ":", label="smooth", linewidth=2)  # smoothing line
+                ax[i].plot(x, smooth_nan_safe(y), ":", label="smooth", linewidth=2)  # smoothing line
                 ax[i].set_title(j, fontsize=12)
         except Exception as e:
             LOGGER.error(f"Plotting error for {f}: {e}")
     if ax is not None:
-        ax[1].legend()
+        for a in ax[len(columns) :]:
+            a.axis("off")
+        (ax[1] if len(ax) > 1 else ax[0]).legend(loc="upper right")
         fname = save_dir / "results.png"
         fig.savefig(fname, dpi=200)
         plt.close()
         if on_plot:
             on_plot(fname)
+
+    loss_names, metric_names = [], []
+    for _, data, _ in records:
+        for c in data.columns:
+            name = loss_name(c)
+            if name and name not in loss_names:
+                loss_names.append(name)
+            elif c.startswith("metrics/") and c not in metric_names:
+                metric_names.append(c)
+
+    if loss_names or metric_names:
+        results_dir.mkdir(parents=True, exist_ok=True)
+
+    for name in loss_names:
+        fig, ax = plt.subplots(figsize=(12, 8), tight_layout=True)
+        plotted = False
+        for f, data, rows in records:
+            x = data.select(data.columns[0]).to_numpy().flatten()
+            for prefix in ("train", "val"):
+                column = f"{prefix}/{name}"
+                if column in data.columns:
+                    y = column_array(data, column)
+                    plot_series(ax, x, y, f"{f.stem} {prefix}")
+                    annotate_checkpoints(ax, x, y, rows, prefix if len(records) == 1 else f"{f.stem} {prefix}")
+                    plotted = True
+        if plotted:
+            base_name = name[:-5] if name.endswith("_loss") else name
+            filename = f"loss_{sanitize_filename(base_name)}.png"
+            finish_single_plot(fig, ax, f"{name} train vs val", name, filename, legend_loc="upper right")
+        else:
+            plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(12, 8), tight_layout=True)
+    plotted = False
+    for f, data, rows in records:
+        x = data.select(data.columns[0]).to_numpy().flatten()
+        for prefix in ("train", "val"):
+            columns = [c for c in data.columns if c.startswith(f"{prefix}/") and loss_name(c)]
+            if columns:
+                total = np.vstack([column_array(data, c) for c in columns]).sum(axis=0)
+                plot_series(ax, x, total, f"{f.stem} {prefix}")
+                annotate_checkpoints(ax, x, total, rows, prefix if len(records) == 1 else f"{f.stem} {prefix}")
+                plotted = True
+    if plotted:
+        finish_single_plot(fig, ax, "total_loss train vs val", "total_loss", "loss_total.png", legend_loc="upper right")
+    else:
+        plt.close(fig)
+
+    for metric in metric_names:
+        fig, ax = plt.subplots(figsize=(12, 8), tight_layout=True)
+        plotted = False
+        for f, data, rows in records:
+            if metric in data.columns:
+                x = data.select(data.columns[0]).to_numpy().flatten()
+                y = column_array(data, metric)
+                plot_series(ax, x, y, f.stem)
+                annotate_checkpoints(ax, x, y, rows, "" if len(records) == 1 else f.stem)
+                plotted = True
+        if plotted:
+            finish_single_plot(
+                fig, ax, metric, metric, f"metric_{sanitize_filename(metric)}.png", legend_loc="lower right"
+            )
+        else:
+            plt.close(fig)
 
 
 @plt_settings()
