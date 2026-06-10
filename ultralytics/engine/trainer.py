@@ -655,7 +655,7 @@ class BaseTrainer:
 
         self._build_train_pipeline()
         self.validator = self.get_validator()
-        self.ema = ModelEMA(self.model)
+        self.ema = ModelEMA(self.model, batch_scale=self._ema_batch_scale())
         self.set_class_weights()  # compute class weights after dataloader is ready
         if RANK in {-1, 0}:
             metric_keys = self.validator.metrics.keys + self.label_loss_items(prefix="val")
@@ -890,8 +890,10 @@ class BaseTrainer:
 
             # Validation
             final_epoch = epoch + 1 >= self.epochs
-            if self.args.val or final_epoch or self.stopper.possible_stop or self.stop:
-                self._clear_memory(None if self.device.type == "mps" else 0.5)  # prevent VRAM spike
+            should_validate = self.args.val or final_epoch or self.stopper.possible_stop or self.stop
+            should_save = self.args.save or final_epoch
+            self._prepare_ema_for_eval_or_save(should_validate=should_validate, should_save=should_save)
+            if should_validate:
                 self.metrics, self.fitness = self.validate()
             self._maybe_apply_vram_target(epoch)
 
@@ -907,7 +909,7 @@ class BaseTrainer:
                     self.stop |= (time.time() - self.train_time_start) > (self.args.time * 3600)
 
                 # Save model
-                if (self.args.save or final_epoch) and self.save_model():
+                if should_save and self.save_model():
                     self.run_callbacks("on_model_save")
 
             if self.args.plots:
@@ -1285,9 +1287,172 @@ class BaseTrainer:
         if self.ema:
             self.ema.update(self.model)
 
+    def _ema_batch_scale(self) -> float:
+        """Return effective optimizer-step batch size normalized by nominal batch size for EMA decay."""
+        accumulate = max(int(getattr(self, "accumulate", 1)), 1)
+        nbs = max(float(getattr(self.args, "nbs", 64)), 1.0)
+        return max(float(self.batch_size) * accumulate / nbs, 1e-12)
+
     def preprocess_batch(self, batch):
         """Allow custom preprocessing of model inputs and ground truths depending on task type."""
         return batch
+
+    @staticmethod
+    def _ema_bn_modules(model):
+        """Return BatchNorm modules whose running statistics can be recalibrated."""
+        return [
+            m
+            for m in model.modules()
+            if isinstance(m, nn.modules.batchnorm._BatchNorm)
+            and m.track_running_stats
+            and isinstance(m.running_mean, torch.Tensor)
+            and isinstance(m.running_var, torch.Tensor)
+            and m.running_mean.is_floating_point()
+            and m.running_var.is_floating_point()
+        ]
+
+    def _build_ema_bn_calibration_loader(self):
+        """Build an independent train dataloader for EMA BN calibration without consuming the main train iterator."""
+        from ultralytics.data import build_dataloader
+
+        batch_size = int(getattr(self.train_loader, "batch_size", 0) or self.batch_size // max(self.world_size, 1))
+        rank = dist.get_rank() if self.world_size > 1 and dist.is_available() and dist.is_initialized() else -1
+        loader = build_dataloader(
+            self.train_loader.dataset,
+            batch=max(batch_size, 1),
+            workers=self.args.workers,
+            shuffle=True,
+            rank=rank,
+            drop_last=False,
+            pin_memory=False,
+        )
+        sampler = getattr(loader, "sampler", None)
+        if rank != -1 and hasattr(sampler, "set_epoch"):
+            sampler.set_epoch(self.epoch)
+            if hasattr(loader, "reset"):
+                loader.reset()
+        return loader
+
+    def _distributed_batch_counts(self, local_count: int) -> list[int]:
+        """Gather per-rank batch image counts for exact global calibration sample accounting."""
+        distributed = self.world_size > 1 and dist.is_available() and dist.is_initialized()
+        if not distributed:
+            return [int(local_count)]
+        count = torch.tensor([int(local_count)], device=self.device, dtype=torch.long)
+        gathered = [torch.zeros_like(count) for _ in range(self.world_size)]
+        dist.all_gather(gathered, count)
+        return [int(x.item()) for x in gathered]
+
+    def _calibrate_ema_bn(self):
+        """Recompute EMA BatchNorm running stats from train-distribution images using distributed precise moments."""
+        if not self.ema:
+            return
+        model = unwrap_model(self.ema.ema)
+        bn_modules = self._ema_bn_modules(model)
+        if not bn_modules or not hasattr(self, "train_loader") or not hasattr(self.train_loader, "dataset"):
+            return
+
+        target_images = min(8192, len(self.train_loader.dataset))
+        if target_images <= 0:
+            return
+
+        calibration_loader = self._build_ema_bn_calibration_loader()
+        # if RANK in {-1, 0}:
+        #     LOGGER.info(f"重估 EMA BN 统计：使用 {target_images} 张训练图片。")
+        self._update_ema_bn_stats(model, calibration_loader, target_images, bn_modules)
+        del calibration_loader
+
+    def _prepare_ema_for_eval_or_save(self, should_validate: bool, should_save: bool):
+        """Calibrate EMA BN stats before validation or checkpoint serialization when needed."""
+        if not (should_validate or should_save):
+            return
+        self._clear_memory(None if self.device.type == "mps" else 0.5)  # prevent VRAM spike
+        self._calibrate_ema_bn()
+
+    def _update_ema_bn_stats(self, model, dataloader, target_images: int, bn_modules=None):
+        """Update EMA BN running_mean/running_var from dataloader activation moments."""
+        bn_modules = bn_modules or self._ema_bn_modules(model)
+        if not bn_modules or target_images <= 0:
+            return
+
+        distributed = self.world_size > 1 and dist.is_available() and dist.is_initialized()
+        rank = dist.get_rank() if distributed else 0
+        stats = {}
+        handles = []
+        local_take = [0]
+
+        for module in bn_modules:
+            stats[module] = {
+                "sum": torch.zeros_like(module.running_mean, dtype=torch.float32, device=module.running_mean.device),
+                "sum_sq": torch.zeros_like(module.running_var, dtype=torch.float32, device=module.running_var.device),
+                "count": torch.zeros(1, dtype=torch.float32, device=module.running_mean.device),
+            }
+
+            def hook(mod, inputs, _output, *, stat=stats[module]):
+                x = inputs[0] if inputs else None
+                take = min(int(local_take[0]), int(x.shape[0])) if isinstance(x, torch.Tensor) and x.ndim >= 2 else 0
+                if take <= 0 or not x.is_floating_point():
+                    return
+                x = x[:take].detach().float()
+                dims = [0, *range(2, x.ndim)]
+                stat["sum"] += x.sum(dim=dims)
+                stat["sum_sq"] += x.square().sum(dim=dims)
+                stat["count"] += x.numel() // x.shape[1]
+
+            handles.append(module.register_forward_hook(hook))
+
+        model_training = model.training
+        bn_states = [(m, m.training, m.momentum) for m in bn_modules]
+        seen_images = 0
+        calibration_batches = 0
+
+        try:
+            model.eval()
+            for module in bn_modules:
+                module.train()
+                module.momentum = 0.0
+
+            with torch.no_grad():
+                for batch in dataloader:
+                    batch = self.preprocess_batch(batch)
+                    local_count = int(batch["img"].shape[0])
+                    counts = self._distributed_batch_counts(local_count)
+                    remaining = target_images - seen_images
+                    if remaining <= 0:
+                        break
+                    prefix = sum(counts[:rank])
+                    local_take[0] = max(min(remaining - prefix, local_count), 0)
+                    global_take = min(sum(counts), remaining)
+                    if local_take[0] > 0:
+                        images = batch["img"][: local_take[0]]
+                        with autocast(self.amp):
+                            model(images)
+                    seen_images += global_take
+                    calibration_batches += 1
+                    if seen_images >= target_images:
+                        break
+
+            for module, stat in stats.items():
+                packed = torch.cat((stat["sum"], stat["sum_sq"], stat["count"]))
+                if distributed:
+                    dist.all_reduce(packed, op=dist.ReduceOp.SUM)
+                channels = module.running_mean.numel()
+                count = packed[-1].clamp_min(1.0)
+                mean = packed[:channels] / count
+                var = packed[channels : 2 * channels] / count - mean.square()
+                module.running_mean.copy_(mean.to(device=module.running_mean.device, dtype=module.running_mean.dtype))
+                module.running_var.copy_(
+                    var.clamp_min_(0).to(device=module.running_var.device, dtype=module.running_var.dtype)
+                )
+                if module.num_batches_tracked is not None:
+                    module.num_batches_tracked.fill_(max(calibration_batches, 1))
+        finally:
+            for handle in handles:
+                handle.remove()
+            for module, training, momentum in bn_states:
+                module.train(training)
+                module.momentum = momentum
+            model.train(model_training)
 
     def validate(self):
         """Run validation on val set using self.validator.
@@ -1523,7 +1688,9 @@ class BaseTrainer:
         if ckpt.get("scaler") is not None:
             self.scaler.load_state_dict(ckpt["scaler"])
         if self.ema and ckpt.get("ema"):
-            self.ema = ModelEMA(self.model)  # validation with EMA creates inference tensors that can't be updated
+            self.ema = ModelEMA(  # validation with EMA creates inference tensors that can't be updated
+                self.model, batch_scale=self._ema_batch_scale()
+            )
             self.ema.ema.load_state_dict(ckpt["ema"].float().state_dict())
             self.ema.updates = ckpt["updates"]
         self.best_fitness = ckpt.get("best_fitness")

@@ -22,7 +22,7 @@ from ultralytics.nn.tasks import DetectionModel, load_checkpoint
 from ultralytics.utils import ASSETS, DEFAULT_CFG, IS_RASPBERRYPI, WEIGHTS_DIR
 from ultralytics.utils.patches import torch_load
 from ultralytics.utils.tal import TaskAlignedAssigner
-from ultralytics.utils.torch_utils import strip_optimizer, unwrap_model
+from ultralytics.utils.torch_utils import ModelEMA, strip_optimizer, unwrap_model
 
 
 def _require_npu_device():
@@ -564,6 +564,168 @@ def test_checkpoint_nonfinite_ema_and_model_sanitized():
     assert all(torch.isfinite(v).all() for v in model.state_dict().values() if isinstance(v, torch.Tensor)), (
         "saved checkpoint contains NaN/Inf"
     )
+
+
+def test_model_ema_averages_parameters_but_copies_buffers():
+    """验证 EMA 只平均参数，BN running stats 等 buffers 直接跟随当前模型。"""
+    model = torch.nn.Sequential(torch.nn.Conv2d(1, 1, 1, bias=False), torch.nn.BatchNorm2d(1))
+    with torch.no_grad():
+        model[0].weight.fill_(1.0)
+        model[1].running_mean.fill_(0.0)
+        model[1].running_var.fill_(1.0)
+        model[1].num_batches_tracked.fill_(0)
+
+    ema = ModelEMA(model)
+    ema.decay = lambda _: 0.5
+
+    with torch.no_grad():
+        model[0].weight.fill_(3.0)
+        model[1].running_mean.fill_(10.0)
+        model[1].running_var.fill_(4.0)
+        model[1].num_batches_tracked.fill_(7)
+
+    ema.update(model)
+
+    assert ema.ema[0].weight.item() == pytest.approx(2.0)
+    assert ema.ema[1].running_mean.item() == pytest.approx(10.0)
+    assert ema.ema[1].running_var.item() == pytest.approx(4.0)
+    assert ema.ema[1].num_batches_tracked.item() == 7
+
+
+def test_model_ema_decay_scales_with_effective_batch():
+    """验证 EMA decay 按有效 batch/nbs 做样本数归一化。"""
+    model = torch.nn.Linear(1, 1)
+    ema = ModelEMA(model, decay=0.81, tau=1, batch_scale=4.0)
+
+    assert ema.batch_scale == pytest.approx(4.0)
+    assert ema.decay(100) == pytest.approx(0.81**4)
+
+
+def test_trainer_ema_batch_scale_uses_accumulated_global_batch():
+    """验证 Trainer 用每次 optimizer step 覆盖的全局图片数计算 EMA batch scale。"""
+    trainer = object.__new__(BaseTrainer)
+    trainer.batch_size = 1024
+    trainer.accumulate = 1
+    trainer.args = SimpleNamespace(nbs=64)
+    assert trainer._ema_batch_scale() == pytest.approx(16.0)
+
+    trainer.batch_size = 16
+    trainer.accumulate = 4
+    assert trainer._ema_batch_scale() == pytest.approx(1.0)
+
+
+def test_update_ema_bn_stats_recomputes_moments_without_changing_parameters():
+    """验证 EMA PreciseBN 使用 activation moments 重算 BN 统计，且不改变可学习参数。"""
+    model = torch.nn.Sequential(torch.nn.BatchNorm2d(1))
+    model.eval()
+    with torch.no_grad():
+        model[0].weight.fill_(2.0)
+        model[0].bias.fill_(1.0)
+        model[0].running_mean.fill_(100.0)
+        model[0].running_var.fill_(100.0)
+
+    trainer = object.__new__(BaseTrainer)
+    trainer.world_size = 1
+    trainer.device = torch.device("cpu")
+    trainer.amp = False
+    dataloader = [
+        {"img": torch.tensor([[[[1.0, 3.0]]], [[[5.0, 7.0]]]])},
+        {"img": torch.tensor([[[[2.0, 4.0]]], [[[6.0, 8.0]]]])},
+    ]
+
+    trainer._update_ema_bn_stats(model, dataloader, target_images=4)
+
+    assert model[0].weight.item() == pytest.approx(2.0)
+    assert model[0].bias.item() == pytest.approx(1.0)
+    assert model[0].running_mean.item() == pytest.approx(4.5)
+    assert model[0].running_var.item() == pytest.approx(5.25)
+    assert model[0].num_batches_tracked.item() == 2
+    assert model.training is False
+
+
+def test_update_ema_bn_stats_uses_distributed_moment_reduction(monkeypatch):
+    """验证 DDP 校准路径聚合 moments，而不是只使用 rank0 本地 BN buffer。"""
+    calls = {"all_gather": 0, "all_reduce": 0}
+
+    def fake_all_gather(outputs, tensor):
+        calls["all_gather"] += 1
+        for out in outputs:
+            out.copy_(tensor)
+
+    def fake_all_reduce(tensor, op=None):
+        calls["all_reduce"] += 1
+
+    monkeypatch.setattr(trainer_module.dist, "is_available", lambda: True)
+    monkeypatch.setattr(trainer_module.dist, "is_initialized", lambda: True)
+    monkeypatch.setattr(trainer_module.dist, "get_rank", lambda: 0)
+    monkeypatch.setattr(trainer_module.dist, "all_gather", fake_all_gather)
+    monkeypatch.setattr(trainer_module.dist, "all_reduce", fake_all_reduce)
+
+    model = torch.nn.Sequential(torch.nn.BatchNorm2d(1))
+    trainer = object.__new__(BaseTrainer)
+    trainer.world_size = 2
+    trainer.device = torch.device("cpu")
+    trainer.amp = False
+    dataloader = [{"img": torch.ones(1, 1, 1, 2)}]
+
+    trainer._update_ema_bn_stats(model, dataloader, target_images=2)
+
+    assert calls["all_gather"] == 1
+    assert calls["all_reduce"] == 1
+
+
+def test_calibrate_ema_bn_caps_samples_to_8192():
+    """验证 EMA BN 校准按图片数使用 min(8192, len(train_dataset))。"""
+    recorded = []
+    trainer = object.__new__(BaseTrainer)
+    trainer.ema = SimpleNamespace(ema=torch.nn.BatchNorm2d(1))
+    trainer.train_loader = SimpleNamespace(dataset=range(10000))
+    trainer._build_ema_bn_calibration_loader = lambda: "loader"
+    trainer._update_ema_bn_stats = lambda _model, _loader, target, _bn: recorded.append(target)
+
+    trainer._calibrate_ema_bn()
+    assert recorded == [8192]
+
+    recorded.clear()
+    trainer.train_loader = SimpleNamespace(dataset=range(17))
+    trainer._calibrate_ema_bn()
+    assert recorded == [17]
+
+
+def test_ema_bn_calibration_loader_disables_pin_memory(monkeypatch):
+    """验证短生命周期 EMA BN 校准 dataloader 不启动 pin_memory 后台线程。"""
+    captured = {}
+
+    def fake_build_dataloader(*args, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(sampler=None)
+
+    monkeypatch.setattr("ultralytics.data.build_dataloader", fake_build_dataloader)
+    trainer = object.__new__(BaseTrainer)
+    trainer.train_loader = SimpleNamespace(dataset=range(8), batch_size=4)
+    trainer.batch_size = 4
+    trainer.world_size = 1
+    trainer.args = SimpleNamespace(workers=2)
+
+    trainer._build_ema_bn_calibration_loader()
+
+    assert captured["pin_memory"] is False
+
+
+def test_prepare_ema_for_eval_or_save_calibrates_for_validation_or_checkpoint():
+    """验证 validation 前和仅保存 checkpoint 前都会进入 EMA BN 校准。"""
+    calls = {"clear": 0, "calibrate": 0}
+    trainer = object.__new__(BaseTrainer)
+    trainer.device = torch.device("cpu")
+    trainer._clear_memory = lambda *args, **kwargs: calls.__setitem__("clear", calls["clear"] + 1)
+    trainer._calibrate_ema_bn = lambda: calls.__setitem__("calibrate", calls["calibrate"] + 1)
+
+    trainer._prepare_ema_for_eval_or_save(should_validate=False, should_save=False)
+    assert calls == {"clear": 0, "calibrate": 0}
+
+    trainer._prepare_ema_for_eval_or_save(should_validate=True, should_save=False)
+    trainer._prepare_ema_for_eval_or_save(should_validate=False, should_save=True)
+    assert calls == {"clear": 2, "calibrate": 2}
 
 
 def test_save_model_checkpoint_saves_raw_model_and_ema(tmp_path):

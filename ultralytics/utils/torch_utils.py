@@ -833,7 +833,7 @@ def unset_deterministic():
 class ModelEMA:
     """Updated Exponential Moving Average (EMA) implementation.
 
-    Keeps a moving average of everything in the model state_dict (parameters and buffers). For EMA details see
+    Keeps a moving average of model parameters while copying buffers from the latest model state. For EMA details see
     References.
 
     To disable EMA set the `enabled` attribute to `False`.
@@ -849,7 +849,7 @@ class ModelEMA:
         - https://www.tensorflow.org/api_docs/python/tf/train/ExponentialMovingAverage
     """
 
-    def __init__(self, model, decay=0.9999, tau=2000, updates=0):
+    def __init__(self, model, decay=0.9999, tau=2000, updates=0, batch_scale=1.0):
         """Initialize EMA for 'model' with given arguments.
 
         Args:
@@ -857,13 +857,15 @@ class ModelEMA:
             decay (float, optional): Maximum EMA decay rate.
             tau (int, optional): EMA decay time constant.
             updates (int, optional): Initial number of updates.
+            batch_scale (float, optional): Effective optimizer-step batch size divided by nominal batch size.
         """
         self.ema = deepcopy(unwrap_model(model)).eval()  # FP32 EMA
         if hasattr(self.ema, "teacher_model"):
             # DistillationModel: strip the teacher so the EMA does not carry a full duplicate copy.
             self.ema.teacher_model = None
         self.updates = updates  # number of EMA updates
-        self.decay = lambda x: decay * (1 - math.exp(-x / tau))  # decay exponential ramp (to help early epochs)
+        self.batch_scale = max(float(batch_scale), 1e-12)
+        self.decay = lambda x: (decay * (1 - math.exp(-x * self.batch_scale / tau))) ** self.batch_scale
         for p in self.ema.parameters():
             p.requires_grad_(False)
         self.enabled = True
@@ -880,7 +882,7 @@ class ModelEMA:
 
             msd = unwrap_model(model).state_dict()  # model state_dict
             ema_v, model_v = [], []
-            for k, v in self.ema.state_dict().items():
+            for k, v in self.ema.named_parameters():
                 if v.dtype.is_floating_point:  # true for FP16 and FP32
                     ema_v.append(v)
                     model_v.append(msd[k])
@@ -891,6 +893,8 @@ class ModelEMA:
             else:  # _foreach_lerp_ needs torch>=2.0, MPS torch>=2.4, and is unavailable on NPU
                 for v, m in zip(ema_v, model_v):
                     v.mul_(d).add_(m, alpha=1 - d)
+            for k, v in self.ema.named_buffers():
+                v.copy_(msd[k])
 
     def update_attr(self, model, include=(), exclude=("process_group", "reducer")):
         """Copy attributes from model to EMA, with options to include/exclude certain attributes.
