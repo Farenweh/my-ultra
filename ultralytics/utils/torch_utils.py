@@ -869,6 +869,16 @@ class ModelEMA:
         for p in self.ema.parameters():
             p.requires_grad_(False)
         self.enabled = True
+        self._foreach_update_cache = None
+        first_tensor = next(itertools.chain(self.ema.parameters(), self.ema.buffers()), None)
+        self._foreach_update_disabled = (
+            not TORCH_2_0
+            or not all(hasattr(torch, name) for name in ("_foreach_lerp_", "_foreach_copy_"))
+            or (first_tensor is not None and first_tensor.device.type == "mps" and not TORCH_2_4)
+        )
+        self._foreach_update_warned = False
+        self._foreach_update_cache_dirty = True
+        self._foreach_update_cache_rebuilds = 0
 
     def update(self, model):
         """Update EMA parameters.
@@ -879,22 +889,127 @@ class ModelEMA:
         if self.enabled:
             self.updates += 1
             d = self.decay(self.updates)
+            with torch.no_grad():
+                if not self._foreach_update_disabled:
+                    try:
+                        self._update_foreach(model, d)
+                        return
+                    except (RuntimeError, TypeError) as e:
+                        self._disable_foreach_update(e)
+                self._update_loop(model, d)
 
-            msd = unwrap_model(model).state_dict()  # model state_dict
-            ema_v, model_v = [], []
-            for k, v in self.ema.named_parameters():
-                if v.dtype.is_floating_point:  # true for FP16 and FP32
-                    ema_v.append(v)
-                    model_v.append(msd[k])
-            if (
-                ema_v and TORCH_2_0 and ema_v[0].device.type != "npu" and (TORCH_2_4 or ema_v[0].device.type != "mps")
-            ):  # one kernel launch per op
-                torch._foreach_lerp_(ema_v, model_v, 1 - d)
-            else:  # _foreach_lerp_ needs torch>=2.0, MPS torch>=2.4, and is unavailable on NPU
-                for v, m in zip(ema_v, model_v):
-                    v.mul_(d).add_(m, alpha=1 - d)
-            for k, v in self.ema.named_buffers():
-                v.copy_(msd[k])
+    @staticmethod
+    def _floating_parameters(module):
+        """Return floating point parameters in module order."""
+        return [p for p in module.parameters() if p.dtype.is_floating_point]
+
+    def _mark_foreach_update_cache_dirty(self):
+        """Mark cached foreach tensor lists stale after module storage/layout changes."""
+        self._foreach_update_cache_dirty = True
+
+    @staticmethod
+    def _parameter_identity(tensor):
+        """Return a cheap identity for one live Parameter object."""
+        if tensor is None:
+            return None
+        return (
+            id(tensor),
+            tensor.device.type,
+            tensor.device.index,
+            tensor.dtype,
+            tensor.layout,
+            tuple(tensor.shape),
+            tuple(tensor.stride()),
+        )
+
+    @staticmethod
+    def _buffer_identity(tensor):
+        """Return a cheap storage-sensitive identity for one buffer tensor."""
+        if tensor is None:
+            return None
+        return (
+            id(tensor),
+            tensor.device.type,
+            tensor.device.index,
+            tensor.dtype,
+            tensor.layout,
+            tuple(tensor.shape),
+            tuple(tensor.stride()),
+            tensor.data_ptr(),
+        )
+
+    @classmethod
+    def _module_sentinel(cls, module):
+        """Return a cheap module sentinel that catches common tensor replacement operations."""
+        first_param = next((p for p in module.parameters() if p.dtype.is_floating_point), None)
+        first_buffer = next(module.buffers(), None)
+        return cls._parameter_identity(first_param), cls._buffer_identity(first_buffer)
+
+    def _update_cache_sentinel(self, model):
+        """Return cheap EMA/source sentinels for cache validation without full tensor-list scans."""
+        return self._module_sentinel(self.ema), self._module_sentinel(model)
+
+    def _make_update_cache(self, model):
+        """Build cached tensor lists for the foreach EMA fast path."""
+        model = unwrap_model(model)
+        ema_params = self._floating_parameters(self.ema)
+        model_params_live = self._floating_parameters(model)
+        ema_buffers = list(self.ema.buffers())
+        model_buffers_live = list(model.buffers())
+        if len(ema_params) != len(model_params_live) or len(ema_buffers) != len(model_buffers_live):
+            raise RuntimeError("EMA and model tensor lists do not match")
+        cache = {
+            "model_id": id(model),
+            "ema_params": ema_params,
+            "model_params": model_params_live,
+            "ema_buffers": ema_buffers,
+            "model_buffers": model_buffers_live,
+            "sentinel": self._update_cache_sentinel(model),
+        }
+        self._foreach_update_cache_dirty = False
+        self._foreach_update_cache_rebuilds += 1
+        return cache
+
+    def _get_update_cache(self, model):
+        """Return a valid foreach update cache, rebuilding when tensor storage changes."""
+        model = unwrap_model(model)
+        cache = self._foreach_update_cache
+        if (
+            cache is None
+            or self._foreach_update_cache_dirty
+            or cache["model_id"] != id(model)
+            or cache["sentinel"] != self._update_cache_sentinel(model)
+        ):
+            cache = self._make_update_cache(model)
+            self._foreach_update_cache = cache
+        return cache
+
+    def _update_foreach(self, model, decay: float):
+        """Update EMA using cached foreach kernels."""
+        cache = self._get_update_cache(model)
+        if cache["ema_buffers"]:
+            torch._foreach_copy_(cache["ema_buffers"], cache["model_buffers"])
+        if cache["ema_params"]:
+            torch._foreach_lerp_(cache["ema_params"], cache["model_params"], 1 - decay)
+
+    def _disable_foreach_update(self, error: Exception):
+        """Disable foreach EMA updates after an unsupported backend error."""
+        self._foreach_update_disabled = True
+        self._foreach_update_cache = None
+        if not self._foreach_update_warned:
+            LOGGER.warning(f"EMA foreach 快路径不可用，已回退到逐元素更新：{error}")
+            self._foreach_update_warned = True
+
+    def _update_loop(self, model, decay: float):
+        """Update EMA with the conservative per-tensor implementation."""
+        msd = unwrap_model(model).state_dict()  # model state_dict
+        for k, v in self.ema.named_parameters():
+            if v.dtype.is_floating_point:  # true for FP16 and FP32
+                v *= decay
+                v += (1 - decay) * msd[k].detach()
+                # assert v.dtype == msd[k].dtype == torch.float32, f'{k}: EMA {v.dtype},  model {msd[k].dtype}'
+        for k, v in self.ema.named_buffers():
+            v.copy_(msd[k].detach())
 
     def update_attr(self, model, include=(), exclude=("process_group", "reducer")):
         """Copy attributes from model to EMA, with options to include/exclude certain attributes.

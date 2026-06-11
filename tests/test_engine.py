@@ -592,6 +592,188 @@ def test_model_ema_averages_parameters_but_copies_buffers():
     assert ema.ema[1].num_batches_tracked.item() == 7
 
 
+def test_model_ema_foreach_fast_path_matches_loop_on_npu():
+    """验证 NPU foreach 快路径与逐元素 EMA 更新等价。"""
+    device = _require_npu_device()
+    model = torch.nn.Sequential(torch.nn.Conv2d(2, 4, 1, bias=False), torch.nn.BatchNorm2d(4)).to(device)
+    ema_loop = ModelEMA(model)
+    ema_fast = ModelEMA(model)
+    ema_loop._foreach_update_disabled = True
+    ema_loop.decay = ema_fast.decay = lambda _: 0.5
+
+    with torch.no_grad():
+        model[0].weight.fill_(3.0)
+        model[1].weight.fill_(5.0)
+        model[1].bias.fill_(7.0)
+        model[1].running_mean.fill_(11.0)
+        model[1].running_var.fill_(13.0)
+        model[1].num_batches_tracked.fill_(17)
+
+    ema_loop.update(model)
+    ema_fast.update(model)
+    torch.npu.synchronize()
+
+    assert not ema_fast._foreach_update_disabled
+    assert ema_fast._foreach_update_cache is not None
+    for (name, expected), (_, actual) in zip(ema_loop.ema.state_dict().items(), ema_fast.ema.state_dict().items()):
+        if actual.is_floating_point():
+            torch.testing.assert_close(actual, expected, rtol=0, atol=1e-6, msg=f"EMA state mismatch for {name}")
+        else:
+            torch.testing.assert_close(actual, expected, msg=f"EMA state mismatch for {name}")
+
+
+def test_model_ema_foreach_cache_reused_on_npu():
+    """验证连续 update 时 foreach cache 不再每步重建。"""
+    device = _require_npu_device()
+    model = torch.nn.Linear(1, 1, bias=False).to(device)
+    ema = ModelEMA(model)
+    ema.decay = lambda _: 0.5
+
+    ema.update(model)
+    torch.npu.synchronize()
+    rebuilds = ema._foreach_update_cache_rebuilds
+
+    with torch.no_grad():
+        for value in (2.0, 3.0, 4.0):
+            model.weight.fill_(value)
+            ema.update(model)
+    torch.npu.synchronize()
+
+    assert ema._foreach_update_cache_rebuilds == rebuilds
+
+
+def test_model_ema_foreach_cache_rebuilds_after_dtype_roundtrip_on_npu():
+    """验证 EMA 模型 dtype/storage 往返后，foreach cache 会重建到 live storage。"""
+    device = _require_npu_device()
+    model = torch.nn.Linear(1, 1, bias=False).to(device)
+    with torch.no_grad():
+        model.weight.fill_(1.0)
+    ema = ModelEMA(model)
+    ema.decay = lambda _: 0.5
+
+    ema.update(model)
+    torch.npu.synchronize()
+    old_cached_ptr = ema._foreach_update_cache["ema_params"][0].data_ptr()
+
+    ema.ema.half()
+    ema.ema.float()
+    live_ptr_after_roundtrip = next(ema.ema.parameters()).data_ptr()
+    with torch.no_grad():
+        model.weight.fill_(3.0)
+
+    ema.update(model)
+    torch.npu.synchronize()
+
+    live_param = next(ema.ema.parameters())
+    assert ema._foreach_update_cache["ema_params"][0].data_ptr() == live_param.data_ptr()
+    if live_ptr_after_roundtrip != old_cached_ptr:
+        assert ema._foreach_update_cache["ema_params"][0].data_ptr() != old_cached_ptr
+    torch.testing.assert_close(live_param.detach().cpu(), torch.tensor([[2.0]]))
+
+
+def test_model_ema_foreach_cache_rebuilds_after_source_dtype_roundtrip_on_npu():
+    """验证 source model dtype/storage 往返后，foreach cache 使用新的 live buffers。"""
+    device = _require_npu_device()
+    model = torch.nn.Sequential(torch.nn.Linear(1, 1, bias=False), torch.nn.BatchNorm1d(1)).to(device)
+    with torch.no_grad():
+        model[0].weight.fill_(1.0)
+        model[1].running_mean.fill_(0.0)
+    ema = ModelEMA(model)
+    ema.decay = lambda _: 0.5
+
+    ema.update(model)
+    torch.npu.synchronize()
+    rebuilds = ema._foreach_update_cache_rebuilds
+    old_buffer_ptr = ema._foreach_update_cache["model_buffers"][0].data_ptr()
+
+    model.half()
+    model.float()
+    with torch.no_grad():
+        model[0].weight.fill_(3.0)
+        model[1].running_mean.fill_(9.0)
+
+    ema.update(model)
+    torch.npu.synchronize()
+
+    live_buffer = next(model.buffers())
+    assert ema._foreach_update_cache_rebuilds == rebuilds + 1
+    assert ema._foreach_update_cache["model_buffers"][0].data_ptr() == live_buffer.data_ptr()
+    if live_buffer.data_ptr() != old_buffer_ptr:
+        assert ema._foreach_update_cache["model_buffers"][0].data_ptr() != old_buffer_ptr
+    torch.testing.assert_close(ema.ema[0].weight.detach().cpu(), torch.tensor([[2.0]]))
+    torch.testing.assert_close(ema.ema[1].running_mean.detach().cpu(), torch.tensor([9.0]))
+
+
+def test_model_ema_foreach_cache_uses_live_parameter_after_data_replacement_on_npu():
+    """验证 source 参数 .data 替换后无需重建 cache 也能读取新参数值。"""
+    device = _require_npu_device()
+    model = torch.nn.Linear(1, 1, bias=False).to(device)
+    with torch.no_grad():
+        model.weight.fill_(1.0)
+    ema = ModelEMA(model)
+    ema.decay = lambda _: 0.5
+
+    ema.update(model)
+    torch.npu.synchronize()
+    rebuilds = ema._foreach_update_cache_rebuilds
+    model.weight.data = torch.full_like(model.weight, 3.0)
+
+    ema.update(model)
+    torch.npu.synchronize()
+
+    assert ema._foreach_update_cache_rebuilds == rebuilds
+    torch.testing.assert_close(next(ema.ema.parameters()).detach().cpu(), torch.tensor([[2.0]]))
+
+
+def test_model_ema_foreach_cache_rebuilds_after_source_load_state_dict_on_npu():
+    """验证 source model load_state_dict 替换 tensor 后会重建 foreach cache。"""
+    device = _require_npu_device()
+    model = torch.nn.Linear(1, 1, bias=False).to(device)
+    with torch.no_grad():
+        model.weight.fill_(1.0)
+    ema = ModelEMA(model)
+    ema.decay = lambda _: 0.5
+
+    ema.update(model)
+    torch.npu.synchronize()
+    rebuilds = ema._foreach_update_cache_rebuilds
+    state = {k: torch.full_like(v, 3.0) for k, v in model.state_dict().items()}
+
+    model.load_state_dict(state, assign=True)
+    ema.update(model)
+    torch.npu.synchronize()
+
+    assert ema._foreach_update_cache_rebuilds == rebuilds + 1
+    torch.testing.assert_close(next(ema.ema.parameters()).detach().cpu(), torch.tensor([[2.0]]))
+
+
+def test_model_ema_foreach_fallback_on_npu(monkeypatch):
+    """验证 NPU foreach 不可用时会回退到逐元素 EMA 更新。"""
+    device = _require_npu_device()
+    model = torch.nn.Linear(1, 1, bias=False).to(device)
+    with torch.no_grad():
+        model.weight.fill_(1.0)
+    ema = ModelEMA(model)
+    ema.decay = lambda _: 0.5
+
+    with torch.no_grad():
+        model.weight.fill_(3.0)
+
+    calls = {"lerp": 0}
+
+    def fail_lerp(*args, **kwargs):
+        calls["lerp"] += 1
+        raise RuntimeError("forced foreach failure")
+
+    monkeypatch.setattr(torch, "_foreach_lerp_", fail_lerp)
+    ema.update(model)
+    torch.npu.synchronize()
+
+    assert calls["lerp"] == 1
+    assert ema._foreach_update_disabled
+    torch.testing.assert_close(next(ema.ema.parameters()).detach().cpu(), torch.tensor([[2.0]]))
+
+
 def test_model_ema_decay_scales_with_effective_batch():
     """验证 EMA decay 按有效 batch/nbs 做样本数归一化。"""
     model = torch.nn.Linear(1, 1)
