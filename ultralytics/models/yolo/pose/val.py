@@ -252,6 +252,10 @@ class PoseValidator(DetectionValidator):
 
     def eval_json(self, stats: dict[str, Any]) -> dict[str, Any]:
         """Evaluate object detection model using COCO JSON format."""
-        anno_json = self.data["path"] / "annotations/person_keypoints_val2017.json"  # annotations
+        anno_json = (
+            Path(self.data["annotations"][self.args.split])
+            if self.is_coco_json
+            else self.data["path"] / "annotations/person_keypoints_val2017.json"
+        )  # annotations
         pred_json = self.save_dir / "predictions.json"  # predictions
         return super().coco_evaluate(stats, pred_json, anno_json, ["bbox", "keypoints"], suffix=["Box", "Pose"])
