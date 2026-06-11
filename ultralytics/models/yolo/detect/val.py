@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -95,7 +96,8 @@ class DetectionValidator(BaseValidator):
             if self.is_coco
             else list(range(1, len(model.names) + 1))
         )
-        self.args.save_json |= self.args.val and (self.is_coco or self.is_lvis) and not self.training  # run final val
+        # Run COCO-style JSON evaluation for detection-like tasks at final/standalone validation time.
+        self.args.save_json |= self.args.task in {"detect", "segment", "pose"} and not self.training
         self.names = model.names
         self.nc = len(model.names)
         self.end2end = getattr(model, "end2end", False)
@@ -437,14 +439,7 @@ class DetectionValidator(BaseValidator):
              ... }
         """
         path = Path(pbatch["im_file"])
-        stem = path.stem
-        image_id = pbatch.get("image_id")
-        if image_id is None:
-            image_id = int(stem) if stem.isnumeric() else stem
-        elif isinstance(image_id, torch.Tensor):
-            image_id = image_id.item()
-        elif isinstance(image_id, np.generic):
-            image_id = image_id.item()
+        image_id = self._image_id(pbatch.get("image_id"), path)
         box = ops.xyxy2xywh(predn["bboxes"])  # xywh
         box[:, :2] -= box[:, 2:] / 2  # xy center to top-left corner
         for b, s, c in zip(box.tolist(), predn["conf"].tolist(), predn["cls"].tolist()):
@@ -490,6 +485,182 @@ class DetectionValidator(BaseValidator):
             )  # annotations
         return self.coco_evaluate(stats, pred_json, anno_json)
 
+    @staticmethod
+    def _image_id(image_id: Any, path: str | Path) -> int | str:
+        """Return the COCO image id used by predictions and generated annotations."""
+        if isinstance(image_id, torch.Tensor):
+            image_id = image_id.item()
+        elif isinstance(image_id, np.generic):
+            image_id = image_id.item()
+        if image_id is not None:
+            return image_id
+        stem = Path(path).stem
+        return int(stem) if stem.isnumeric() else stem
+
+    @staticmethod
+    def _coco_box(box: np.ndarray, shape: tuple[int, int], bbox_format: str, normalized: bool) -> list[float]:
+        """Convert a dataset box to absolute COCO xywh format."""
+        h, w = shape
+        box = np.asarray(box, dtype=np.float64).reshape(4)
+        if bbox_format == "xyxy":
+            if normalized:
+                box *= np.array([w, h, w, h], dtype=np.float64)
+            x1, y1, x2, y2 = box.tolist()
+            return [x1, y1, max(x2 - x1, 0.0), max(y2 - y1, 0.0)]
+        if normalized:
+            box *= np.array([w, h, w, h], dtype=np.float64)
+        x, y, bw, bh = box.tolist()
+        return [x - bw / 2, y - bh / 2, max(bw, 0.0), max(bh, 0.0)]
+
+    @staticmethod
+    def _coco_segment(segment: np.ndarray, shape: tuple[int, int], normalized: bool) -> list[list[float]] | None:
+        """Convert a YOLO polygon segment to COCO segmentation format."""
+        h, w = shape
+        segment = np.asarray(segment, dtype=np.float64).reshape(-1, 2)
+        if segment.shape[0] < 3:
+            return None
+        if normalized:
+            segment *= np.array([w, h], dtype=np.float64)
+        return [[round(float(x), 3) for x in segment.reshape(-1).tolist()]]
+
+    @staticmethod
+    def _coco_keypoints(
+        keypoints: np.ndarray, shape: tuple[int, int], normalized: bool
+    ) -> tuple[list[float], int] | None:
+        """Convert YOLO keypoints to COCO keypoint format."""
+        keypoints = np.asarray(keypoints, dtype=np.float64)
+        if keypoints.ndim != 2 or keypoints.shape[1] != 3:
+            return None
+        h, w = shape
+        if normalized:
+            keypoints[:, 0] *= w
+            keypoints[:, 1] *= h
+        return [round(float(x), 3) for x in keypoints.reshape(-1).tolist()], int((keypoints[:, 2] > 0).sum())
+
+    def _coco_categories(self) -> list[dict[str, Any]]:
+        """Build COCO category metadata from the validator names and class map."""
+        categories = []
+        for class_index, category_id in enumerate(self.class_map or range(1, self.nc + 1)):
+            name = (
+                self.names.get(class_index, str(class_index))
+                if isinstance(self.names, dict)
+                else self.names[class_index]
+                if class_index < len(self.names)
+                else str(class_index)
+            )
+            category = {"id": int(category_id), "name": str(name)}
+            if self.args.task == "pose" and getattr(self, "kpt_shape", None):
+                category["keypoints"] = [f"kpt_{i}" for i in range(self.kpt_shape[0])]
+                category["skeleton"] = []
+            categories.append(category)
+        return categories
+
+    def _iter_label_datasets(self):
+        """Yield datasets that expose YOLO label dictionaries."""
+        dataset = getattr(self.dataloader, "dataset", None)
+        datasets = getattr(dataset, "datasets", None)
+        if datasets:
+            yield from datasets
+        elif dataset is not None:
+            yield dataset
+
+    def _write_coco_annotations(
+        self, anno_json: Path, iou_types: list[str], suffix: list[str]
+    ) -> tuple[Path, list[str], list[str]]:
+        """Generate a temporary COCO annotation file from YOLO dataset labels."""
+        images, annotations = [], []
+        annotation_id = 1
+        segment_count = keypoint_count = 0
+
+        for dataset in self._iter_label_datasets():
+            for label in getattr(dataset, "labels", []):
+                im_file = Path(label["im_file"])
+                image_id = self._image_id(label.get("image_id"), im_file)
+                h, w = (int(x) for x in label["shape"][:2])
+                images.append({"id": image_id, "file_name": im_file.name, "height": h, "width": w})
+
+                cls = np.asarray(label.get("cls", []), dtype=np.int64).reshape(-1)
+                bboxes = np.asarray(label.get("bboxes", []), dtype=np.float64).reshape(-1, 4)
+                segments = label.get("segments")
+                if segments is None:
+                    segments = []
+                keypoints = label.get("keypoints")
+                normalized = bool(label.get("normalized", True))
+                bbox_format = label.get("bbox_format", "xywh")
+
+                for i, class_index in enumerate(cls.tolist()):
+                    if i >= len(bboxes):
+                        continue
+                    class_index = 0 if self.args.single_cls else int(class_index)
+                    if class_index >= len(self.class_map):
+                        continue
+                    bbox = self._coco_box(bboxes[i], (h, w), bbox_format, normalized)
+                    annotation = {
+                        "id": annotation_id,
+                        "image_id": image_id,
+                        "category_id": int(self.class_map[class_index]),
+                        "bbox": [round(float(x), 3) for x in bbox],
+                        "area": round(float(bbox[2] * bbox[3]), 3),
+                        "iscrowd": 0,
+                    }
+                    if "segm" in iou_types and i < len(segments):
+                        segmentation = self._coco_segment(segments[i], (h, w), normalized)
+                        if segmentation:
+                            annotation["segmentation"] = segmentation
+                            segment_count += 1
+                    if "keypoints" in iou_types and keypoints is not None and i < len(keypoints):
+                        kpt = self._coco_keypoints(keypoints[i], (h, w), normalized)
+                        if kpt:
+                            annotation["keypoints"], annotation["num_keypoints"] = kpt
+                            keypoint_count += 1
+                    annotations.append(annotation)
+                    annotation_id += 1
+
+        data = {"images": images, "annotations": annotations, "categories": self._coco_categories()}
+        anno_json = self.save_dir / "coco_eval_annotations.json"
+        with open(anno_json, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        LOGGER.info(f"Saving generated COCO-style annotations to {anno_json}...")
+
+        available = {"bbox"}
+        if "segm" in iou_types and annotations and segment_count == len(annotations):
+            available.add("segm")
+        elif "segm" in iou_types:
+            LOGGER.warning("当前数据集没有完整 polygon segments，COCO-style eval 将只运行 bbox。")
+        if "keypoints" in iou_types and annotations and keypoint_count == len(annotations):
+            available.add("keypoints")
+        elif "keypoints" in iou_types:
+            LOGGER.warning("当前数据集没有完整 COCO keypoints 标注，COCO-style eval 将只运行 bbox。")
+
+        filtered = [(iou_type, suffix[i]) for i, iou_type in enumerate(iou_types) if iou_type in available]
+        return anno_json, [x[0] for x in filtered], [x[1] for x in filtered]
+
+    def _resolve_coco_annotations(
+        self, anno_json: str | Path, iou_types: list[str], suffix: list[str]
+    ) -> tuple[Path, list[str], list[str]]:
+        """Return an existing or generated COCO annotation file and matching eval types."""
+        anno_json = Path(anno_json)
+        if anno_json.is_file():
+            return anno_json, iou_types, suffix
+        return self._write_coco_annotations(anno_json, iou_types, suffix)
+
+    def _coco_image_ids(self, anno_json: Path) -> list[int | str]:
+        """Return image ids to evaluate."""
+        image_ids = []
+        for dataset in self._iter_label_datasets():
+            dataset_image_ids = []
+            for label in getattr(dataset, "labels", []):
+                if label.get("im_file"):
+                    dataset_image_ids.append(self._image_id(label.get("image_id"), label["im_file"]))
+            if not dataset_image_ids:
+                dataset_image_ids.extend(self._image_id(None, im_file) for im_file in getattr(dataset, "im_files", []))
+            image_ids.extend(dataset_image_ids)
+        if image_ids:
+            return image_ids
+        with open(anno_json, encoding="utf-8") as f:
+            data = json.load(f)
+        return [x["id"] for x in data.get("images", [])]
+
     def coco_evaluate(
         self,
         stats: dict[str, Any],
@@ -516,28 +687,37 @@ class DetectionValidator(BaseValidator):
         Returns:
             (dict[str, Any]): Updated stats dictionary containing the computed COCO/LVIS evaluation metrics.
         """
-        if self.args.save_json and (self.is_coco or self.is_lvis) and len(self.jdict):
+        if self.args.save_json and len(self.jdict):
             LOGGER.info(f"\nEvaluating faster-coco-eval mAP using {pred_json} and {anno_json}...")
             try:
-                for x in pred_json, anno_json:
-                    assert x.is_file(), f"{x} file not found"
+                pred_json = Path(pred_json)
                 iou_types = [iou_types] if isinstance(iou_types, str) else iou_types
                 suffix = [suffix] if isinstance(suffix, str) else suffix
+                anno_json, iou_types, suffix = self._resolve_coco_annotations(anno_json, iou_types, suffix)
+                for x in pred_json, anno_json:
+                    assert x.is_file(), f"{x} file not found"
+                if not iou_types:
+                    LOGGER.warning("没有可用于 faster-coco-eval 的 COCO-style eval 类型。")
+                    return stats
                 check_requirements("faster-coco-eval>=1.6.7")
                 from faster_coco_eval import COCO, COCOeval_faster
 
                 anno = COCO(anno_json)
                 pred = anno.loadRes(pred_json)
+                summary_lines = [f"predictions: {pred_json}", f"annotations: {anno_json}"]
+                image_ids = self._coco_image_ids(anno_json)
                 for i, iou_type in enumerate(iou_types):
+                    summary_lines.extend(("", f"iou_type: {iou_type}"))
+
+                    def print_summary(*values):
+                        message = " ".join(str(x) for x in values)
+                        summary_lines.append(str(message))
+                        LOGGER.info(message)
+
                     val = COCOeval_faster(
-                        anno, pred, iouType=iou_type, lvis_style=self.is_lvis, print_function=LOGGER.info
+                        anno, pred, iouType=iou_type, lvis_style=self.is_lvis, print_function=print_summary
                     )
-                    image_ids = [
-                        x["image_id"] for x in getattr(self.dataloader.dataset, "labels", []) if "image_id" in x
-                    ]
-                    val.params.imgIds = (
-                        image_ids if image_ids else [int(Path(x).stem) for x in self.dataloader.dataset.im_files]
-                    )  # images to eval
+                    val.params.imgIds = image_ids  # images to eval
                     val.evaluate()
                     val.accumulate()
                     val.summarize()
@@ -559,6 +739,9 @@ class DetectionValidator(BaseValidator):
 
                 if self.is_lvis:
                     stats["fitness"] = stats["metrics/mAP50-95(B)"]  # always use box mAP50-95 for fitness
+                summary_file = self.save_dir / "coco_eval.txt"
+                summary_file.write_text("\n".join(summary_lines).rstrip() + "\n", encoding="utf-8")
+                LOGGER.info(f"Saving COCO-style eval summary to {summary_file}...")
             except Exception as e:
                 LOGGER.warning(f"faster-coco-eval unable to run: {e}")
         return stats

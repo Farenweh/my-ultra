@@ -1,10 +1,11 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
+import json
 import sys
 import threading
 from collections import OrderedDict
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from unittest import mock
 
 import pytest
@@ -17,6 +18,7 @@ from ultralytics.engine import trainer as trainer_module
 from ultralytics.engine.exporter import Exporter
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.models.yolo import classify, depth, detect, obb, pose, segment, semantic
+from ultralytics.models.yolo.detect import val as detect_val
 from ultralytics.nn.distill_model import DistillationModel
 from ultralytics.nn.tasks import DetectionModel, load_checkpoint
 from ultralytics.utils import ASSETS, DEFAULT_CFG, IS_RASPBERRYPI, WEIGHTS_DIR
@@ -210,6 +212,184 @@ def test_save_metrics_backfills_legacy_csv_fitness(tmp_path):
     assert header == ["epoch", "time", "train/loss", "metrics/accuracy_top1", "fitness", "lr/pg0"]
     assert rows[1][fitness_index] == "nan"
     assert rows[2][fitness_index] == "0.6"
+
+
+def _install_fake_faster_coco_eval(monkeypatch):
+    """安装最小 fake faster-coco-eval，避免单测依赖真实 COCO 评估。"""
+    seen_iou_types = []
+    fake_module = ModuleType("faster_coco_eval")
+
+    class FakeCOCO:
+        def __init__(self, annotation_file):
+            self.annotation_file = annotation_file
+
+        def loadRes(self, prediction_file):
+            return {"prediction_file": prediction_file}
+
+    class FakeCOCOeval:
+        def __init__(self, anno, pred, iouType, lvis_style=False, print_function=print):
+            self.anno = anno
+            self.pred = pred
+            self.iouType = iouType
+            self.lvis_style = lvis_style
+            self.print_function = print_function
+            self.params = SimpleNamespace(imgIds=[])
+            self.stats_as_dict = {
+                "AP_50": 0.5,
+                "AP_all": 0.4,
+                "AP_small": 0.1,
+                "AP_medium": 0.2,
+                "AP_large": 0.3,
+            }
+            seen_iou_types.append(iouType)
+
+        def evaluate(self):
+            assert self.params.imgIds
+
+        def accumulate(self):
+            pass
+
+        def summarize(self):
+            self.print_function("fake summary", self.iouType)
+
+    fake_module.COCO = FakeCOCO
+    fake_module.COCOeval_faster = FakeCOCOeval
+    monkeypatch.setitem(sys.modules, "faster_coco_eval", fake_module)
+    monkeypatch.setattr(detect_val, "check_requirements", lambda *args, **kwargs: None)
+    return seen_iou_types
+
+
+def _coco_eval_label(tmp_path, *, segments=None, keypoints=None):
+    """构造最小 YOLO dataset label。"""
+    return {
+        "im_file": str(tmp_path / "0001.jpg"),
+        "shape": (100, 200),
+        "cls": [[0]],
+        "bboxes": [[0.5, 0.5, 0.2, 0.4]],
+        "segments": segments or [],
+        "keypoints": keypoints,
+        "normalized": True,
+        "bbox_format": "xywh",
+    }
+
+
+def _coco_eval_validator(tmp_path, labels, task="detect"):
+    """构造只包含 coco_evaluate 所需属性的 DetectionValidator。"""
+    validator = object.__new__(detect.DetectionValidator)
+    validator.args = SimpleNamespace(save_json=True, task=task, single_cls=False)
+    validator.is_lvis = False
+    validator.is_coco = False
+    validator.save_dir = tmp_path
+    validator.jdict = [{"image_id": 1, "category_id": 1, "bbox": [80, 30, 40, 40], "score": 0.9}]
+    validator.class_map = [1, 2]
+    validator.names = {0: "class0", 1: "class1"}
+    validator.nc = 2
+    validator.dataloader = SimpleNamespace(
+        dataset=SimpleNamespace(labels=labels, im_files=[label["im_file"] for label in labels])
+    )
+    if task == "pose":
+        validator.kpt_shape = [2, 3]
+    return validator
+
+
+def _write_prediction_json(tmp_path):
+    pred_json = tmp_path / "predictions.json"
+    pred_json.write_text(
+        '[{"image_id": 1, "category_id": 1, "bbox": [80, 30, 40, 40], "score": 0.9}]',
+        encoding="utf-8",
+    )
+    return pred_json
+
+
+def test_coco_eval_generates_annotations_for_yolo_dataset(tmp_path, monkeypatch):
+    """普通 YOLO 数据集没有 annotation JSON 时，会在 save_dir 生成 COCO-style GT。"""
+    _install_fake_faster_coco_eval(monkeypatch)
+    validator = _coco_eval_validator(tmp_path, [_coco_eval_label(tmp_path)])
+
+    stats = validator.coco_evaluate({}, _write_prediction_json(tmp_path), tmp_path / "missing_annotations.json")
+
+    annotation_json = tmp_path / "coco_eval_annotations.json"
+    data = json.loads(annotation_json.read_text(encoding="utf-8"))
+    assert data["images"] == [{"id": 1, "file_name": "0001.jpg", "height": 100, "width": 200}]
+    assert data["annotations"][0]["bbox"] == [80.0, 30.0, 40.0, 40.0]
+    assert data["annotations"][0]["category_id"] == 1
+    assert stats["metrics/mAP50(B)"] == 0.5
+    assert stats["metrics/mAP50-95(B)"] == 0.4
+    assert stats["fitness"] == pytest.approx(0.41)
+
+
+def test_coco_eval_saves_summary_text(tmp_path, monkeypatch):
+    """COCO-style eval summary 会同步保存到 save_dir/coco_eval.txt。"""
+    _install_fake_faster_coco_eval(monkeypatch)
+    validator = _coco_eval_validator(tmp_path, [_coco_eval_label(tmp_path)])
+
+    validator.coco_evaluate({}, _write_prediction_json(tmp_path), tmp_path / "missing_annotations.json")
+
+    summary = (tmp_path / "coco_eval.txt").read_text(encoding="utf-8")
+    assert f"predictions: {tmp_path / 'predictions.json'}" in summary
+    assert f"annotations: {tmp_path / 'coco_eval_annotations.json'}" in summary
+    assert "iou_type: bbox" in summary
+    assert "fake summary bbox" in summary
+
+
+@pytest.mark.parametrize(
+    "task,iou_types,suffix,label_kwargs,expected",
+    [
+        (
+            "segment",
+            ["bbox", "segm"],
+            ["Box", "Mask"],
+            {"segments": [[[0.4, 0.3], [0.6, 0.3], [0.6, 0.7], [0.4, 0.7]]]},
+            ["bbox", "segm"],
+        ),
+        (
+            "pose",
+            ["bbox", "keypoints"],
+            ["Box", "Pose"],
+            {"keypoints": [[[0.45, 0.45, 2], [0.55, 0.55, 2]]]},
+            ["bbox", "keypoints"],
+        ),
+    ],
+)
+def test_coco_eval_uses_task_iou_types_when_annotations_exist(
+    tmp_path, monkeypatch, task, iou_types, suffix, label_kwargs, expected
+):
+    """segment/pose 标注完整时，会额外运行对应 COCO iou_type。"""
+    seen_iou_types = _install_fake_faster_coco_eval(monkeypatch)
+    validator = _coco_eval_validator(tmp_path, [_coco_eval_label(tmp_path, **label_kwargs)], task=task)
+
+    validator.coco_evaluate(
+        {},
+        _write_prediction_json(tmp_path),
+        tmp_path / "missing_annotations.json",
+        iou_types,
+        suffix,
+    )
+
+    assert seen_iou_types == expected
+
+
+@pytest.mark.parametrize(
+    "task,iou_types,suffix",
+    [
+        ("segment", ["bbox", "segm"], ["Box", "Mask"]),
+        ("pose", ["bbox", "keypoints"], ["Box", "Pose"]),
+    ],
+)
+def test_coco_eval_falls_back_to_bbox_when_task_annotations_missing(tmp_path, monkeypatch, task, iou_types, suffix):
+    """segment/pose 标注缺失时，COCO-style eval 降级到 bbox 且不中断。"""
+    seen_iou_types = _install_fake_faster_coco_eval(monkeypatch)
+    validator = _coco_eval_validator(tmp_path, [_coco_eval_label(tmp_path)], task=task)
+
+    validator.coco_evaluate(
+        {},
+        _write_prediction_json(tmp_path),
+        tmp_path / "missing_annotations.json",
+        iou_types,
+        suffix,
+    )
+
+    assert seen_iou_types == ["bbox"]
 
 
 def _minimal_plot_trainer(tmp_path):

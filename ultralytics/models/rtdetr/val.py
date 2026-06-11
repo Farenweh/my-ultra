@@ -166,8 +166,7 @@ class RTDETRValidator(DetectionValidator):
             pbatch (dict[str, Any]): Batch dictionary containing 'imgsz', 'ori_shape', 'ratio_pad', and 'im_file'.
         """
         path = Path(pbatch["im_file"])
-        stem = path.stem
-        image_id = int(stem) if stem.isnumeric() else stem
+        image_id = self._image_id(pbatch.get("image_id"), path)
         box = predn["bboxes"].clone()
         box[..., [0, 2]] *= pbatch["ori_shape"][1] / self.args.imgsz  # native-space pred
         box[..., [1, 3]] *= pbatch["ori_shape"][0] / self.args.imgsz  # native-space pred

@@ -295,9 +295,12 @@ class SegmentationValidator(DetectionValidator):
     def eval_json(self, stats: dict[str, Any]) -> dict[str, Any]:
         """Return COCO-style instance segmentation evaluation metrics."""
         pred_json = self.save_dir / "predictions.json"  # predictions
-        anno_json = (
-            self.data["path"]
-            / "annotations"
-            / ("instances_val2017.json" if self.is_coco else f"lvis_v1_{self.args.split}.json")
-        )  # annotations
+        if self.is_coco_json:
+            anno_json = Path(self.data["annotations"][self.args.split])
+        else:
+            anno_json = (
+                self.data["path"]
+                / "annotations"
+                / ("instances_val2017.json" if self.is_coco else f"lvis_v1_{self.args.split}.json")
+            )  # annotations
         return super().coco_evaluate(stats, pred_json, anno_json, ["bbox", "segm"], suffix=["Box", "Mask"])
