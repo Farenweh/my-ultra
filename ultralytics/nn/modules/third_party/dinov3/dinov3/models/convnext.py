@@ -12,6 +12,7 @@ import torch
 import torch.nn.functional as F
 import torch.nn.init
 from torch import Tensor, nn
+from ultralytics.utils.checks import IS_ASCEND
 
 
 logger = logging.getLogger("dinov3")
@@ -72,6 +73,8 @@ class Block(nn.Module):
         input = x
         x = self.dwconv(x)
         x = x.permute(0, 2, 3, 1)  # (N, C, H, W) -> (N, H, W, C)
+        if IS_ASCEND and x.device.type == "npu":
+            x = x.contiguous()
         x = self.norm(x)
         x = self.pwconv1(x)
         x = self.act(x)
@@ -79,6 +82,8 @@ class Block(nn.Module):
         if self.gamma is not None:
             x = self.gamma * x
         x = x.permute(0, 3, 1, 2)  # (N, H, W, C) -> (N, C, H, W)
+        if IS_ASCEND and x.device.type == "npu":
+            x = x.contiguous()
 
         x = input + self.drop_path(x)
         return x
@@ -112,8 +117,9 @@ class LayerNorm(nn.Module):
             return F.layer_norm(x, self.normalized_shape, self.weight, self.bias, self.eps)
         elif self.data_format == "channels_first":
             u = x.mean(1, keepdim=True)
-            s = (x - u).pow(2).mean(1, keepdim=True)
-            x = (x - u) / torch.sqrt(s + self.eps)
+            centered = x - u
+            s = (centered * centered).mean(1, keepdim=True)
+            x = centered / torch.sqrt(s + self.eps)
             x = self.weight[:, None, None] * x + self.bias[:, None, None]
             return x
 

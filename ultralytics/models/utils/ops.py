@@ -129,7 +129,7 @@ class HungarianMatcher(nn.Module):
         )
 
         # Set invalid values (NaNs and infinities) to 0
-        C[C.isnan() | C.isinf()] = 0.0
+        C = torch.nan_to_num(C, nan=0.0, posinf=0.0, neginf=0.0)
 
         # 代价矩阵复用上游逐图计算，仅合并 CPU 匹配索引的张量构造。
         C_np = C.cpu().numpy()
@@ -231,26 +231,24 @@ def get_cdn_group(
     dn_bbox = gt_bbox.repeat(2 * num_group, 1)  # 2*num_group*bs*num, 4
     dn_b_idx = b_idx.repeat(2 * num_group).view(-1)  # (2*num_group*bs*num, )
 
-    # Positive and negative mask
-    # (bs*num*num_group, ), the second total_num*num_group part as negative samples
-    neg_idx = torch.arange(total_num * num_group, dtype=torch.long, device=gt_bbox.device) + num_group * total_num
-
     if cls_noise_ratio > 0:
         # Apply class label noise to half of the samples
-        mask = torch.rand(dn_cls.shape) < (cls_noise_ratio * 0.5)
-        idx = torch.nonzero(mask).squeeze(-1)
-        # Randomly assign new class labels
-        new_label = torch.randint_like(idx, 0, num_classes, dtype=dn_cls.dtype, device=dn_cls.device)
-        dn_cls[idx] = new_label
+        mask = torch.rand(dn_cls.shape, device=dn_cls.device) < (cls_noise_ratio * 0.5)
+        new_label = torch.randint(0, num_classes, dn_cls.shape, dtype=dn_cls.dtype, device=dn_cls.device)
+        dn_cls = torch.where(mask, new_label, dn_cls)
 
     if box_noise_scale > 0:
         known_bbox = xywh2xyxy(dn_bbox)
 
-        diff = (dn_bbox[..., 2:] * 0.5).repeat(1, 2) * box_noise_scale  # 2*num_group*bs*num, 4
+        half_wh = dn_bbox[..., 2:] * (0.5 * box_noise_scale)
+        diff = torch.cat((half_wh, half_wh), dim=-1)  # 2*num_group*bs*num, 4
 
         rand_sign = torch.randint_like(dn_bbox, 0, 2) * 2.0 - 1.0
         rand_part = torch.rand_like(dn_bbox)
-        rand_part[neg_idx] += 1.0
+        neg_mask = (
+            torch.arange(dn_bbox.shape[0], dtype=torch.long, device=dn_bbox.device) >= (num_group * total_num)
+        ).to(dtype=rand_part.dtype)
+        rand_part = rand_part + neg_mask.unsqueeze(-1)
         rand_part *= rand_sign
         known_bbox += rand_part * diff
         known_bbox.clip_(min=0.0, max=1.0)

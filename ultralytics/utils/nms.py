@@ -83,7 +83,8 @@ def non_max_suppression(
     extra = prediction.shape[1] - nc - 4  # number of extra info
     mi = 4 + nc  # mask start index
     xc = prediction[:, 4:mi].amax(1) > conf_thres  # candidates
-    xinds = torch.arange(prediction.shape[-1], device=prediction.device).expand(bs, -1)[..., None]  # to track idxs
+    if return_idxs:
+        xinds = torch.arange(prediction.shape[-1], device=prediction.device).expand(bs, -1)[..., None]  # to track idxs
 
     # Settings
     # min_wh = 2  # (pixels) minimum box width and height
@@ -91,16 +92,24 @@ def non_max_suppression(
     multi_label &= nc > 1  # multiple labels per box (adds 0.5ms/img)
 
     prediction = prediction.transpose(-1, -2)  # shape(1,84,6300) to shape(1,6300,84)
+    npu_xyxy = prediction.device.type == "npu" and not rotated
+    if prediction.device.type == "npu":
+        prediction = prediction.clone(memory_format=torch.contiguous_format)
+        if npu_xyxy:
+            prediction[..., :4] = xywh2xyxy(prediction[..., :4])  # xywh to xyxy
 
     t = time.time()
     output = [torch.zeros((0, 6 + extra), device=prediction.device)] * bs
-    keepi = [torch.zeros((0, 1), device=prediction.device)] * bs  # to store the kept idxs
-    for xi, (x, xk) in enumerate(zip(prediction, xinds)):  # image index, (preds, preds indices)
+    if return_idxs:
+        keepi = [torch.zeros((0, 1), device=prediction.device)] * bs  # to store the kept idxs
+    for xi, x in enumerate(prediction):  # image index, image inference
+        if return_idxs:
+            xk = xinds[xi]
         # Apply constraints
         # x[((x[:, 2:4] < min_wh) | (x[:, 2:4] > max_wh)).any(1), 4] = 0  # width-height
         filt = xc[xi]  # confidence
         x = x[filt]
-        if not rotated:
+        if not rotated and not npu_xyxy:
             x[:, :4] = xywh2xyxy(x[:, :4])
         if return_idxs:
             xk = xk[filt]
