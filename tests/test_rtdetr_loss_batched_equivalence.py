@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 import torch
 
+from ultralytics.models.utils import loss as loss_module
 from ultralytics.models.utils.loss import RTDETRDetectionLoss
 from ultralytics.models.utils.ops import get_cdn_group
 
@@ -105,7 +106,7 @@ def test_rtdetr_loss_batched_matches_legacy(use_uni_match: bool, with_dn: bool):
 
     if with_dn:
         dn_match_indices = criterion.get_dn_match_indices(
-            case["dn_meta"]["dn_pos_idx"], case["dn_meta"]["dn_num_group"], case["batch"]["gt_groups"]
+            case["dn_meta"]["dn_pos_idx"], case["dn_meta"]["dn_num_group"], case["dn_meta"]["dn_gt_idx"]
         )
         layer_match_indices_dn = [dn_match_indices for _ in range(int(case["dn_bboxes"].shape[0]))]
         loss_batched_dn = criterion._forward_group_batched(
@@ -162,3 +163,31 @@ def test_rtdetr_loss_batched_matches_legacy_no_gt():
         case["pred_bboxes"], case["pred_scores"], case["batch"], postfix="", layer_match_indices=layer_match_indices
     )
     _assert_loss_dict_close(loss_batched_main, loss_legacy_main)
+
+
+@pytest.mark.skipif(
+    not hasattr(torch, "npu") or not torch.npu.is_available(),
+    reason="torch_npu/NPU is not available",
+)
+def test_rtdetr_loss_batched_npu_rejects_legacy_fallback(monkeypatch):
+    monkeypatch.setattr(loss_module, "IS_ASCEND", True)
+    device = torch.device("npu:0")
+    torch.npu.set_device(device)
+
+    criterion = RTDETRDetectionLoss(nc=3)
+    pred_bboxes = torch.zeros(2, 1, 2, 4, device=device)
+    pred_scores = torch.zeros(2, 1, 2, 3, device=device)
+    batch = {
+        "cls": torch.zeros(1, dtype=torch.long, device=device),
+        "bboxes": torch.zeros(1, 4, device=device),
+        "gt_groups": [1],
+    }
+    layer_match_indices = [
+        [(torch.tensor([0], dtype=torch.long), torch.tensor([0], dtype=torch.long))],
+        [(torch.empty(0, dtype=torch.long), torch.empty(0, dtype=torch.long))],
+    ]
+
+    with pytest.raises(RuntimeError, match="匹配数量一致"):
+        criterion._forward_group_batched(
+            pred_bboxes, pred_scores, batch, postfix="", layer_match_indices=layer_match_indices
+        )

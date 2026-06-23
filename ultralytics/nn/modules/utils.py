@@ -8,6 +8,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 from torch.nn.init import uniform_
+
 from ultralytics.utils import LOGGER
 from ultralytics.utils.checks import IS_ASCEND
 
