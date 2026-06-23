@@ -10,11 +10,12 @@ import torch.nn.functional as F
 from torch import nn
 from torch.nn.init import constant_, trunc_normal_, xavier_uniform_
 
+from ultralytics.utils.checks import IS_ASCEND
 from ultralytics.utils.torch_utils import TORCH_1_11
 
 from .conv import Conv
 from .third_party.dinov3.dinov3.layers import LayerScale, RopePositionEmbedding, SelfAttentionBlock
-from .utils import _get_clones, inverse_sigmoid, multi_scale_deformable_attn_pytorch
+from .utils import _get_clones, multi_scale_deformable_attn_pytorch
 
 __all__ = (
     "AIFI",
@@ -198,6 +199,8 @@ class AIFI(TransformerEncoderLayer):
             normalize_before (bool): Whether to apply normalization before attention and feedforward.
         """
         super().__init__(c1, cm, num_heads, dropout, act, normalize_before)
+        self._cached_pos_embed_key = None
+        self._cached_pos_embed = None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass for the AIFI transformer layer.
@@ -209,9 +212,20 @@ class AIFI(TransformerEncoderLayer):
             (torch.Tensor): Output tensor with shape [B, C, H, W].
         """
         c, h, w = x.shape[1:]
-        pos_embed = self.build_2d_sincos_position_embedding(w, h, c, device=x.device)
+        if torch.jit.is_tracing():
+            pos_embed = self.build_2d_sincos_position_embedding(w, h, c, device=x.device).to(dtype=x.dtype)
+        else:
+            pos_key = (w, h, c)
+            if self._cached_pos_embed_key != pos_key or self._cached_pos_embed is None:
+                self._cached_pos_embed_key = pos_key
+                self._cached_pos_embed = self.build_2d_sincos_position_embedding(w, h, c, device=x.device).to(
+                    dtype=x.dtype
+                )
+            else:
+                self._cached_pos_embed = self._cached_pos_embed.to(device=x.device, dtype=x.dtype)
+            pos_embed = self._cached_pos_embed
         # Flatten [B, C, H, W] to [B, HxW, C]
-        x = super().forward(x.flatten(2).permute(0, 2, 1), pos=pos_embed.to(device=x.device, dtype=x.dtype))
+        x = super().forward(x.flatten(2).permute(0, 2, 1), pos=pos_embed)
         return x.permute(0, 2, 1).view([-1, c, h, w]).contiguous()
 
     @staticmethod
@@ -457,8 +471,9 @@ class LayerNorm2d(nn.Module):
             (torch.Tensor): Normalized output tensor.
         """
         u = x.mean(1, keepdim=True)
-        s = (x - u).pow(2).mean(1, keepdim=True)
-        x = (x - u) / torch.sqrt(s + self.eps)
+        centered = x - u
+        s = (centered * centered).mean(1, keepdim=True)
+        x = centered / torch.sqrt(s + self.eps)
         return self.weight[:, None, None] * x + self.bias[:, None, None]
 
 
@@ -568,7 +583,10 @@ class MSDeformAttn(nn.Module):
 
         value = self.value_proj(value)
         if value_mask is not None:
-            value = value.masked_fill(value_mask[..., None], float(0))
+            if IS_ASCEND and value.device.type == "npu":
+                value = value * (~value_mask[..., None]).to(value.dtype)
+            else:
+                value = value.masked_fill(value_mask[..., None], float(0))
         value = value.view(bs, len_v, self.n_heads, self.d_model // self.n_heads)
         # Fold (n_levels, n_points) into one axis so every traced tensor stays at rank <= 5 (required for CoreML
         # export). Decoder reference points use one level axis, while encoder reference points provide n_levels.
@@ -591,9 +609,12 @@ class MSDeformAttn(nn.Module):
                 or self._cached_offset_normalizer.device != query.device
             ):
                 self._cached_value_shapes = value_shapes_tuple
-                self._cached_offset_normalizer = torch.as_tensor(
-                    value_shapes_tuple, dtype=query.dtype, device=query.device
-                ).flip(-1)[:, None, :].expand(-1, self.n_points, -1).reshape(n_total_points, 2)
+                self._cached_offset_normalizer = (
+                    torch.as_tensor(value_shapes_tuple, dtype=query.dtype, device=query.device)
+                    .flip(-1)[:, None, :]
+                    .expand(-1, self.n_points, -1)
+                    .reshape(n_total_points, 2)
+                )
             offset_normalizer = self._cached_offset_normalizer
             sampling_offsets = sampling_offsets / offset_normalizer
             if num_reference_levels == 1:
@@ -695,19 +716,21 @@ class DeformableTransformerEncoder(nn.Module):
         self.layers = _get_clones(encoder_layer, num_layers)
 
     @staticmethod
-    def _get_reference_points(
-        shapes: list[list[int]], dtype: torch.dtype, device: torch.device
-    ) -> torch.Tensor:
+    def _get_reference_points(shapes: list[list[int]], dtype: torch.dtype, device: torch.device) -> torch.Tensor:
         """Build normalized per-level grid reference points with shape (1, total_tokens, n_levels, 2)."""
         reference_points = []
         for h, w in shapes:
-            ref_y, ref_x = torch.meshgrid(
-                torch.linspace(0.5, h - 0.5, h, dtype=dtype, device=device),
-                torch.linspace(0.5, w - 0.5, w, dtype=dtype, device=device),
-                indexing="ij",
-            ) if TORCH_1_11 else torch.meshgrid(
-                torch.linspace(0.5, h - 0.5, h, dtype=dtype, device=device),
-                torch.linspace(0.5, w - 0.5, w, dtype=dtype, device=device),
+            ref_y, ref_x = (
+                torch.meshgrid(
+                    torch.linspace(0.5, h - 0.5, h, dtype=dtype, device=device),
+                    torch.linspace(0.5, w - 0.5, w, dtype=dtype, device=device),
+                    indexing="ij",
+                )
+                if TORCH_1_11
+                else torch.meshgrid(
+                    torch.linspace(0.5, h - 0.5, h, dtype=dtype, device=device),
+                    torch.linspace(0.5, w - 0.5, w, dtype=dtype, device=device),
+                )
             )
             reference_points.append(torch.stack((ref_x.reshape(-1) / w, ref_y.reshape(-1) / h), -1))
         return torch.cat(reference_points, 0)[None, :, None, :].expand(-1, -1, len(shapes), -1)

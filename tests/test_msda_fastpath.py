@@ -119,8 +119,8 @@ def _run_msda_npu(embed_dims=32, num_queries=32, num_points=4):
 
 @pytest.mark.skipif(not hasattr(torch, "npu") or not torch.npu.is_available(), reason="NPU is not available")
 def test_msda_fastpath_embed_dims_not_divisible_by_8_falls_back_on_npu(monkeypatch):
-    warnings = []
     monkeypatch.setattr(module_utils, "IS_ASCEND", True)
+    warnings = []
     monkeypatch.setattr(module_utils, "_MSDA_FASTPATH_WARNING_EMITTED", False)
     monkeypatch.setattr(module_utils.LOGGER, "warning", warnings.append)
 
@@ -133,8 +133,8 @@ def test_msda_fastpath_embed_dims_not_divisible_by_8_falls_back_on_npu(monkeypat
 
 @pytest.mark.skipif(not hasattr(torch, "npu") or not torch.npu.is_available(), reason="NPU is not available")
 def test_msda_fastpath_missing_mmcv_warns_once_on_npu(monkeypatch):
-    warnings = []
     monkeypatch.setattr(module_utils, "IS_ASCEND", True)
+    warnings = []
     monkeypatch.setattr(module_utils, "_MSDA_FASTPATH_WARNING_EMITTED", False)
     monkeypatch.setattr(module_utils.LOGGER, "warning", warnings.append)
     monkeypatch.setattr(module_utils, "_get_msda_fastpath_function", lambda: None)

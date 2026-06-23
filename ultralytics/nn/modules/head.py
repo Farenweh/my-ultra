@@ -1809,7 +1809,7 @@ class RTDETRDecoder(nn.Module):
             refer_bbox = torch.cat([dn_bbox, refer_bbox], 1)
         enc_scores = enc_outputs_scores[batch_ind, topk_ind].view(bs, self.num_queries, -1)
 
-        embeddings = self.tgt_embed.weight.unsqueeze(0).repeat(bs, 1, 1) if self.learnt_init_query else top_k_features
+        embeddings = self.tgt_embed.weight.unsqueeze(0).expand(bs, -1, -1) if self.learnt_init_query else top_k_features
         if self.training:
             refer_bbox = refer_bbox.detach()
             if not self.learnt_init_query:

@@ -7,6 +7,8 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from ultralytics.utils.checks import IS_ASCEND
+from ultralytics.utils.attention import npu_format_cast_to_nd_if_needed, sdpa_with_npu_padding
 from ultralytics.utils.torch_utils import fuse_conv_and_bn
 
 from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, autopad
@@ -76,6 +78,9 @@ class DFL(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Apply the DFL module to input tensor and return transformed output."""
         b, _, a = x.shape  # batch, channels, anchors
+        if IS_ASCEND and x.device.type == "npu":
+            proj = self.conv.weight.view(1, 1, self.c1, 1).to(dtype=x.dtype)
+            return (x.view(b, 4, self.c1, a).softmax(2) * proj).sum(2)
         return self.conv(x.view(b, 4, self.c1, a).transpose(2, 1).softmax(1)).view(b, 4, a)
         # return self.conv(x.view(b, self.c1, 4, a).softmax(1)).view(b, 4, a)
 
@@ -742,11 +747,16 @@ class ImagePoolingAttn(nn.Module):
         k = k.reshape(bs, -1, self.nh, self.hc)
         v = v.reshape(bs, -1, self.nh, self.hc)
 
-        aw = torch.einsum("bnmc,bkmc->bmnk", q, k)
-        aw = aw / (self.hc**0.5)
-        aw = F.softmax(aw, dim=-1)
-
-        x = torch.einsum("bmnk,bkmc->bnmc", aw, v)
+        if IS_ASCEND and q.device.type == "npu":
+            x = sdpa_with_npu_padding(
+                q.permute(0, 2, 1, 3),
+                k.permute(0, 2, 1, 3),
+                v.permute(0, 2, 1, 3),
+                scale=self.hc**-0.5,
+            ).permute(0, 2, 1, 3)
+        else:
+            aw = torch.einsum("bnmc,bkmc->bmnk", q, k) / (self.hc**0.5)
+            x = torch.einsum("bmnk,bkmc->bnmc", F.softmax(aw, dim=-1), v)
         x = self.proj(x.reshape(bs, -1, self.ec))
         return x * self.scale + text
 
@@ -1318,13 +1328,24 @@ class Attention(nn.Module):
         B, C, H, W = x.shape
         N = H * W
         qkv = self.qkv(x)
+        if IS_ASCEND and x.device.type == "npu":
+            qkv = npu_format_cast_to_nd_if_needed(qkv)
         q, k, v = qkv.view(B, self.num_heads, self.key_dim * 2 + self.head_dim, N).split(
             [self.key_dim, self.key_dim, self.head_dim], dim=2
         )
 
-        attn = (q * self.scale).transpose(-2, -1) @ k
-        attn = attn.softmax(dim=-1)
-        x = (v @ attn.transpose(-2, -1)).view(B, C, H, W) + self.pe(v.reshape(B, C, H, W))
+        if IS_ASCEND and x.device.type == "npu":
+            x = sdpa_with_npu_padding(
+                q.transpose(-2, -1),
+                k.transpose(-2, -1),
+                v.transpose(-2, -1),
+                scale=self.scale,
+                guard_input_format=False,
+            ).transpose(-2, -1)
+        else:
+            attn = ((q * self.scale).transpose(-2, -1) @ k).softmax(dim=-1)
+            x = v @ attn.transpose(-2, -1)
+        x = x.reshape(B, C, H, W) + self.pe(v.reshape(B, C, H, W))
         x = self.proj(x)
         return x
 
@@ -1710,9 +1731,16 @@ class AAttn(nn.Module):
             .permute(0, 2, 3, 1)
             .split([self.head_dim, self.head_dim, self.head_dim], dim=2)
         )
-        attn = (q * (self.head_dim**-0.5)).transpose(-2, -1) @ k
-        attn = attn.softmax(dim=-1)
-        x = v @ attn.transpose(-2, -1)
+        if IS_ASCEND and q.device.type == "npu":
+            x = sdpa_with_npu_padding(
+                q.transpose(-2, -1),
+                k.transpose(-2, -1),
+                v.transpose(-2, -1),
+                scale=self.head_dim**-0.5,
+            ).transpose(-2, -1)
+        else:
+            attn = ((q * (self.head_dim**-0.5)).transpose(-2, -1) @ k).softmax(dim=-1)
+            x = v @ attn.transpose(-2, -1)
         x = x.permute(0, 3, 1, 2)
         v = v.permute(0, 3, 1, 2)
 

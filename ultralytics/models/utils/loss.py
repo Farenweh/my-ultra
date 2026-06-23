@@ -10,6 +10,7 @@ from torch import nn
 
 from ultralytics.utils.loss import FocalLoss, VarifocalLoss
 from ultralytics.utils.metrics import bbox_iou
+from ultralytics.utils.checks import IS_ASCEND
 
 from .ops import HungarianMatcher
 
@@ -281,7 +282,13 @@ class DETRLoss(nn.Module):
                 uni_layer = max(0, min(self.uni_match_ind, aux_layers - 1))
                 uni_masks = masks[uni_layer] if masks is not None else None
                 shared_indices = self.matcher(
-                    pred_bboxes[uni_layer], pred_scores[uni_layer], gt_bboxes, gt_cls, gt_groups, masks=uni_masks, gt_mask=gt_mask
+                    pred_bboxes[uni_layer],
+                    pred_scores[uni_layer],
+                    gt_bboxes,
+                    gt_cls,
+                    gt_groups,
+                    masks=uni_masks,
+                    gt_mask=gt_mask,
                 )
                 for i in range(aux_layers):
                     layer_match_indices[i] = shared_indices
@@ -328,7 +335,11 @@ class DETRLoss(nn.Module):
             src_idx_layers.append(src_idx)
             gt_idx_layers.append(gt_idx)
 
-        return torch.stack(batch_idx_layers, dim=0), torch.stack(src_idx_layers, dim=0), torch.stack(gt_idx_layers, dim=0)
+        return (
+            torch.stack(batch_idx_layers, dim=0),
+            torch.stack(src_idx_layers, dim=0),
+            torch.stack(gt_idx_layers, dim=0),
+        )
 
     def _forward_group_legacy(
         self,
@@ -339,12 +350,18 @@ class DETRLoss(nn.Module):
         match_indices: list[tuple[torch.Tensor, torch.Tensor]] | None = None,
         layer_match_indices: list[list[tuple[torch.Tensor, torch.Tensor]]] | None = None,
     ) -> dict[str, torch.Tensor]:
-        """Legacy per-layer loss implementation used for fallback and equivalence checks."""
+        """Legacy per-layer loss implementation used for reference and equivalence checks."""
         gt_cls, gt_bboxes, gt_groups = batch["cls"], batch["bboxes"], batch["gt_groups"]
 
         if layer_match_indices is None:
             total_loss = self._get_loss(
-                pred_bboxes[-1], pred_scores[-1], gt_bboxes, gt_cls, gt_groups, postfix=postfix, match_indices=match_indices
+                pred_bboxes[-1],
+                pred_scores[-1],
+                gt_bboxes,
+                gt_cls,
+                gt_groups,
+                postfix=postfix,
+                match_indices=match_indices,
             )
             if self.aux_loss:
                 total_loss.update(
@@ -356,7 +373,9 @@ class DETRLoss(nn.Module):
 
         num_layers = int(pred_bboxes.shape[0])
         if len(layer_match_indices) != num_layers:
-            return self._forward_group_legacy(pred_bboxes, pred_scores, batch, postfix=postfix, match_indices=match_indices)
+            return self._forward_group_legacy(
+                pred_bboxes, pred_scores, batch, postfix=postfix, match_indices=match_indices
+            )
 
         total_loss = self._get_loss(
             pred_bboxes[-1],
@@ -400,13 +419,23 @@ class DETRLoss(nn.Module):
         layer_match_indices: list[list[tuple[torch.Tensor, torch.Tensor]]],
     ) -> dict[str, torch.Tensor]:
         """Batched tensor loss path with serial Hungarian indices."""
+        ascend_npu = IS_ASCEND and pred_bboxes.device.type == "npu"
         if len(layer_match_indices) != int(pred_bboxes.shape[0]):
+            if ascend_npu:
+                raise RuntimeError(
+                    "Ascend NPU RT-DETR batched loss 要求每个预测层都有一组匹配索引；"
+                    f"当前 {len(layer_match_indices)} 组索引对应 {int(pred_bboxes.shape[0])} 个预测层。"
+                )
             return self._forward_group_legacy(
                 pred_bboxes, pred_scores, batch, postfix=postfix, layer_match_indices=layer_match_indices
             )
 
         packed_indices = self._pack_layer_indices(layer_match_indices)
         if packed_indices is None:
+            if ascend_npu:
+                raise RuntimeError(
+                    "Ascend NPU RT-DETR batched loss 要求各预测层匹配数量一致；拒绝通过 legacy 路径隐藏优化失败。"
+                )
             return self._forward_group_legacy(
                 pred_bboxes, pred_scores, batch, postfix=postfix, layer_match_indices=layer_match_indices
             )
@@ -422,7 +451,9 @@ class DETRLoss(nn.Module):
         gt_idx_box = gt_idx.to(gt_bboxes.device)
         gt_idx_cls = gt_idx.to(gt_cls.device)
 
-        layer_idx = torch.arange(num_layers, device=pred_bboxes.device, dtype=torch.long).unsqueeze(1).expand(-1, match_count)
+        layer_idx = (
+            torch.arange(num_layers, device=pred_bboxes.device, dtype=torch.long).unsqueeze(1).expand(-1, match_count)
+        )
 
         if match_count > 0:
             pred_match = pred_bboxes[layer_idx, batch_idx, src_idx]
@@ -478,11 +509,15 @@ class DETRLoss(nn.Module):
                 loss_cls_layer = loss_cls_layer.mean(2).sum((1, 2))
                 loss_cls_layer /= max(match_count, 1) / nq
             else:
-                loss_cls_layer = F.binary_cross_entropy_with_logits(pred_scores, gt_scores, reduction="none").mean(2).sum((1, 2))
+                loss_cls_layer = (
+                    F.binary_cross_entropy_with_logits(pred_scores, gt_scores, reduction="none").mean(2).sum((1, 2))
+                )
         loss_cls_layer = loss_cls_layer * self.loss_gain["class"]
 
         if match_count > 0:
-            loss_bbox_layer = self.loss_gain["bbox"] * F.l1_loss(pred_match, gt_match, reduction="none").sum((1, 2)) / match_count
+            loss_bbox_layer = (
+                self.loss_gain["bbox"] * F.l1_loss(pred_match, gt_match, reduction="none").sum((1, 2)) / match_count
+            )
             loss_giou_layer = 1.0 - bbox_iou(pred_match, gt_match, xywh=True, GIoU=True).squeeze(-1)
             loss_giou_layer = self.loss_gain["giou"] * (loss_giou_layer.sum(1) / match_count)
         else:
@@ -497,14 +532,24 @@ class DETRLoss(nn.Module):
         if self.aux_loss:
             total_loss.update(
                 {
-                    f"loss_class_aux{postfix}": loss_cls_layer[:-1].sum() if num_layers > 1 else loss_cls_layer.new_tensor(0.0),
-                    f"loss_bbox_aux{postfix}": loss_bbox_layer[:-1].sum() if num_layers > 1 else loss_bbox_layer.new_tensor(0.0),
-                    f"loss_giou_aux{postfix}": loss_giou_layer[:-1].sum() if num_layers > 1 else loss_giou_layer.new_tensor(0.0),
+                    f"loss_class_aux{postfix}": loss_cls_layer[:-1].sum()
+                    if num_layers > 1
+                    else loss_cls_layer.new_tensor(0.0),
+                    f"loss_bbox_aux{postfix}": loss_bbox_layer[:-1].sum()
+                    if num_layers > 1
+                    else loss_bbox_layer.new_tensor(0.0),
+                    f"loss_giou_aux{postfix}": loss_giou_layer[:-1].sum()
+                    if num_layers > 1
+                    else loss_giou_layer.new_tensor(0.0),
                 }
             )
 
         if getattr(self, "_enable_loss_finite_guard", False):
             if not all(torch.isfinite(v).all() for v in total_loss.values()):
+                if ascend_npu:
+                    raise RuntimeError(
+                        "Ascend NPU RT-DETR batched loss 产生非有限值；拒绝通过 legacy 路径隐藏优化失败。"
+                    )
                 return self._forward_group_legacy(
                     pred_bboxes, pred_scores, batch, postfix=postfix, layer_match_indices=layer_match_indices
                 )

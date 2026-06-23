@@ -10,6 +10,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from ultralytics.utils.checks import IS_ASCEND
 from ultralytics.utils.metrics import CITYSCAPES_WEIGHT, OKS_SIGMA, RLE_WEIGHT
 from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
 from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, dist2bbox, dist2rbox, make_anchors
@@ -17,6 +18,18 @@ from ultralytics.utils.torch_utils import autocast
 
 from .metrics import bbox_iou, probiou
 from .tal import bbox2dist, rbox2dist
+
+
+def npu_confusion_transpose_or_permute(x: torch.Tensor) -> torch.Tensor:
+    """Use Ascend fused transpose+view for YOLO head tensors, otherwise keep the PyTorch path."""
+    if IS_ASCEND and x.device.type == "npu":
+        import torch_npu
+
+        fn = getattr(torch_npu, "npu_confusion_transpose", None)
+        if fn is None:
+            raise RuntimeError("Ascend YOLO loss requires torch_npu.npu_confusion_transpose.")
+        return fn(x, (0, 2, 1), (x.shape[0], x.shape[2], x.shape[1]), transpose_first=True)
+    return x.permute(0, 2, 1).contiguous()
 
 
 class VarifocalLoss(nn.Module):
@@ -371,6 +384,18 @@ class v8DetectionLoss:
         )
         self.bbox_loss = BboxLoss(m.reg_max).to(device)
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
+        self._anchor_cache_key = None
+        self._anchor_cache = None
+
+    def get_anchor_points_and_stride(self, feats: list[torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return anchor points and stride tensor, caching fixed-shape NPU training tensors."""
+        if IS_ASCEND and feats[0].device.type == "npu":
+            key = tuple((feat.shape[2], feat.shape[3], feat.dtype, feat.device.index) for feat in feats)
+            if key != self._anchor_cache_key:
+                self._anchor_cache = make_anchors(feats, self.stride, 0.5)
+                self._anchor_cache_key = key
+            return self._anchor_cache
+        return make_anchors(feats, self.stride, 0.5)
 
     def preprocess(self, targets: torch.Tensor, batch_size: int, scale_tensor: torch.Tensor) -> torch.Tensor:
         """Preprocess targets by converting to tensor format and scaling coordinates."""
@@ -379,12 +404,11 @@ class v8DetectionLoss:
             out = torch.zeros(batch_size, 0, ne - 1, device=self.device)
         else:
             batch_idx = targets[:, 0].long()  # image index
-            _, counts = batch_idx.unique(return_counts=True)
-            counts = counts.to(dtype=torch.int32)
+            counts = torch.zeros(batch_size, dtype=torch.int32, device=self.device)
+            counts.scatter_add_(0, batch_idx, torch.ones_like(batch_idx, dtype=torch.int32))
             out = torch.zeros(batch_size, counts.max(), ne - 1, device=self.device)
             offsets = torch.zeros(batch_size + 1, dtype=torch.long, device=self.device)
-            offsets.scatter_add_(0, batch_idx + 1, torch.ones_like(batch_idx))
-            offsets = offsets.cumsum(0)
+            offsets[1:] = counts.to(torch.long).cumsum(0)
             within_idx = torch.arange(nl, device=self.device) - offsets[batch_idx]
             out[batch_idx, within_idx] = targets[:, 1:]
             out[..., 1:5] = xywh2xyxy(out[..., 1:5].mul_(scale_tensor))
@@ -405,10 +429,10 @@ class v8DetectionLoss:
         """
         loss = torch.zeros(3, device=self.device)  # box, cls, dfl
         pred_distri, pred_scores = (
-            preds["boxes"].permute(0, 2, 1).contiguous(),
-            preds["scores"].permute(0, 2, 1).contiguous(),
+            npu_confusion_transpose_or_permute(preds["boxes"]),
+            npu_confusion_transpose_or_permute(preds["scores"]),
         )
-        anchor_points, stride_tensor = make_anchors(preds["feats"], self.stride, 0.5)
+        anchor_points, stride_tensor = self.get_anchor_points_and_stride(preds["feats"])
 
         dtype = pred_scores.dtype
         batch_size = pred_scores.shape[0]
@@ -432,7 +456,10 @@ class v8DetectionLoss:
             mask_gt,
         )
 
-        target_scores_sum = max(target_scores.sum(), 1)
+        if IS_ASCEND and target_scores.device.type == "npu":
+            target_scores_sum = target_scores.sum().clamp_min(1)
+        else:
+            target_scores_sum = max(target_scores.sum(), 1)
 
         # Cls loss with optional class weighting
         bce_loss = self.bce(pred_scores, target_scores.to(dtype))  # (bs, num_anchors, nc)

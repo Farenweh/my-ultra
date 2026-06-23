@@ -1055,7 +1055,7 @@ class RTDETRDetectionModel(DetectionModel):
         # NOTE: preprocess gt_bbox and gt_labels to list.
         bs = img.shape[0]
         batch_idx = batch["batch_idx"]
-        gt_groups = [(batch_idx == i).sum().item() for i in range(bs)]
+        gt_groups = torch.bincount(batch_idx.to(device=img.device, dtype=torch.long), minlength=bs).cpu().tolist()
         targets = {
             "cls": batch["cls"].to(img.device, dtype=torch.long).view(-1),
             "bboxes": batch["bboxes"].to(device=img.device),

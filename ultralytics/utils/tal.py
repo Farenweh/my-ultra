@@ -133,7 +133,10 @@ class TaskAlignedAssigner(nn.Module):
         )
 
         # Assigned target
-        target_labels, target_bboxes, target_scores = self.get_targets(gt_labels, gt_bboxes, target_gt_idx, fg_mask)
+        score_dtype = pd_scores.dtype if pd_scores.device.type == "npu" else None
+        target_labels, target_bboxes, target_scores = self.get_targets(
+            gt_labels, gt_bboxes, target_gt_idx, fg_mask, score_dtype=score_dtype
+        )
 
         # Normalize
         mask_pos = mask_pos.bool()
@@ -191,16 +194,26 @@ class TaskAlignedAssigner(nn.Module):
         overlaps = torch.zeros([self.bs, self.n_max_boxes, na], dtype=pd_bboxes.dtype, device=pd_bboxes.device)
         bbox_scores = torch.zeros([self.bs, self.n_max_boxes, na], dtype=pd_scores.dtype, device=pd_scores.device)
 
-        batch_ind = torch.arange(self.bs, device=pd_scores.device)[:, None]  # b, 1
         # Get the scores of each grid for each gt cls
-        bbox_scores[mask_gt] = pd_scores[batch_ind, :, gt_labels.squeeze(-1).long()][mask_gt]  # b, max_num_obj, h*w
+        if pd_scores.device.type == "npu":
+            labels = gt_labels.long().clamp_min(0).expand(-1, -1, na)
+            bbox_scores = pd_scores.transpose(1, 2).gather(1, labels)
+            bbox_scores.masked_fill_(~mask_gt, 0)
+        else:
+            batch_ind = torch.arange(self.bs, device=pd_scores.device)[:, None]  # b, 1
+            bbox_scores[mask_gt] = pd_scores[batch_ind, :, gt_labels.squeeze(-1).long()][mask_gt]
 
         # (b, max_num_obj, 1, 4), (b, 1, h*w, 4)
         pd_boxes = pd_bboxes.unsqueeze(1).expand(-1, self.n_max_boxes, -1, -1)[mask_gt]
         gt_boxes = gt_bboxes.unsqueeze(2).expand(-1, -1, na, -1)[mask_gt]
         overlaps[mask_gt] = self.iou_calculation(gt_boxes, pd_boxes)
 
-        align_metric = bbox_scores.pow(self.alpha) * overlaps.pow(self.beta)
+        if pd_scores.device.type == "npu" and self.alpha == 0.5 and self.beta == 6.0:
+            overlaps2 = overlaps * overlaps
+            overlaps4 = overlaps2 * overlaps2
+            align_metric = bbox_scores.sqrt() * overlaps4 * overlaps2
+        else:
+            align_metric = bbox_scores.pow(self.alpha) * overlaps.pow(self.beta)
         return align_metric, overlaps
 
     def iou_calculation(self, gt_bboxes, pd_bboxes):
@@ -233,7 +246,10 @@ class TaskAlignedAssigner(nn.Module):
         if topk_mask is None:
             topk_mask = (topk_metrics.max(-1, keepdim=True)[0] > self.eps).expand_as(topk_idxs)
         # (b, max_num_obj, topk)
-        topk_idxs.masked_fill_(~topk_mask, 0)
+        if topk_idxs.device.type == "npu":
+            topk_idxs.mul_(topk_mask)
+        else:
+            topk_idxs.masked_fill_(~topk_mask, 0)
 
         # Count how many of the topk lists select each anchor; scatter_add_ accumulates duplicate indices in one pass
         count_tensor = torch.zeros(metrics.shape, dtype=torch.int8, device=topk_idxs.device)
@@ -243,7 +259,7 @@ class TaskAlignedAssigner(nn.Module):
 
         return count_tensor.to(metrics.dtype)
 
-    def get_targets(self, gt_labels, gt_bboxes, target_gt_idx, fg_mask):
+    def get_targets(self, gt_labels, gt_bboxes, target_gt_idx, fg_mask, score_dtype=None):
         """Compute target labels, target bounding boxes, and target scores for the positive anchor points.
 
         Args:
@@ -254,6 +270,7 @@ class TaskAlignedAssigner(nn.Module):
                 shape (b, h*w), where h*w is the total number of anchor points.
             fg_mask (torch.Tensor): A boolean tensor of shape (b, h*w) indicating the positive (foreground) anchor
                 points.
+            score_dtype (torch.dtype, optional): Target score dtype for NPU execution.
 
         Returns:
             target_labels (torch.Tensor): Target labels for positive anchor points with shape (b, h*w).
@@ -272,14 +289,23 @@ class TaskAlignedAssigner(nn.Module):
         target_labels.clamp_(0)
 
         # 10x faster than F.one_hot()
-        target_scores = torch.zeros(
-            (target_labels.shape[0], target_labels.shape[1], self.num_classes),
-            dtype=torch.int8,
-            device=target_labels.device,
-        )  # (b, h*w, 80)
-        target_scores.scatter_(2, target_labels.unsqueeze(-1), 1)
+        if score_dtype is not None:
+            target_scores = torch.zeros(
+                (target_labels.shape[0], target_labels.shape[1], self.num_classes),
+                dtype=score_dtype,
+                device=target_labels.device,
+            )  # (b, h*w, 80)
+            target_scores.scatter_(2, target_labels.unsqueeze(-1), 1.0)
+            target_scores.mul_(fg_mask[:, :, None])
+        else:
+            target_scores = torch.zeros(
+                (target_labels.shape[0], target_labels.shape[1], self.num_classes),
+                dtype=torch.int8,
+                device=target_labels.device,
+            )  # (b, h*w, 80)
+            target_scores.scatter_(2, target_labels.unsqueeze(-1), 1)
 
-        target_scores = target_scores * (fg_mask[:, :, None] > 0)
+            target_scores = target_scores * (fg_mask[:, :, None] > 0)
 
         return target_labels, target_bboxes, target_scores
 

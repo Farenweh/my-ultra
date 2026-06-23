@@ -128,15 +128,19 @@ class HungarianMatcher(nn.Module):
             pred_bboxes_flat = pred_bboxes.view(-1, 4)
             pred_scores_flat = pred_scores_flat[:, gt_cls]
             if self.use_fl:
-                neg_cost_class = (1 - self.alpha) * (pred_scores_flat**self.gamma) * (
-                    -(1 - pred_scores_flat + 1e-8).log()
+                neg_cost_class = (
+                    (1 - self.alpha) * (pred_scores_flat**self.gamma) * (-(1 - pred_scores_flat + 1e-8).log())
                 )
-                pos_cost_class = self.alpha * ((1 - pred_scores_flat) ** self.gamma) * (-(pred_scores_flat + 1e-8).log())
+                pos_cost_class = (
+                    self.alpha * ((1 - pred_scores_flat) ** self.gamma) * (-(pred_scores_flat + 1e-8).log())
+                )
                 cost_class = pos_cost_class - neg_cost_class
             else:
                 cost_class = -pred_scores_flat
             cost_bbox = (pred_bboxes_flat.unsqueeze(1) - gt_bboxes.unsqueeze(0)).abs().sum(-1)
-            cost_giou = 1.0 - bbox_iou(pred_bboxes_flat.unsqueeze(1), gt_bboxes.unsqueeze(0), xywh=True, GIoU=True).squeeze(-1)
+            cost_giou = 1.0 - bbox_iou(
+                pred_bboxes_flat.unsqueeze(1), gt_bboxes.unsqueeze(0), xywh=True, GIoU=True
+            ).squeeze(-1)
             C = (
                 self.cost_gain["class"] * cost_class
                 + self.cost_gain["bbox"] * cost_bbox
@@ -160,22 +164,23 @@ class HungarianMatcher(nn.Module):
 
             pred_scores_local = pred_scores.gather(2, gt_cls_pad.unsqueeze(1).expand(-1, nq, -1))
             if self.use_fl:
-                neg_cost_class = (1 - self.alpha) * (pred_scores_local**self.gamma) * (
-                    -(1 - pred_scores_local + 1e-8).log()
-                )
-                pos_cost_class = self.alpha * ((1 - pred_scores_local) ** self.gamma) * (-(pred_scores_local + 1e-8).log())
+                pred_scores_inv = 1 - pred_scores_local
+                neg_cost_class = (1 - self.alpha) * (pred_scores_local**self.gamma) * (-(pred_scores_inv + 1e-8).log())
+                pos_cost_class = self.alpha * (pred_scores_inv**self.gamma) * (-(pred_scores_local + 1e-8).log())
                 cost_class = pos_cost_class - neg_cost_class
             else:
                 cost_class = -pred_scores_local
 
             cost_bbox = (pred_bboxes.unsqueeze(2) - gt_bboxes_pad.unsqueeze(1)).abs().sum(-1)
-            cost_giou = 1.0 - bbox_iou(pred_bboxes.unsqueeze(2), gt_bboxes_pad.unsqueeze(1), xywh=True, GIoU=True).squeeze(-1)
+            cost_giou = 1.0 - bbox_iou(
+                pred_bboxes.unsqueeze(2), gt_bboxes_pad.unsqueeze(1), xywh=True, GIoU=True
+            ).squeeze(-1)
             C = (
                 self.cost_gain["class"] * cost_class
                 + self.cost_gain["bbox"] * cost_bbox
                 + self.cost_gain["giou"] * cost_giou
             )
-            C[C.isnan() | C.isinf()] = 0.0
+            C = torch.nan_to_num(C, nan=0.0, posinf=0.0, neginf=0.0)
             C_np = C.cpu().numpy()
 
         indices = []
@@ -305,26 +310,24 @@ def get_cdn_group(
     dn_bbox = gt_bbox.repeat(2 * num_group, 1)  # 2*num_group*bs*num, 4
     dn_b_idx = b_idx.repeat(2 * num_group).view(-1)  # (2*num_group*bs*num, )
 
-    # Positive and negative mask
-    # (bs*num*num_group, ), the second total_num*num_group part as negative samples
-    neg_idx = torch.arange(total_num * num_group, dtype=torch.long, device=gt_bbox.device) + num_group * total_num
-
     if cls_noise_ratio > 0:
         # Apply class label noise to half of the samples
-        mask = torch.rand(dn_cls.shape) < (cls_noise_ratio * 0.5)
-        idx = torch.nonzero(mask).squeeze(-1)
-        # Randomly assign new class labels
-        new_label = torch.randint_like(idx, 0, num_classes, dtype=dn_cls.dtype, device=dn_cls.device)
-        dn_cls[idx] = new_label
+        mask = torch.rand(dn_cls.shape, device=dn_cls.device) < (cls_noise_ratio * 0.5)
+        new_label = torch.randint(0, num_classes, dn_cls.shape, dtype=dn_cls.dtype, device=dn_cls.device)
+        dn_cls = torch.where(mask, new_label, dn_cls)
 
     if box_noise_scale > 0:
         known_bbox = xywh2xyxy(dn_bbox)
 
-        diff = (dn_bbox[..., 2:] * 0.5).repeat(1, 2) * box_noise_scale  # 2*num_group*bs*num, 4
+        half_wh = dn_bbox[..., 2:] * (0.5 * box_noise_scale)
+        diff = torch.cat((half_wh, half_wh), dim=-1)  # 2*num_group*bs*num, 4
 
         rand_sign = torch.randint_like(dn_bbox, 0, 2) * 2.0 - 1.0
         rand_part = torch.rand_like(dn_bbox)
-        rand_part[neg_idx] += 1.0
+        neg_mask = (
+            torch.arange(dn_bbox.shape[0], dtype=torch.long, device=dn_bbox.device) >= (num_group * total_num)
+        ).to(dtype=rand_part.dtype)
+        rand_part = rand_part + neg_mask.unsqueeze(-1)
         rand_part *= rand_sign
         known_bbox += rand_part * diff
         known_bbox.clip_(min=0.0, max=1.0)
