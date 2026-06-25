@@ -1284,6 +1284,9 @@ if IS_ASCEND:
     USE_ASCEND_INTERNAL_FORMAT: bool | None = (
         None if "USE_ASCEND_INTERNAL_FORMAT" not in os.environ else os.environ["USE_ASCEND_INTERNAL_FORMAT"] == "1"
     )
+    USE_ASCEND_DDP_BUFFER_ALIGN: bool | None = (
+        None if "USE_ASCEND_DDP_BUFFER_ALIGN" not in os.environ else os.environ["USE_ASCEND_DDP_BUFFER_ALIGN"] == "1"
+    )
 
     os.environ.setdefault("TASK_QUEUE_ENABLE", "2")
     os.environ.setdefault("ACLNN_CACHE_LIMIT", "500000")
