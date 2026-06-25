@@ -19,6 +19,26 @@ class RTDETRDetectionModel(nn.Module):
         return self.linear(x)
 
 
+class DDPBufferModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.register_buffer("bn_float_buffers", torch.zeros(249344 // 4, dtype=torch.float32))
+        self.register_buffer("bn_count_buffers", torch.zeros(1336 // 8, dtype=torch.int64))
+
+
+def _padding_buffers(model):
+    return {
+        name: buffer for name, buffer in model.named_buffers() if name.startswith(BaseTrainer._DDP_BUFFER_ALIGN_PREFIX)
+    }
+
+
+def _buffer_bytes_by_dtype(model):
+    bytes_by_dtype = {}
+    for buffer in model.buffers():
+        bytes_by_dtype[buffer.dtype] = bytes_by_dtype.get(buffer.dtype, 0) + buffer.numel() * buffer.element_size()
+    return bytes_by_dtype
+
+
 def _capture_ddp_kwargs(monkeypatch, model, compile):
     trainer = object.__new__(BaseTrainer)
     trainer.args = SimpleNamespace(
@@ -149,3 +169,81 @@ def test_resolve_ddp_gradient_as_bucket_view_disabled_for_ascend_fused_optimizer
     monkeypatch.setattr(trainer_module, "USE_ASCEND_FUSED_OPTIMIZER", True)
 
     assert BaseTrainer._resolve_ddp_gradient_as_bucket_view() is False
+
+
+def test_align_ddp_broadcast_buffers_pads_each_dtype_for_per_rank_alignment(monkeypatch):
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", True)
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_DDP_BUFFER_ALIGN", True)
+    model = DDPBufferModel()
+
+    padding = BaseTrainer._align_ddp_broadcast_buffers(model, world_size=2)
+
+    bytes_by_dtype = _buffer_bytes_by_dtype(model)
+    assert bytes_by_dtype[torch.float32] % 1024 == 0
+    assert bytes_by_dtype[torch.int64] % 1024 == 0
+    assert sorted(padding.values()) == [512, 712]
+    assert sorted(buffer.numel() * buffer.element_size() for buffer in _padding_buffers(model).values()) == [
+        512,
+        712,
+    ]
+
+
+def test_align_ddp_broadcast_buffers_padding_is_not_persistent(monkeypatch):
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", True)
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_DDP_BUFFER_ALIGN", True)
+    model = DDPBufferModel()
+
+    BaseTrainer._align_ddp_broadcast_buffers(model, world_size=2)
+
+    assert _padding_buffers(model)
+    assert not any(name.startswith(BaseTrainer._DDP_BUFFER_ALIGN_PREFIX) for name in model.state_dict())
+
+
+def test_align_ddp_broadcast_buffers_skips_when_disabled(monkeypatch):
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", True)
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_DDP_BUFFER_ALIGN", False)
+    model = DDPBufferModel()
+
+    padding = BaseTrainer._align_ddp_broadcast_buffers(model, world_size=2)
+
+    assert padding == {}
+    assert _padding_buffers(model) == {}
+
+
+def test_align_ddp_broadcast_buffers_skips_outside_ascend(monkeypatch):
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", False)
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_DDP_BUFFER_ALIGN", True)
+    model = DDPBufferModel()
+
+    padding = BaseTrainer._align_ddp_broadcast_buffers(model, world_size=2)
+
+    assert padding == {}
+    assert _padding_buffers(model) == {}
+
+
+def test_align_ddp_broadcast_buffers_skips_single_process(monkeypatch):
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", True)
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_DDP_BUFFER_ALIGN", True)
+    model = DDPBufferModel()
+
+    padding = BaseTrainer._align_ddp_broadcast_buffers(model, world_size=1)
+
+    assert padding == {}
+    assert _padding_buffers(model) == {}
+
+
+def test_align_ddp_broadcast_buffers_is_idempotent(monkeypatch):
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", True)
+    monkeypatch.setattr(trainer_module, "USE_ASCEND_DDP_BUFFER_ALIGN", True)
+    model = DDPBufferModel()
+
+    BaseTrainer._align_ddp_broadcast_buffers(model, world_size=2)
+    first_padding = _padding_buffers(model)
+    first_total_bytes = sum(buffer.numel() * buffer.element_size() for buffer in model.buffers())
+    BaseTrainer._align_ddp_broadcast_buffers(model, world_size=2)
+    second_padding = _padding_buffers(model)
+    second_total_bytes = sum(buffer.numel() * buffer.element_size() for buffer in model.buffers())
+
+    assert sorted(buffer.numel() * buffer.element_size() for buffer in first_padding.values()) == [512, 712]
+    assert sorted(buffer.numel() * buffer.element_size() for buffer in second_padding.values()) == [512, 712]
+    assert first_total_bytes == second_total_bytes

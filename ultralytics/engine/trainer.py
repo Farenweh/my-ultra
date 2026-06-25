@@ -51,6 +51,7 @@ from ultralytics.utils.checks import (
     EMPTY_VRAM_CACHE,
     IS_ASCEND,
     PROFILE,
+    USE_ASCEND_DDP_BUFFER_ALIGN,
     USE_ASCEND_FUSED_GRAD_CLIP,
     USE_ASCEND_FUSED_OPTIMIZER,
     USE_ASCEND_INTERNAL_FORMAT,
@@ -144,6 +145,8 @@ class BaseTrainer:
         >>> trainer = BaseTrainer(cfg="config.yaml")
         >>> trainer.train()
     """
+
+    _DDP_BUFFER_ALIGN_PREFIX = "_ultralytics_ddp_buffer_align_pad_"
 
     def __init__(self, cfg=DEFAULT_CFG, overrides=None, _callbacks: dict | None = None):
         """Initialize the BaseTrainer class.
@@ -393,6 +396,48 @@ class BaseTrainer:
         """解析 DDP 梯度是否可以复用通信 bucket view。"""
         return not (IS_ASCEND and USE_ASCEND_FUSED_OPTIMIZER)
 
+    @staticmethod
+    def _align_ddp_broadcast_buffers(
+        model: nn.Module, world_size: int, alignment_bytes: int = 512
+    ) -> dict[tuple[torch.device, torch.dtype], int]:
+        """为 DDP buffer broadcast 注册非持久化 padding，保证每链路传输按字节对齐。"""
+        prefix = BaseTrainer._DDP_BUFFER_ALIGN_PREFIX
+        for name in [name for name in model._buffers if name.startswith(prefix)]:
+            del model._buffers[name]
+
+        if not (IS_ASCEND and USE_ASCEND_DDP_BUFFER_ALIGN and world_size > 1 and alignment_bytes > 0):
+            return {}
+
+        target_bytes = alignment_bytes * world_size
+        grouped_bytes: dict[tuple[torch.device, torch.dtype], int] = {}
+        examples: dict[tuple[torch.device, torch.dtype], torch.Tensor] = {}
+        for name, buffer in model.named_buffers():
+            if name.startswith(prefix) or buffer is None or buffer.numel() == 0:
+                continue
+            key = (buffer.device, buffer.dtype)
+            grouped_bytes[key] = grouped_bytes.get(key, 0) + buffer.numel() * buffer.element_size()
+            examples.setdefault(key, buffer)
+
+        padding: dict[tuple[torch.device, torch.dtype], int] = {}
+        for index, (key, total_bytes) in enumerate(
+            sorted(grouped_bytes.items(), key=lambda item: (str(item[0][0]), str(item[0][1])))
+        ):
+            pad_bytes = (-total_bytes) % target_bytes
+            if pad_bytes == 0:
+                continue
+            example = examples[key]
+            element_size = example.element_size()
+            if pad_bytes % element_size:
+                pad_bytes += element_size - pad_bytes % element_size
+            pad_elements = pad_bytes // element_size
+            model.register_buffer(
+                f"{prefix}{index}",
+                torch.zeros(pad_elements, dtype=example.dtype, device=example.device),
+                persistent=False,
+            )
+            padding[key] = pad_bytes
+        return padding
+
     def _resolve_val_batch_size(self, train_batch_size: int) -> int:
         """解析训练期间验证 dataloader 的 batch size。"""
         factor = getattr(self.args, "val_batch_factor", None)
@@ -584,6 +629,12 @@ class BaseTrainer:
         if self.world_size > 1:
             compiled = bool(self.args.compile)
             ddp_kwargs = {"static_graph": compiled} if TORCH_1_11 else {}
+            padding = self._align_ddp_broadcast_buffers(self.model, self.world_size)
+            if padding and RANK in {-1, 0}:
+                LOGGER.info(
+                    "DDP buffer alignment padding: "
+                    + ", ".join(f"{device}/{dtype}: {pad_bytes}B" for (device, dtype), pad_bytes in padding.items())
+                )
             self.model = nn.parallel.DistributedDataParallel(
                 self.model,
                 device_ids=[self.device.index],

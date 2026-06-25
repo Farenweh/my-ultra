@@ -1161,6 +1161,7 @@ USE_ASCEND_FUSED_OPTIMIZER = os.getenv("USE_ASCEND_FUSED_OPTIMIZER", "1") == "1"
 USE_ASCEND_FUSED_GRAD_CLIP = os.getenv("USE_ASCEND_FUSED_GRAD_CLIP", "0") == "1"
 USE_ASCEND_JIT_COMPILE = os.getenv("USE_ASCEND_JIT_COMPILE", "0") == "1"
 USE_ASCEND_INTERNAL_FORMAT = os.getenv("USE_ASCEND_INTERNAL_FORMAT", "1") == "1"
+USE_ASCEND_DDP_BUFFER_ALIGN = os.getenv("USE_ASCEND_DDP_BUFFER_ALIGN", "1") == "1"
 
 _amp_dtype = os.getenv("AMP_DTYPE", "fp16")
 if _amp_dtype in {"float16", "fp16", "half", "FP16"}:
