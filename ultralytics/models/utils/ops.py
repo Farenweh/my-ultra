@@ -349,8 +349,14 @@ def get_cdn_group(
     gt_groups_tensor = torch.as_tensor(gt_groups, dtype=torch.long, device=gt_bbox.device)
     local_indices = torch.arange(max_nums, dtype=torch.long, device=gt_bbox.device).unsqueeze(0).expand(bs, -1)
     local_indices = local_indices[local_indices < gt_groups_tensor.unsqueeze(1)]
-    group_offsets = max_nums * torch.arange(num_group, dtype=torch.long, device=gt_bbox.device).unsqueeze(1)
-    pos_idx = local_indices.unsqueeze(0) + group_offsets
+
+    # Loss 匹配使用 CPU 索引，直接根据已有 Python 分组大小构造，避免每个训练 step 从 NPU 同步回主机。
+    gt_groups_cpu = torch.as_tensor(gt_groups, dtype=torch.long)
+    local_indices_cpu = torch.arange(max_nums, dtype=torch.long).unsqueeze(0).expand(bs, -1)
+    local_indices_cpu = local_indices_cpu[local_indices_cpu < gt_groups_cpu.unsqueeze(1)]
+    group_offsets_cpu = max_nums * torch.arange(num_group, dtype=torch.long).unsqueeze(1)
+    pos_idx_cpu = local_indices_cpu.unsqueeze(0) + group_offsets_cpu
+    dn_pos_idx = [p.reshape(-1) for p in pos_idx_cpu.split(list(gt_groups), dim=1)]
 
     all_offsets = max_nums * torch.arange(2 * num_group, dtype=torch.long, device=gt_bbox.device).unsqueeze(1)
     map_indices = (local_indices.unsqueeze(0) + all_offsets).reshape(-1)
@@ -371,7 +377,7 @@ def get_cdn_group(
             attn_mask[max_nums * 2 * i : max_nums * 2 * (i + 1), max_nums * 2 * (i + 1) : num_dn] = True
             attn_mask[max_nums * 2 * i : max_nums * 2 * (i + 1), : max_nums * 2 * i] = True
     dn_meta = {
-        "dn_pos_idx": [p.reshape(-1) for p in pos_idx.cpu().split(list(gt_groups), dim=1)],
+        "dn_pos_idx": dn_pos_idx,
         "dn_gt_idx": list(gt_idx.cpu().split(list(gt_groups))),  # gt each denoising query reconstructs
         "dn_num_group": num_group,
         "dn_num_split": [num_dn, num_queries],
