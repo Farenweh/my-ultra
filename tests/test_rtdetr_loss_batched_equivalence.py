@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 import torch
 
 from ultralytics.models.utils import loss as loss_module
-from ultralytics.models.utils.loss import RTDETRDetectionLoss
+from ultralytics.models.utils.loss import DETRLoss, RTDETRDetectionLoss
 from ultralytics.models.utils.ops import get_cdn_group
 
 
@@ -163,6 +165,57 @@ def test_rtdetr_loss_batched_matches_legacy_no_gt():
         case["pred_bboxes"], case["pred_scores"], case["batch"], postfix="", layer_match_indices=layer_match_indices
     )
     _assert_loss_dict_close(loss_batched_main, loss_legacy_main)
+
+
+@pytest.mark.parametrize("with_gt", [False, True])
+def test_rtdetr_layer_batched_match_indices_equal_serial(with_gt: bool):
+    """Layer-batched Hungarian 只合并 cost 计算和 D2H，同每层独立求解结果一致。"""
+    case = _build_case(with_gt=with_gt, with_dn=False)
+    criterion = RTDETRDetectionLoss(nc=case["nc"], use_vfl=True, use_uni_match=False)
+    args = (
+        case["pred_bboxes"],
+        case["pred_scores"],
+        case["batch"]["bboxes"],
+        case["batch"]["cls"],
+        case["batch"]["gt_groups"],
+    )
+
+    serial = criterion._collect_match_indices_serial(*args)
+    batched = criterion._collect_match_indices_batched(*args)
+
+    assert len(serial) == len(batched)
+    for serial_layer, batched_layer in zip(serial, batched):
+        assert len(serial_layer) == len(batched_layer)
+        for (serial_src, serial_dst), (batched_src, batched_dst) in zip(serial_layer, batched_layer):
+            assert torch.equal(serial_src, batched_src)
+            assert torch.equal(serial_dst, batched_dst)
+
+
+@pytest.mark.parametrize(("setting", "expected"), [(None, "batched"), (True, "batched"), (False, "serial")])
+def test_rtdetr_layer_batched_hungarian_config_modes(monkeypatch, setting, expected):
+    """Batched Hungarian 未配置时默认启用，显式 0 时回退逐层匹配。"""
+    criterion = DETRLoss(nc=3, use_uni_match=False)
+    predictions = SimpleNamespace(device=SimpleNamespace(type="npu"))
+    batch = {"cls": None, "bboxes": None, "gt_groups": None}
+    calls = []
+
+    monkeypatch.setattr(loss_module, "IS_ASCEND", True)
+    monkeypatch.setattr(loss_module, "USE_BATCHED_HUNGARIAN", setting)
+    monkeypatch.setattr(
+        criterion,
+        "_collect_match_indices_batched",
+        lambda *args, **kwargs: calls.append("batched") or [],
+    )
+    monkeypatch.setattr(
+        criterion,
+        "_collect_match_indices_serial",
+        lambda *args, **kwargs: calls.append("serial") or [],
+    )
+    monkeypatch.setattr(criterion, "_forward_group_batched", lambda *args, **kwargs: {})
+
+    criterion(predictions, predictions, batch)
+
+    assert calls == [expected]
 
 
 @pytest.mark.skipif(
