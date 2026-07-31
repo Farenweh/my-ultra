@@ -151,16 +151,12 @@ class HungarianMatcher(nn.Module):
             C_np = C.view(bs, nq, -1).cpu().numpy()
         else:
             max_gt = int(gt_groups_np.max())
-            gt_bboxes_pad = gt_bboxes.new_zeros((bs, max_gt, 4))
-            gt_cls_pad = gt_cls.new_zeros((bs, max_gt))
-            for bi in range(bs):
-                num_gt = int(gt_groups_np[bi])
-                if num_gt == 0:
-                    continue
-                start = int(gt_offsets_np[bi])
-                end = start + num_gt
-                gt_bboxes_pad[bi, :num_gt] = gt_bboxes[start:end]
-                gt_cls_pad[bi, :num_gt] = gt_cls[start:end]
+            # Padding 列不会进入 solver；一次索引构造替代逐图 NPU setitem，空图位置可安全指向任意有效 GT。
+            pad_indices_np = gt_offsets_np[:, None] + np.arange(max_gt, dtype=np.int64)[None, :]
+            np.minimum(pad_indices_np, len(gt_bboxes) - 1, out=pad_indices_np)
+            pad_indices = torch.from_numpy(pad_indices_np).to(gt_bboxes.device)
+            gt_bboxes_pad = gt_bboxes[pad_indices]
+            gt_cls_pad = gt_cls[pad_indices]
 
             pred_scores_local = pred_scores.gather(2, gt_cls_pad.unsqueeze(1).expand(-1, nq, -1))
             if self.use_fl:

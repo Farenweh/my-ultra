@@ -3,7 +3,7 @@ from __future__ import annotations
 import torch
 
 from ultralytics.models.utils.loss import RTDETRDetectionLoss
-from ultralytics.models.utils.ops import get_cdn_group
+from ultralytics.models.utils.ops import HungarianMatcher, get_cdn_group
 
 
 def test_get_cdn_group_preserves_output_dtypes():
@@ -78,3 +78,32 @@ def test_rtdetr_loss_component_forward():
     assert "loss_class" in losses and "loss_bbox" in losses and "loss_giou" in losses
     assert "loss_class_dn" in losses and "loss_bbox_dn" in losses and "loss_giou_dn" in losses
     assert all(torch.isfinite(v).item() for v in losses.values())
+
+
+def test_hungarian_padding_mixed_empty_groups_matches_per_image():
+    """向量化 padding 在 batch 含空图时应与逐图匹配一致。"""
+    torch.manual_seed(7)
+    matcher = HungarianMatcher(cost_gain={"class": 2, "bbox": 5, "giou": 2})
+    gt_groups = [2, 0, 1]
+    pred_bboxes = torch.rand(3, 32, 4)
+    pred_scores = torch.randn(3, 32, 6)
+    gt_bboxes = torch.rand(sum(gt_groups), 4)
+    gt_cls = torch.randint(0, 6, (sum(gt_groups),), dtype=torch.long)
+
+    batched = matcher(pred_bboxes, pred_scores, gt_bboxes, gt_cls, gt_groups)
+    expected = []
+    offset = 0
+    for index, num_gt in enumerate(gt_groups):
+        expected_src, expected_dst = matcher(
+            pred_bboxes[index : index + 1],
+            pred_scores[index : index + 1],
+            gt_bboxes[offset : offset + num_gt],
+            gt_cls[offset : offset + num_gt],
+            [num_gt],
+        )[0]
+        expected.append((expected_src, expected_dst + offset))
+        offset += num_gt
+
+    for (batched_src, batched_dst), (expected_src, expected_dst) in zip(batched, expected):
+        assert torch.equal(batched_src, expected_src)
+        assert torch.equal(batched_dst, expected_dst)
