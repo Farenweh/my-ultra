@@ -263,8 +263,13 @@ def get_cdn_group(
     padding_cls = torch.zeros(bs, num_dn, dn_cls_embed.shape[-1], device=gt_cls.device, dtype=dn_cls_embed.dtype)
     padding_bbox = torch.zeros(bs, num_dn, 4, device=gt_bbox.device, dtype=dn_bbox.dtype)
 
-    map_indices = torch.cat([torch.tensor(range(num), dtype=torch.long) for num in gt_groups])
-    pos_idx = torch.stack([map_indices + max_nums * i for i in range(num_group)], dim=0)
+    # 保留上游去噪目标截断，并在 CPU 批量构造正样本索引。
+    gt_groups_cpu = torch.as_tensor(gt_groups, dtype=torch.long)
+    local_indices_cpu = torch.arange(max_nums, dtype=torch.long).unsqueeze(0).expand(bs, -1)
+    map_indices = local_indices_cpu[local_indices_cpu < gt_groups_cpu.unsqueeze(1)]
+    group_offsets_cpu = max_nums * torch.arange(num_group, dtype=torch.long).unsqueeze(1)
+    pos_idx_cpu = map_indices.unsqueeze(0) + group_offsets_cpu
+    dn_pos_idx = [p.reshape(-1) for p in pos_idx_cpu.split(list(gt_groups), dim=1)]
 
     map_indices = torch.cat([map_indices + max_nums * i for i in range(2 * num_group)])
     padding_cls[(dn_b_idx, map_indices)] = dn_cls_embed
@@ -284,7 +289,7 @@ def get_cdn_group(
             attn_mask[max_nums * 2 * i : max_nums * 2 * (i + 1), max_nums * 2 * (i + 1) : num_dn] = True
             attn_mask[max_nums * 2 * i : max_nums * 2 * (i + 1), : max_nums * 2 * i] = True
     dn_meta = {
-        "dn_pos_idx": [p.reshape(-1) for p in pos_idx.cpu().split(list(gt_groups), dim=1)],
+        "dn_pos_idx": dn_pos_idx,
         "dn_gt_idx": list(gt_idx.cpu().split(list(gt_groups))),  # gt each denoising query reconstructs
         "dn_num_group": num_group,
         "dn_num_split": [num_dn, num_queries],

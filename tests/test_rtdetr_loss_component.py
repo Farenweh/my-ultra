@@ -31,6 +31,33 @@ def test_get_cdn_group_preserves_output_dtypes():
     assert attn_mask.dtype == torch.bool
 
 
+def test_get_cdn_group_builds_cpu_positive_indices_for_uneven_groups():
+    """Denoising正样本索引应在CPU上构造，并保持不均匀/空图分组语义。"""
+    torch.manual_seed(1)
+    gt_groups = [2, 0, 3]
+    batch = {
+        "cls": torch.randint(0, 10, (sum(gt_groups),), dtype=torch.long),
+        "bboxes": torch.rand(sum(gt_groups), 4),
+        "batch_idx": torch.tensor([0, 0, 2, 2, 2], dtype=torch.long),
+        "gt_groups": gt_groups,
+    }
+    _, _, _, dn_meta = get_cdn_group(
+        batch=batch,
+        num_classes=10,
+        num_queries=32,
+        class_embed=torch.randn(10, 16),
+        num_dn=20,
+        training=True,
+    )
+
+    assert dn_meta is not None
+    max_gt, num_group = max(gt_groups), dn_meta["dn_num_group"]
+    group_offsets = max_gt * torch.arange(num_group).unsqueeze(1)
+    expected = [(torch.arange(num_gt).unsqueeze(0) + group_offsets).reshape(-1) for num_gt in gt_groups]
+    assert all(actual.device.type == "cpu" for actual in dn_meta["dn_pos_idx"])
+    assert all(torch.equal(actual, target) for actual, target in zip(dn_meta["dn_pos_idx"], expected))
+
+
 def test_rtdetr_loss_component_forward():
     torch.manual_seed(0)
     bs = 2
