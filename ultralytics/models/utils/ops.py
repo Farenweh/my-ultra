@@ -99,9 +99,15 @@ class HungarianMatcher(nn.Module):
         if sum(gt_groups) == 0:
             return [(torch.tensor([], dtype=torch.long), torch.tensor([], dtype=torch.long)) for _ in range(bs)]
 
-        # Pad targets to compute costs within each image.
-        gt_bboxes = torch.nn.utils.rnn.pad_sequence(gt_bboxes.split(gt_groups), batch_first=True)
-        gt_cls = torch.nn.utils.rnn.pad_sequence(gt_cls.split(gt_groups), batch_first=True)
+        gt_offsets_np = np.zeros(bs, dtype=np.int64)
+        if bs > 1:
+            gt_offsets_np[1:] = np.cumsum(gt_groups[:-1], dtype=np.int64)
+        # 无效填充列不进入匹配，使用一次索引构造避免逐图设备写入。
+        pad_indices_np = gt_offsets_np[:, None] + np.arange(max(gt_groups), dtype=np.int64)[None, :]
+        np.minimum(pad_indices_np, len(gt_bboxes) - 1, out=pad_indices_np)
+        pad_indices = torch.from_numpy(pad_indices_np).to(gt_bboxes.device)
+        gt_bboxes = gt_bboxes[pad_indices]
+        gt_cls = gt_cls[pad_indices]
         pred_scores = pred_scores.detach()
         pred_scores = pred_scores.sigmoid() if self.use_fl else F.softmax(pred_scores, dim=-1)
         pred_bboxes = pred_bboxes.detach()
@@ -134,9 +140,6 @@ class HungarianMatcher(nn.Module):
         # 代价矩阵复用上游逐图计算，仅合并 CPU 匹配索引的张量构造。
         C_np = C.cpu().numpy()
         indices = [linear_sum_assignment(c[:, :n]) for c, n in zip(C_np, gt_groups)]
-        gt_offsets_np = np.zeros(bs, dtype=np.int64)
-        if bs > 1:
-            gt_offsets_np[1:] = np.cumsum(gt_groups[:-1], dtype=np.int64)
         match_lengths = [len(src_idx) for src_idx, _ in indices]
         total_matches = sum(match_lengths)
         if total_matches == 0:
