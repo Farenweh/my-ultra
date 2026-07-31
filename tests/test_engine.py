@@ -1,6 +1,8 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
 import json
+import os
+import subprocess
 import sys
 import threading
 from collections import OrderedDict
@@ -25,6 +27,16 @@ from ultralytics.utils import ASSETS, DEFAULT_CFG, IS_RASPBERRYPI, WEIGHTS_DIR
 from ultralytics.utils.patches import torch_load
 from ultralytics.utils.tal import TaskAlignedAssigner
 from ultralytics.utils.torch_utils import ModelEMA, strip_optimizer, unwrap_model
+
+
+ASCEND_OPTION_NAMES = (
+    "USE_ASCEND_FUSED_OPTIMIZER",
+    "USE_ASCEND_FUSED_GRAD_CLIP",
+    "USE_ASCEND_JIT_COMPILE",
+    "USE_ASCEND_INTERNAL_FORMAT",
+    "USE_ASCEND_DDP_BUFFER_ALIGN",
+)
+OPTION_NAMES = (*ASCEND_OPTION_NAMES, "USE_BATCHED_HUNGARIAN")
 
 
 def _require_npu_device():
@@ -208,6 +220,58 @@ def test_setup_train_resolves_ascend_runtime_modes(
 
     assert compile_modes == [expected_jit]
     assert npu_config.allow_internal_format is expected_internal
+
+
+@pytest.mark.parametrize(("value", "expected"), [(None, None), ("0", False), ("1", True)])
+def test_ascend_options_parse_as_optional_bools(value, expected):
+    """五项 Ascend 配置和全局 Hungarian 配置应区分未设置与显式 0/1。"""
+    env = os.environ.copy()
+    for name in OPTION_NAMES:
+        env.pop(name, None)
+    for name in OPTION_NAMES:
+        if value is None:
+            continue
+        else:
+            env[name] = value
+    code = (
+        "from types import SimpleNamespace; import json, torch; "
+        "torch.npu = SimpleNamespace(is_available=lambda: True); "
+        "from ultralytics.utils import checks; "
+        f"print(json.dumps([getattr(checks, name) for name in {OPTION_NAMES!r}]))"
+    )
+
+    result = subprocess.run([sys.executable, "-c", code], check=True, capture_output=True, text=True, env=env)
+
+    assert json.loads(result.stdout.splitlines()[-1]) == [expected] * len(OPTION_NAMES)
+
+
+def test_ascend_options_are_hidden_outside_ascend():
+    """非 Ascend 环境不创建五项专用变量，但全局 Hungarian 配置始终可导入。"""
+    env = os.environ.copy()
+    for name in OPTION_NAMES:
+        env.pop(name, None)
+    code = (
+        "from types import SimpleNamespace; import json, torch; "
+        "torch.npu = SimpleNamespace(is_available=lambda: False); "
+        "from ultralytics.utils import checks; from ultralytics.engine import trainer; "
+        "from ultralytics.models.utils import loss; "
+        f"names = {ASCEND_OPTION_NAMES!r}; "
+        "print(json.dumps({"
+        "'checks': [hasattr(checks, name) for name in names], "
+        "'trainer': [hasattr(trainer, name) for name in names], "
+        "'global_checks': checks.USE_BATCHED_HUNGARIAN, "
+        "'global_loss': loss.USE_BATCHED_HUNGARIAN}))"
+    )
+
+    result = subprocess.run([sys.executable, "-c", code], check=True, capture_output=True, text=True, env=env)
+    parsed = json.loads(result.stdout.splitlines()[-1])
+
+    assert parsed == {
+        "checks": [False] * len(ASCEND_OPTION_NAMES),
+        "trainer": [False] * len(ASCEND_OPTION_NAMES),
+        "global_checks": None,
+        "global_loss": None,
+    }
 
 
 def test_optimizer_step_ascend_fused_grad_clip_missing_fails(monkeypatch):

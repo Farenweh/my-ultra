@@ -1259,6 +1259,9 @@ EMPTY_VRAM_CACHE = _parse_env_bool("EMPTY_VRAM_CACHE", False)
 VRAM_TARGET_ENV = os.getenv("VRAM_TARGET")
 VRAM_TARGET = _parse_vram_target(VRAM_TARGET_ENV)
 _validate_vram_target_config(VRAM_TARGET, EMPTY_VRAM_CACHE)
+USE_BATCHED_HUNGARIAN: bool | None = (
+    None if "USE_BATCHED_HUNGARIAN" not in os.environ else os.environ["USE_BATCHED_HUNGARIAN"] == "1"
+)
 
 if IS_ASCEND:
     # NOTE: benchmarked on atlas a800 t2, python3.11, pytorch 2.7.1, cann 8.5.0, b32x8, yolo11l, sgd

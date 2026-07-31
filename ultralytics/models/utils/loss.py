@@ -10,7 +10,7 @@ from torch import nn
 
 from ultralytics.utils.loss import FocalLoss, VarifocalLoss
 from ultralytics.utils.metrics import bbox_iou
-from ultralytics.utils.checks import IS_ASCEND
+from ultralytics.utils.checks import IS_ASCEND, USE_BATCHED_HUNGARIAN
 
 from .ops import HungarianMatcher
 
@@ -305,6 +305,35 @@ class DETRLoss(nn.Module):
             pred_bboxes[-1], pred_scores[-1], gt_bboxes, gt_cls, gt_groups, masks=last_masks, gt_mask=gt_mask
         )
         return [m for m in layer_match_indices if m is not None]
+
+    def _collect_match_indices_batched(
+        self,
+        pred_bboxes: torch.Tensor,
+        pred_scores: torch.Tensor,
+        gt_bboxes: torch.Tensor,
+        gt_cls: torch.Tensor,
+        gt_groups: list[int],
+    ) -> list[list[tuple[torch.Tensor, torch.Tensor]]]:
+        """一次计算所有预测层的 Hungarian cost，保留逐层独立匹配语义。"""
+        num_layers, bs = pred_bboxes.shape[:2]
+        if num_layers <= 1:
+            return [self.matcher(pred_bboxes[-1], pred_scores[-1], gt_bboxes, gt_cls, gt_groups)]
+
+        total_gt = sum(gt_groups)
+        flat_matches = self.matcher(
+            pred_bboxes.flatten(0, 1),
+            pred_scores.flatten(0, 1),
+            gt_bboxes.repeat(num_layers, 1),
+            gt_cls.repeat(num_layers),
+            gt_groups * num_layers,
+        )
+        layer_matches = []
+        for layer in range(num_layers):
+            gt_offset = layer * total_gt
+            layer_matches.append(
+                [(src_idx, dst_idx - gt_offset) for src_idx, dst_idx in flat_matches[layer * bs : (layer + 1) * bs]]
+            )
+        return layer_matches
 
     def _pack_layer_indices(
         self, layer_match_indices: list[list[tuple[torch.Tensor, torch.Tensor]]]
@@ -691,9 +720,20 @@ class DETRLoss(nn.Module):
                 group_bboxes, group_scores, batch, postfix=postfix, match_indices=match_indices
             )
 
-        layer_match_indices = self._collect_match_indices_serial(
-            group_bboxes, group_scores, gt_bboxes, gt_cls, gt_groups, match_indices=match_indices
-        )
+        if (
+            IS_ASCEND
+            and USE_BATCHED_HUNGARIAN is not False
+            and pred_bboxes.device.type == "npu"
+            and match_indices is None
+            and not self.use_uni_match
+        ):
+            layer_match_indices = self._collect_match_indices_batched(
+                group_bboxes, group_scores, gt_bboxes, gt_cls, gt_groups
+            )
+        else:
+            layer_match_indices = self._collect_match_indices_serial(
+                group_bboxes, group_scores, gt_bboxes, gt_cls, gt_groups, match_indices=match_indices
+            )
         return self._forward_group_batched(group_bboxes, group_scores, batch, postfix, layer_match_indices)
 
 
