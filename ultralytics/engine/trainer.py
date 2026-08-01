@@ -17,7 +17,7 @@ import subprocess
 import threading
 import time
 import warnings
-from contextlib import redirect_stdout
+from contextlib import nullcontext, redirect_stdout
 from copy import copy, deepcopy
 from datetime import datetime, timedelta
 from functools import partial
@@ -812,32 +812,35 @@ class BaseTrainer:
                         if "momentum" in x:
                             x["momentum"] = float(np.interp(ni, xi, [self.args.warmup_momentum, self.args.momentum]))
 
-                # Forward
+                # 仅在优化器更新边界同步 DDP 梯度，避免累积微步重复通信。
+                should_step = ni - last_opt_step >= self.accumulate
+                sync_context = self.model.no_sync if self.world_size > 1 and not should_step else nullcontext
                 try:
-                    with autocast(self.amp_enabled, device=self.device.type, dtype=self.amp_dtype):
-                        batch = self.preprocess_batch(batch)
-                        if self.args.compile:
-                            # Decouple inference and loss calculations for improved compile performance
-                            preds = self.model(batch["img"])
-                            loss, self.loss_items = unwrap_model(self.model).loss(batch, preds)
-                        else:
-                            loss, self.loss_items = self.model(batch)
-                        self.loss = loss.sum()
-                        if RANK != -1:
-                            self.loss *= self.world_size
-                        if not self.loss_names:  # derive loss names from the criterion's loss dict on first batch
-                            self.loss_names = tuple(self.loss_items)
-                            if RANK in {-1, 0}:
-                                LOGGER.info(self.progress_string())
-                                self.metrics.update(dict.fromkeys(self.label_loss_items(prefix="val"), 0.0))
-                        self.tloss = (
-                            self.loss_items
-                            if self.tloss is None
-                            else {k: (self.tloss[k] * i + v) / (i + 1) for k, v in self.loss_items.items()}
-                        )
+                    with sync_context():
+                        with autocast(self.amp_enabled, device=self.device.type, dtype=self.amp_dtype):
+                            batch = self.preprocess_batch(batch)
+                            if self.args.compile:
+                                # Decouple inference and loss calculations for improved compile performance
+                                preds = self.model(batch["img"])
+                                loss, self.loss_items = unwrap_model(self.model).loss(batch, preds)
+                            else:
+                                loss, self.loss_items = self.model(batch)
+                            self.loss = loss.sum()
+                            if RANK != -1:
+                                self.loss *= self.world_size
+                            if not self.loss_names:  # derive loss names from the criterion's loss dict on first batch
+                                self.loss_names = tuple(self.loss_items)
+                                if RANK in {-1, 0}:
+                                    LOGGER.info(self.progress_string())
+                                    self.metrics.update(dict.fromkeys(self.label_loss_items(prefix="val"), 0.0))
+                            self.tloss = (
+                                self.loss_items
+                                if self.tloss is None
+                                else {k: (self.tloss[k] * i + v) / (i + 1) for k, v in self.loss_items.items()}
+                            )
 
-                    # Backward
-                    self.scaler.scale(self.loss).backward()
+                        # Backward
+                        self.scaler.scale(self.loss).backward()
                 except RuntimeError as e:
                     is_oom = "out of memory" in str(e).lower()  # torch.cuda.OutOfMemoryError requires torch>=1.13
                     if not is_oom and not any(
@@ -871,7 +874,7 @@ class BaseTrainer:
                     self.optimizer.zero_grad()
                     break  # restart epoch loop with reduced batch size
                 self.global_step = ni + 1
-                if ni - last_opt_step >= self.accumulate:
+                if should_step:
                     self.optimizer_step()
                     last_opt_step = ni
 
