@@ -79,6 +79,7 @@ from ultralytics.nn.modules import (
     v10Detect,
     DINOv2,
     DINOv3ViT,
+    SigLIP2So400M,
     RoPEViT,
 )
 from ultralytics.utils import (
@@ -486,7 +487,7 @@ class DetectionModel(BaseModel):
         # Build strides
         m = self.model[-1]  # Detect()
         if isinstance(m, Detect):  # includes all Detect subclasses like Segment, Pose, OBB, YOLOEDetect, YOLOESegment
-            s = 448  # common multiple of DINOv2/3 patch strides and standard P6 (64-stride) heads
+            s = 448  # DINOv2/3、SigLIP2 patch stride与标准P6（stride 64）检测头的公倍数
             m.inplace = self.inplace
 
             def _forward(x):
@@ -2175,7 +2176,7 @@ def parse_model(d, ch, verbose=True):
         return int(value)
 
     def layer_stride_factor(m, args):
-        if m in frozenset({DINOv2, DINOv3ViT}):
+        if m in frozenset({DINOv2, DINOv3ViT, SigLIP2So400M}):
             return m.feature_stride
         if m in frozenset({AConv, ADown, Focus}):
             return 2
@@ -2281,6 +2282,9 @@ def parse_model(d, ch, verbose=True):
         elif m in frozenset({DINOv2, DINOv3ViT}):
             c1 = ch[f]
             c2 = m.dims(args[0])
+        elif m is SigLIP2So400M:
+            c1 = ch[f]
+            c2 = m.dims()
         elif m in frozenset({RoPEViT}):
             c1 = ch[f]
             c2 = args[0]
