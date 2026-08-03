@@ -279,14 +279,9 @@ class BaseValidator:
             self.run_callbacks("on_val_end")
 
         if self.training:
-            # Reduce loss across all GPUs
-            loss = {k: v.clone().detach() for k, v in self.loss.items()}
-            if trainer.world_size > 1:
-                for v in loss.values():
-                    dist.reduce(v, dst=0, op=dist.ReduceOp.AVG)
-            if RANK > 0:
+            loss = self._reduce_training_loss(trainer)
+            if loss is None:
                 return
-            loss = {k: v.cpu() / len(self.dataloader) for k, v in loss.items()}
             results = {**stats, **trainer.label_loss_items(loss, prefix="val")}
             return {k: round(float(v), 5) for k, v in results.items()}  # return results as 5 decimal place floats
         else:
@@ -305,6 +300,18 @@ class BaseValidator:
             if self.args.plots or self.args.save_json:
                 LOGGER.info(f"Results saved to {colorstr('bold', self.save_dir)}")
             return stats
+
+    def _reduce_training_loss(self, trainer) -> dict[str, torch.Tensor] | None:
+        """Return the global mean validation loss when distributed ranks own unequal batch counts."""
+        loss = {k: v.clone().detach() for k, v in self.loss.items()}
+        batch_count = torch.tensor(float(len(self.dataloader)), device=self.device)
+        if trainer.world_size > 1:
+            for value in (*loss.values(), batch_count):
+                dist.reduce(value, dst=0, op=dist.ReduceOp.SUM)
+        if RANK > 0:
+            return None
+        batch_count = batch_count.clamp_min_(1.0).cpu()
+        return {k: v.cpu() / batch_count for k, v in loss.items()}
 
     def match_predictions(
         self, pred_classes: torch.Tensor, true_classes: torch.Tensor, iou: torch.Tensor, use_scipy: bool = False

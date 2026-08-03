@@ -94,3 +94,70 @@ def test_validator_ddp_unprefixed_device_uses_resolved_backend(monkeypatch):
         validator()
 
     assert captured["device"] == torch.device("npu", 1)
+
+
+@pytest.mark.parametrize(
+    ("local_batches", "local_loss", "remote_batches", "remote_loss", "expected"),
+    (
+        (2, (2.0, 4.0), 2, (2.0, 4.0), (1.0, 2.0)),
+        (2, (2.0, 4.0), 3, (3.0, 6.0), (1.0, 2.0)),
+        (0, (0.0, 0.0), 5, (5.0, 10.0), (1.0, 2.0)),
+        (2, (1.38622, 1.134), 18, (20.79374, 17.01), (1.108998, 0.9072)),
+    ),
+)
+def test_validator_reduces_loss_by_global_batch_count(
+    monkeypatch, local_batches, local_loss, remote_batches, remote_loss, expected
+):
+    validator = object.__new__(BaseValidator)
+    validator.device = torch.device("cpu")
+    validator.dataloader = [None] * local_batches
+    validator.loss = {
+        "box_loss": torch.tensor(local_loss[0]),
+        "cls_loss": torch.tensor(local_loss[1]),
+    }
+    reduced = iter((*remote_loss, float(remote_batches)))
+    ops = []
+
+    def reduce(value, dst, op):
+        ops.append((dst, op))
+        value.add_(next(reduced))
+
+    monkeypatch.setattr(validator_module, "RANK", 0)
+    monkeypatch.setattr(validator_module.dist, "reduce", reduce)
+
+    loss = validator._reduce_training_loss(SimpleNamespace(world_size=4))
+
+    assert torch.isclose(loss["box_loss"], torch.tensor(expected[0]))
+    assert torch.isclose(loss["cls_loss"], torch.tensor(expected[1]))
+    assert ops == [(0, validator_module.dist.ReduceOp.SUM)] * 3
+
+
+def test_validator_single_rank_loss_preserves_local_batch_mean(monkeypatch):
+    validator = object.__new__(BaseValidator)
+    validator.device = torch.device("cpu")
+    validator.dataloader = [None, None]
+    validator.loss = {"box_loss": torch.tensor(3.0)}
+    monkeypatch.setattr(validator_module, "RANK", 0)
+    monkeypatch.setattr(
+        validator_module.dist,
+        "reduce",
+        lambda *_args, **_kwargs: pytest.fail("single-rank validation must not reduce"),
+    )
+
+    loss = validator._reduce_training_loss(SimpleNamespace(world_size=1))
+
+    assert torch.equal(loss["box_loss"], torch.tensor(1.5))
+
+
+def test_validator_nonzero_rank_reduces_before_returning(monkeypatch):
+    validator = object.__new__(BaseValidator)
+    validator.device = torch.device("cpu")
+    validator.dataloader = [None]
+    validator.loss = {"box_loss": torch.tensor(1.0)}
+    calls = []
+    monkeypatch.setattr(validator_module, "RANK", 1)
+    monkeypatch.setattr(validator_module.dist, "reduce", lambda value, dst, op: calls.append((value, dst, op)))
+
+    assert validator._reduce_training_loss(SimpleNamespace(world_size=2)) is None
+    assert len(calls) == 2
+    assert all(dst == 0 and op == validator_module.dist.ReduceOp.SUM for _, dst, op in calls)
