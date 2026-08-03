@@ -1,0 +1,702 @@
+{
+  "环境": {
+    "hardware": "Ascend 910B2 65536 MiB",
+    "python": "3.12.13",
+    "torch": "2.12.0+cpu",
+    "torch_npu": "2.12.0",
+    "torch_npu_git": "fa0f83fe49d309dcbc31e264e9e6ed6e5dc49d2d",
+    "ultralytics": "8.4.114",
+    "git_head": "0a209b1c3895ca497dc122063845e487e1059a72",
+    "cann": "9.1.0-beta.3",
+    "task_queue": 2,
+    "dtype": "fp16"
+  },
+  "迁移状态": {
+    "日期": "2026-08-02",
+    "npu_head": "0bfc29006f323a4feebea9a284885c23d773dea1",
+    "npu_opt_head": "0bfc29006f323a4feebea9a284885c23d773dea1",
+    "有效新增提交": [
+      "cd886700f674c7d629a0d76ba00d050e5336c57f",
+      "038b39b2f6593e8f5648452f03c33dbfc8b7724f",
+      "3877fa5c26743927660a6b7c57107dddc7bc55fd",
+      "e96dc7cba3315b16c49d49af13fcc6207db3dae6",
+      "0bfc29006f323a4feebea9a284885c23d773dea1"
+    ],
+    "材料状态": "测试时为本地非跟踪审计材料；2026-08-03 统一迁入 npu-opt/优化记录并纳入版本控制",
+    "回归环境": "CANN 9.1.0 正式版，torch 2.12.0，torch_npu 2.12.0",
+    "回归结果": "82 项集中测试通过；RT-DETR-L 使用 device=[0,1] 完成双卡 accumulate=2 训练、保存、重载和最终验证"
+  },
+  "固定batch同卡ABBA": {
+    "口径": "每个进程 warmup=20，measure_steps=20，repeats=10；表中汇总为两次 run-level median 的均值",
+    "yolo11l_batch32_物理NPU3": {
+      "A1原代码": {
+        "median_ms": 248.373084,
+        "mean_ms": 248.555836,
+        "throughput": 128.838437
+      },
+      "B1优化后": {
+        "median_ms": 235.246525,
+        "mean_ms": 236.947874,
+        "throughput": 136.027514
+      },
+      "B2优化后": {
+        "median_ms": 234.73608,
+        "mean_ms": 235.021267,
+        "throughput": 136.323312
+      },
+      "A2原代码": {
+        "median_ms": 251.289705,
+        "mean_ms": 251.223557,
+        "throughput": 127.34306
+      },
+      "原代码median均值_ms": 249.831395,
+      "优化后median均值_ms": 234.991303,
+      "加速比": 1.063152,
+      "成对加速比": [1.055799, 1.07052]
+    },
+    "rtdetr_l_batch8_物理NPU5": {
+      "A1原代码": {
+        "median_ms": 244.059926,
+        "mean_ms": 245.450224,
+        "throughput": 32.778835
+      },
+      "B1优化后": {
+        "median_ms": 227.154275,
+        "mean_ms": 228.425106,
+        "throughput": 35.218356
+      },
+      "B2优化后": {
+        "median_ms": 227.96464,
+        "mean_ms": 230.539809,
+        "throughput": 35.093162
+      },
+      "A2原代码": {
+        "median_ms": 241.918819,
+        "mean_ms": 243.021491,
+        "throughput": 33.068945
+      },
+      "原代码median均值_ms": 242.989372,
+      "优化后median均值_ms": 227.559457,
+      "加速比": 1.067806,
+      "成对加速比": [1.074424, 1.061212]
+    }
+  },
+  "batch扫描": {
+    "口径": "合成完整训练 step；用于寻找吞吐/显存拐点，不作为收敛结论",
+    "yolo11l": [
+      {
+        "batch": 32,
+        "median_ms": 234.991303,
+        "throughput": 136.175253,
+        "allocated_MiB": 18868.487
+      },
+      {
+        "batch": 64,
+        "median_ms": 419.36404,
+        "throughput": 152.612036,
+        "allocated_MiB": 37202.832
+      },
+      {
+        "batch": 96,
+        "median_ms": 610.908303,
+        "throughput": 157.14306,
+        "allocated_MiB": 55537.177
+      }
+    ],
+    "rtdetr_l": [
+      {
+        "batch": 8,
+        "median_ms": 227.559457,
+        "throughput": 35.155647,
+        "allocated_MiB": 5278.554
+      },
+      {
+        "batch": 16,
+        "median_ms": 276.058482,
+        "throughput": 57.958734,
+        "allocated_MiB": 9848.928
+      },
+      {
+        "batch": 48,
+        "median_ms": 591.807282,
+        "throughput": 81.107485,
+        "allocated_MiB": 28130.432
+      },
+      {
+        "batch": 80,
+        "median_ms": 939.883805,
+        "throughput": 85.116904,
+        "allocated_MiB": 46411.935
+      }
+    ]
+  },
+  "利用率": {
+    "口径": "从旧 JSON 原始采样按修正版尾部规则重算；独立单次跨卡筛选，只作方向证据",
+    "yolo11l原代码_batch32": {
+      "samples": 95,
+      "AICore_mean": 65.684,
+      "NPU_mean": 85.032
+    },
+    "yolo11l优化后_batch32": {
+      "samples": 88,
+      "AICore_mean": 72.273,
+      "NPU_mean": 91.284
+    },
+    "yolo11l优化后_batch64": {
+      "samples": 24,
+      "AICore_mean": 78.875,
+      "NPU_mean": 95.458
+    },
+    "rtdetr_l原代码_batch8": {
+      "samples": 90,
+      "AICore_mean": 44.9,
+      "NPU_mean": 56.289
+    },
+    "rtdetr_l优化后_batch8": {
+      "samples": 85,
+      "AICore_mean": 47.882,
+      "NPU_mean": 58.024
+    },
+    "rtdetr_l优化后_batch48": {
+      "samples": 33,
+      "AICore_mean": 82.848,
+      "NPU_mean": 88.97
+    }
+  },
+  "逐项验证与提交_2026-07-31": {
+    "代码状态": {
+      "branch": "npu-opt",
+      "base": "0a209b1c3895ca497dc122063845e487e1059a72",
+      "core_optimization_head": "3877fa5c2",
+      "pushed": false
+    },
+    "有效提交": [
+      {
+        "commit": "d9931e58f",
+        "内容": "从Ascend原生迁移提交起支持NPU亲和优化器并自动选择融合梯度裁剪"
+      },
+      {
+        "commit": "3571ba27d",
+        "内容": "添加NPU亲和配置、解析自动策略并保留五项显式Ascend环境配置（npu基线重写）"
+      },
+      {
+        "commit": "ce6ece687",
+        "内容": "将MSDA fast-path缓存收归MSDeformAttn实例（npu基线重写）"
+      },
+      { "commit": "cd886700f", "内容": "向量化RT-DETR Hungarian目标填充" },
+      {
+        "commit": "038b39b2f",
+        "内容": "合并RT-DETR跨层Hungarian代价传输并提供全局开关"
+      },
+      { "commit": "3877fa5c2", "内容": "在CPU构造RT-DETR去噪匹配索引" }
+    ],
+    "Ascend环境默认值": {
+      "策略": "仅在变量不存在时写入默认值，显式值（包括空字符串）均保留",
+      "TASK_QUEUE_ENABLE": "2",
+      "ACLNN_CACHE_LIMIT": "500000",
+      "CPU_AFFINITY_CONF": "1",
+      "PYTORCH_NPU_ALLOC_CONF": "expandable_segments:True",
+      "HOST_CACHE_CAPACITY": "50"
+    },
+    "三态配置": {
+      "未设置": null,
+      "显式0": false,
+      "显式1": true,
+      "可见范围": "五项USE_ASCEND配置仅在Ascend环境创建；USE_BATCHED_HUNGARIAN全局可见",
+      "自动策略": {
+        "USE_ASCEND_FUSED_GRAD_CLIP": "融合优化器未被禁用且优化器提供融合裁剪方法时启用，否则标准裁剪",
+        "USE_ASCEND_FUSED_OPTIMIZER": "融合类存在时使用，不存在时回退标准优化器",
+        "USE_ASCEND_JIT_COMPILE": false,
+        "USE_ASCEND_INTERNAL_FORMAT": true,
+        "USE_BATCHED_HUNGARIAN": "满足Ascend NPU、匹配模式和输入条件时启用",
+        "USE_ASCEND_DDP_BUFFER_ALIGN": "多卡Ascend训练时启用"
+      }
+    },
+    "正式ABBA": {
+      "yolo11l_batch32_融合梯度裁剪": {
+        "A普通裁剪_ms": 248.747818,
+        "B融合裁剪_ms": 231.170822,
+        "加速比": 1.076035,
+        "A吞吐": 128.64438,
+        "B吞吐": 138.425871,
+        "成对加速比": [1.074571, 1.077501],
+        "峰值已分配显存变化_MiB": 96.787109
+      },
+      "rtdetr_l_batch8_跨层Hungarian": {
+        "A逐层cost_D2H_ms": 220.976569,
+        "B合并cost_D2H_ms": 210.001731,
+        "加速比": 1.052261,
+        "A吞吐": 36.203255,
+        "B吞吐": 38.095626,
+        "成对加速比": [1.053647, 1.050887],
+        "峰值已分配显存变化_MiB": 0.0
+      },
+      "rtdetr_l_batch8_MSDA实例缓存": {
+        "A全局缓存_ms": 230.570428,
+        "B实例缓存_ms": 231.812676,
+        "A除以B": 0.994641,
+        "B相对A变化_百分比": 0.538772,
+        "A吞吐": 34.696557,
+        "B吞吐": 34.510624,
+        "成对比值": [0.964197, 1.026521],
+        "峰值已分配显存变化_MiB": 0.004883,
+        "峰值已保留显存变化_MiB": 0.0,
+        "结论": "两对方向相反，实例缓存没有超过1%的稳定退化"
+      }
+    },
+    "微基准": {
+      "Hungarian_padding_batch8": {
+        "旧_ms": 1.04496,
+        "新_ms": 0.216999,
+        "节省_ms": 0.827961
+      },
+      "Hungarian_padding_batch48": {
+        "旧_ms": 5.518729,
+        "新_ms": 0.224682,
+        "节省_ms": 5.294047
+      },
+      "denoising_index_batch8": {
+        "旧_ms": 0.345251,
+        "新_ms": 0.222872,
+        "节省_ms": 0.122378
+      },
+      "denoising_index_batch48": {
+        "旧_ms": 0.719988,
+        "新_ms": 0.623061,
+        "节省_ms": 0.096926
+      }
+    },
+    "否决候选": {
+      "RTDETR预计算gt_groups": {
+        "A_ms": 221.161655,
+        "B_ms": 231.912465,
+        "加速比": 0.953643,
+        "结论": "端到端退化，已撤销且未提交"
+      },
+      "YOLO前景同步与固定常量缓存": {
+        "A_ms": 234.005564,
+        "B_ms": 233.019687,
+        "加速比": 1.004231,
+        "成对加速比": [1.008303, 1.000171],
+        "结论": "第二对无差异，收益不足以抵偿缓存状态复杂度，已撤销且未提交"
+      },
+      "YOLO_DDP关闭unused扫描": {
+        "A_ms": 264.706306,
+        "B_ms": 262.732391,
+        "加速比": 1.007513,
+        "成对加速比": [0.992792, 1.022539],
+        "结论": "两对方向相反，提交已从本地历史移除"
+      }
+    },
+    "正确性验证": {
+      "真实Trainer": "YOLO11-L与RT-DETR-L在coco8上各完成1 epoch、2 iters，退出码均为0",
+      "ascend_optional_bool": "五项USE_ASCEND配置在Ascend环境和全局USE_BATCHED_HUNGARIAN均验证未设置为null、显式0为false、显式1为true",
+      "ascend_visibility": "非Ascend环境不创建五项USE_ASCEND配置，Trainer与Loss可正常导入；USE_BATCHED_HUNGARIAN始终存在",
+      "ascend_default_runtime": "五项Ascend配置和全局Hungarian配置均未设置时，两种模型均自动选择NpuFusedAdamW、关闭JIT并开启internal format",
+      "focused_tests": "三态配置、DDP、RT-DETR、MSDA、deformable encoder与TensorBoard集中回归75 passed，无跳过项",
+      "rtdetr_layer_batched_matching": "有目标和全空目标均与逐层serial索引严格一致",
+      "hungarian_mixed_empty_groups": "gt_groups=[2,0,1]与逐图匹配严格一致",
+      "MSDA_instance_cache": "实际NPU测试确认深拷贝实例隔离、缓存tensor可用于autograd、动态尺寸单条替换，设备或精度迁移时清空",
+      "static_checks": "Ruff format/check、py_compile、git diff --check通过"
+    }
+  },
+  "继续优化_2026-08-01": {
+    "代码状态": {
+      "branch": "npu-opt",
+      "起始head": "3877fa5c26743927660a6b7c57107dddc7bc55fd",
+      "有效优化提交": "e96dc7cba3315b16c49d49af13fcc6207db3dae6",
+      "pushed": false
+    },
+    "正式ABBA": {
+      "口径": "独占物理NPU7；warmup=20，measure_steps=20，repeats=5；A为高级索引，B为query维gather",
+      "rtdetr_l_batch8_decoder_topk_gather": {
+        "A1_ms": 206.801003,
+        "B1_ms": 199.430501,
+        "B2_ms": 205.48297,
+        "A2_ms": 210.167209,
+        "A_median均值_ms": 208.484106,
+        "B_median均值_ms": 202.456735,
+        "A吞吐_images_per_s": 38.37223,
+        "B吞吐_images_per_s": 39.514615,
+        "加速比": 1.029771,
+        "成对加速比": [1.036958, 1.022796],
+        "峰值已分配显存变化_MiB": 0.0,
+        "峰值已保留显存变化_MiB": 0.0
+      },
+      "rtdetr_l_batch48_decoder_topk_gather": {
+        "A_ms": 592.920178,
+        "B_ms": 590.885934,
+        "A吞吐_images_per_s": 80.955248,
+        "B吞吐_images_per_s": 81.233953,
+        "加速比": 1.003443,
+        "峰值已分配显存变化_MiB": 0.0
+      }
+    },
+    "RTDETRL_batch48当前利用率": {
+      "物理NPU": 4,
+      "samples": 53,
+      "median_step_ms": 567.869195,
+      "throughput_images_per_s": 84.526508,
+      "AICore_mean": 88.849057,
+      "AICore_median": 95,
+      "NPU_mean": 92.339623,
+      "NPU_median": 93,
+      "HBM带宽_mean": 42.377358,
+      "峰值已分配显存_MiB": 28130.436523,
+      "峰值已保留显存_MiB": 28662.0,
+      "说明": "独立利用率运行；不同物理卡绝对时延有差异，不与旧卡结果计算因果加速比"
+    },
+    "YOLO11L当前路径": {
+      "batch": 32,
+      "median_step_ms": 232.651693,
+      "throughput_images_per_s": 137.544668,
+      "阶段中位_ms": {
+        "forward_loss": 94.777749,
+        "backward": 128.969766,
+        "unscale_clip": 1.572119,
+        "optimizer_step": 1.064766,
+        "EMA": 5.241609
+      },
+      "利用率": {
+        "samples": 10,
+        "AICore_mean": 74.7,
+        "NPU_mean": 89.5,
+        "AIVector_mean": 42.9,
+        "HBM带宽_mean": 48.2
+      },
+      "结论": "本轮没有新增达到1%稳定收益门槛的YOLO代码改动"
+    },
+    "否决候选": {
+      "YOLO_target_max由CPU提供": {
+        "A_ms": 232.651693,
+        "B_ms": 233.527414,
+        "加速比": 0.99625
+      },
+      "YOLO_TAL无条件冲突消解": {
+        "A_ms": 232.651693,
+        "B_ms": 231.958239,
+        "加速比": 1.002989,
+        "结论": "低于1%且未形成可观测稳定收益"
+      },
+      "torch_npu_branchless_fused_clip": {
+        "A_ms": 233.53121,
+        "B_ms": 237.15798,
+        "加速比": 0.984708,
+        "结论": "退化且仓库侧实现依赖torch_npu私有API"
+      },
+      "异步EMA_stream": {
+        "A_ms": 233.53121,
+        "B_ms": 234.202289,
+        "加速比": 0.997135,
+        "结论": "无收益且增加callback/checkpoint一致性风险"
+      },
+      "静态GradScaler": {
+        "A_ms": 233.53121,
+        "B_ms": 233.229422,
+        "结论": "仅快0.13%，最终loss为NaN"
+      },
+      "YOLO_BF16": {
+        "FP16_ms": 233.649233,
+        "BF16_ms": 303.530845,
+        "加速比": 0.769771,
+        "结论": "反向显著变慢"
+      },
+      "RTDETR_CDN_attention_mask向量化": {
+        "A_ms": 236.016,
+        "B_ms": 240.76,
+        "加速比": 0.980296
+      },
+      "MSDA_im2col_step": {
+        "当前值": 64,
+        "step8_ms": 237.19186,
+        "step32_ms": 215.003747,
+        "结论": "step8退化，step32未优于当前64；跨卡筛查不作为精确加速比"
+      }
+    },
+    "正确性验证": {
+      "decoder_topk_forward": "CPU和910B2 FP16与旧高级索引逐元素完全一致",
+      "decoder_topk_backward": "CPU和910B2 FP16在浮点容差内一致",
+      "focused_tests": "RT-DETR loss、MSDA、deformable encoder和AIFI共25 passed",
+      "真实Trainer": "YOLO11-L与RT-DETR-L均完成coco8 1 epoch/2 iterations、验证、best/last保存及best重载验证；RT-DETR TensorBoard graph trace成功",
+      "pushed": false
+    }
+  },
+  "继续优化_DDP梯度累积_2026-08-01": {
+    "代码状态": {
+      "branch": "npu-opt",
+      "起始head": "e96dc7cba3315b16c49d49af13fcc6207db3dae6",
+      "有效优化提交": "0bfc29006f323a4feebea9a284885c23d773dea1",
+      "pushed": false
+    },
+    "实现": {
+      "内容": "DDP梯度累积的非更新microstep使用no_sync，forward和backward均位于context内",
+      "更新判据": "ni - last_opt_step >= self.accumulate",
+      "无变化路径": ["单卡", "accumulate=1"],
+      "通信次数": "accumulate=2时每个optimizer update由2次梯度同步降为1次",
+      "新增配置": false
+    },
+    "正式MuSGD_ABBA": {
+      "口径": "物理NPU6/7，FP16，TaskQueue2，accumulate=2，GradScaler init_scale=16；warmup=20，5x20个测量microstep；每次60个optimizer update且overflow=0",
+      "yolo11l_每rank_batch16": {
+        "A1_每步同步_ms": 228.951492,
+        "B1_仅更新步同步_ms": 226.156052,
+        "B2_仅更新步同步_ms": 228.620148,
+        "A2_每步同步_ms": 243.799164,
+        "A_median均值_ms": 236.375328,
+        "B_median均值_ms": 227.3881,
+        "加速比": 1.039524,
+        "成对加速比": [1.012361, 1.066394],
+        "A全局吞吐_images_per_s": 135.378,
+        "B全局吞吐_images_per_s": 140.729,
+        "峰值已分配显存_MiB": 9799.696
+      },
+      "rtdetr_l_每rank_batch4": {
+        "A1_每步同步_ms": 260.248199,
+        "B1_仅更新步同步_ms": 235.750473,
+        "B2_仅更新步同步_ms": 244.203583,
+        "A2_每步同步_ms": 254.598434,
+        "A_median均值_ms": 257.423317,
+        "B_median均值_ms": 239.977028,
+        "加速比": 1.0727,
+        "成对加速比": [1.103914, 1.042566],
+        "A全局吞吐_images_per_s": 31.077,
+        "B全局吞吐_images_per_s": 33.337,
+        "峰值已分配显存_MiB": 3119.565
+      }
+    },
+    "稳态利用率复测": {
+      "yolo11l_物理NPU2_每rank_batch16": {
+        "测量microsteps": 200,
+        "A_每步同步": {
+          "microstep_ms": 236.8339,
+          "全局吞吐_images_per_s": 135.1158,
+          "samples": 50,
+          "AICore_mean": 52.0,
+          "AICore_median": 53.5,
+          "NPU_mean": 61.42,
+          "NPU_median": 62.0,
+          "HBM带宽_mean": 20.6,
+          "HBM带宽_median": 20.0
+        },
+        "B_仅更新步同步": {
+          "microstep_ms": 222.1131,
+          "全局吞吐_images_per_s": 144.0707,
+          "samples": 47,
+          "AICore_mean": 46.81,
+          "AICore_median": 47.0,
+          "NPU_mean": 65.02,
+          "NPU_median": 62.0,
+          "HBM带宽_mean": 23.13,
+          "HBM带宽_median": 22.0
+        },
+        "加速比": 1.06628,
+        "说明": "AICore下降包含被删除的HCCL规约工作及采样相位影响；有效吞吐、NPU均值和HBM带宽提高"
+      },
+      "rtdetr_l_物理NPU4_每rank_batch4": {
+        "A_每步同步": {
+          "microstep_ms": 249.4843,
+          "全局吞吐_images_per_s": 32.0662,
+          "samples": 38,
+          "AICore_mean": 32.342,
+          "AICore_median": 30.5,
+          "NPU_mean": 45.842,
+          "NPU_median": 44.0,
+          "HBM带宽_mean": 4.263,
+          "HBM带宽_median": 5.0
+        },
+        "B_仅更新步同步": {
+          "microstep_ms": 232.2106,
+          "全局吞吐_images_per_s": 34.4515,
+          "samples": 35,
+          "AICore_mean": 34.971,
+          "AICore_median": 35.0,
+          "NPU_mean": 45.971,
+          "NPU_median": 44.0,
+          "HBM带宽_mean": 5.6,
+          "HBM带宽_median": 5.0
+        },
+        "加速比": 1.07439
+      }
+    },
+    "算子profile": {
+      "yolo11l_两步设备热点_ms": {
+        "TransData": 47.936,
+        "Conv_forward": 39.407,
+        "Conv_backward": 88.6,
+        "SiluGrad": 31.996,
+        "BN_backward": 48.498
+      },
+      "rtdetr_l_每步设备热点_ms": {
+        "MSDA_forward_backward": 22.705,
+        "TransData": 9.494,
+        "Transpose": 7.559,
+        "Cast": 6.329,
+        "BatchMatMul": 5.128,
+        "Softmax_forward_backward": 2.167,
+        "LayerNorm_forward_backward": 1.872
+      }
+    },
+    "否决候选": {
+      "YOLO_C3k2_forward_split": {
+        "chunk_ms": 237.2196,
+        "split_ms": 236.2294,
+        "加速比": 1.00419,
+        "成对加速比": [1.00918, 0.99911],
+        "结论": "低于1%且两对方向相反"
+      },
+      "RTDETR_npu_fusion_attention": {
+        "A_ms": 196.901,
+        "B_ms": 203.724,
+        "加速比": 0.96651,
+        "显存节省_MiB": 389.4
+      },
+      "RTDETR_loss索引合并H2D": {
+        "A_ms": 196.901,
+        "B_ms": 216.836,
+        "加速比": 0.90807
+      },
+      "npu_add_layer_norm": "AMP混合dtype backward不支持",
+      "MuSGD_grad复用": {
+        "A_ms": 287.194,
+        "B_ms": 290.834,
+        "加速比": 0.98748,
+        "结论": "退化且改变None/zero grad语义"
+      },
+      "MuSGD_foreach标准clip": {
+        "A_ms": 287.194,
+        "B_ms": 287.501,
+        "加速比": 0.99893
+      },
+      "MuSGD合并不同scale正交化bucket": {
+        "A_ms": 53.1265,
+        "B_ms": 64.0984,
+        "加速比": 0.82883
+      }
+    },
+    "正确性验证": {
+      "DDP梯度最大差": 2.9802322387695312e-8,
+      "optimizer_step后参数最大差": 7.450580596923828e-9,
+      "momentum最大差": 2.9802322387695312e-8,
+      "focused_tests": "Trainer DDP、融合裁剪和EMA相关27 passed；独立NPU进程中的RT-DETR、MSDA、deformable encoder、AIFI和NPU算子50 passed",
+      "真实两卡Trainer": "YOLO11-L与RT-DETR-L均以accumulate=2完成coco128 1 epoch/2 microsteps、验证、best/last保存及best重载验证；RT-DETR TensorBoard graph trace成功",
+      "pushed": false
+    }
+  },
+  "继续优化_深度审计_2026-08-01": {
+    "代码状态": {
+      "branch": "npu-opt",
+      "起始head": "0bfc29006f323a4feebea9a284885c23d773dea1",
+      "新增有效代码提交": null,
+      "结论": "本轮候选均未通过完整step稳定收益门槛，仅更新测评报告",
+      "pushed": false
+    },
+    "YOLO标量同步与配置": {
+      "Python层可见_local_scalar_dense_per_step": 7,
+      "来源": {
+        "counts.max": 1,
+        "fg_mask.max": 1,
+        "fg_mask.sum条件": 1,
+        "GradScaler": 3,
+        "fused_clip": 1
+      },
+      "torch_npu内部标量元数据调用约": 411,
+      "说明": "仓库层可见路径均已在前轮测试或属于GradScaler/fused clip，内部调用不经过Python dispatcher",
+      "HF32": {
+        "默认_conv开_matmul关_ms": 234.9282,
+        "全部关闭_ms": 234.9411,
+        "全部开启_ms": 236.9186,
+        "全部开启相对默认": 0.9916,
+        "峰值已分配显存_MiB": 18983.43,
+        "峰值已保留显存_MiB": 19912.0,
+        "结论": "保持torch_npu默认值"
+      },
+      "channels_last": {
+        "状态": "不可用",
+        "错误": "Only contiguous_format or preserve_format is supported (ERR01007)",
+        "结论": "Trainer继续只在CUDA启用"
+      }
+    },
+    "MuSGD宽度分桶": {
+      "理论padding": {
+        "YOLO11L": {
+          "当前buckets": 9,
+          "当前计算放大": 2.8351,
+          "pow2_buckets": 23,
+          "pow2计算放大": 1.0067
+        },
+        "RTDETRL": {
+          "当前buckets": 18,
+          "当前计算放大": 1.7689,
+          "pow2_buckets": 35,
+          "pow2计算放大": 1.0035
+        }
+      },
+      "YOLO11L完整step_batch32": {
+        "当前_ms": 287.7147,
+        "pow2分桶_ms": 296.1359,
+        "pow2加速比": 0.97156,
+        "宽度间隔大于2分桶_ms": 294.9157,
+        "间隔分桶加速比": 0.97558,
+        "峰值已分配显存_MiB": 18774.086,
+        "结论": "额外kernel launch和任务下发成本超过padding计算节省"
+      }
+    },
+    "RTDETR_Hungarian_CPU并行": {
+      "每step分解_ms": {
+        "总计": 3.849,
+        "56次SciPy_solver": 1.03,
+        "cost_enqueue_D2H_pack": 2.826
+      },
+      "CPU微基准_ms": {
+        "串行FP32": 0.991,
+        "串行预转FP64": 0.92,
+        "持久4线程_median": 0.717,
+        "持久4线程_mean": 0.809
+      },
+      "完整step_ABBA_ms": {
+        "A1串行": 200.752,
+        "B1线程池": 228.003,
+        "B2线程池": 200.013,
+        "A2串行": 205.962,
+        "A均值": 203.357,
+        "B均值": 214.008,
+        "成对加速比": [0.8805, 1.0297],
+        "汇总加速比": 0.95023
+      },
+      "正确性": "56组row和column索引逐元素严格一致",
+      "结论": "solver占比过小，线程调度和TaskQueue争用导致完整step退化"
+    },
+    "DDP进一步筛查": {
+      "口径": "2x910B2，YOLO11-L，MuSGD，FP16，no-sync accumulate=2，20个optimizer update，overflow=0",
+      "候选_ms": {
+        "bucket25_viewFalse_staticFalse": 229.864,
+        "bucket25_viewTrue": 231.53,
+        "bucket10": 244.102,
+        "bucket50": 239.316,
+        "bucket100": 255.331
+      },
+      "bucket_view_reserved节省_MiB": 40.0,
+      "static_graph": "与no_sync组合触发expect_autograd_hooks_ reducer internal assert",
+      "结论": "保持25 MiB、gradient_as_bucket_view=False、static_graph=False"
+    },
+    "真实Trainer数据供给": {
+      "模型": "YOLO11-L",
+      "数据": "coco128",
+      "batch": 32,
+      "workers0_fetch_ms": {
+        "median": 555.7997,
+        "mean": 564.6589,
+        "p95": 617.9606,
+        "max": 670.7144
+      },
+      "workers4_fetch_ms": {
+        "median": 0.3153,
+        "mean": 0.3456,
+        "p95": 0.5546,
+        "max": 0.6769
+      },
+      "说明": "当前loader按每轮batch数限制worker；本口径默认workers=8实际使用4个，数据读取与增强已被NPU计算隐藏",
+      "建议": "生产从默认workers开始，不要无故设为0；按存储和CPU配额复测"
+    }
+  }
+}
