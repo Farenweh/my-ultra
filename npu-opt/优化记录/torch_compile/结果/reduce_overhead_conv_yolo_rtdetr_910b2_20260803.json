@@ -1,0 +1,101 @@
+{
+  "记录日期": "2026-08-03",
+  "实验状态": {
+    "状态": "已按要求终止",
+    "临时兼容实现": "已撤回并删除",
+    "原始日志与专用缓存": "已删除",
+    "当前代码是否提供该路径": false,
+    "生产建议": "Eager + TASK_QUEUE_ENABLE=2"
+  },
+  "环境": {
+    "hardware": "Ascend 910B2",
+    "cann": "9.1.0",
+    "torch": "2.12.0",
+    "torch_npu": "2.12.0",
+    "triton_ascend": "3.2.2",
+    "candidate_task_queue": 1,
+    "production_baseline_task_queue": 2
+  },
+  "ConvBNReLU_20M": {
+    "负载": {
+      "blocks": 35,
+      "parameters": 20219392,
+      "input_shape": [2, 64, 32, 32],
+      "dtype": "BF16 AMP",
+      "optimizer": "SGD",
+      "step_scope": "forward + loss + backward + optimizer step"
+    },
+    "正确性": {
+      "steps": 10,
+      "passed": true,
+      "loss_max_abs": 0.0,
+      "gradient_max_abs": 0.0,
+      "parameter_max_abs": 0.0,
+      "bn_running_stats_max_abs": 0.0,
+      "optimizer_state_max_abs": 0.0
+    },
+    "冷启动_ms": {
+      "empty_cache_first_step": 363177.53,
+      "warm_cache_candidate_first_step": 3320.85,
+      "eager_queue2_first_step": 223.34
+    },
+    "Queue1配对测试": {
+      "AB": {
+        "eager_median_step_ms": 24.8635,
+        "candidate_median_step_ms": 11.2907,
+        "speedup": 2.202
+      },
+      "BA": {
+        "eager_median_step_ms": 25.9425,
+        "candidate_median_step_ms": 10.292,
+        "speedup": 2.521
+      }
+    },
+    "独立稳态测试": {
+      "reduce_overhead_queue1": {
+        "median_step_ms": 10.3607,
+        "mean_step_ms": 10.3651,
+        "peak_allocated_MiB": 203.343
+      },
+      "eager_queue2": {
+        "median_step_ms": 17.3768,
+        "mean_step_ms": 17.2138,
+        "peak_allocated_MiB": 203.423
+      },
+      "median_speedup": 1.6772,
+      "median_latency_reduction_percent": 40.38
+    },
+    "利用率": {
+      "reduce_overhead_queue1": {
+        "samples": 20,
+        "aicore_mean_percent": 70.3,
+        "npu_mean_percent": 99.4
+      },
+      "eager_queue2": {
+        "samples": 32,
+        "aicore_mean_percent": 42.96875,
+        "npu_mean_percent": 58.46875
+      }
+    }
+  },
+  "YOLO11L": {
+    "状态": "失败",
+    "首个确定阻塞": "SPPF MaxPool 的 FakeTensor 预期 stride 与 NPU internal-format 实际 stride 不一致",
+    "shape": [1, 256, 4, 4],
+    "expected_stride": [4096, 16, 4, 1],
+    "actual_stride": [4096, 1600, 64, 1],
+    "后续阻塞": [
+      "约 28 个 graph-break 子图",
+      "Expected standard deleter",
+      "ACLop Conv2D capture 失败",
+      "静态地址与原地 autograd 不兼容",
+      "NPUGraph allocator 地址空间不足",
+      "等价 SPPF 改写的 backward Triton kernel 长时间无法完成编译"
+    ]
+  },
+  "RTDETRL": {
+    "状态": "测试被终止",
+    "正确性结论": null,
+    "性能结论": null
+  }
+}
