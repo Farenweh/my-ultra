@@ -109,7 +109,7 @@ from .transformer import (
     TransformerLayer,
     RoPEViT,
 )
-from .backbone import DINOv2, DINOv3ViT
+from .backbone import DINOv2, DINOv3ViT, SigLIP2So400M
 
 __all__ = (
     "AIFI",
@@ -198,5 +198,6 @@ __all__ = (
     "YOLOESegment26",
     "v10Detect",
     "DINOv3ViT",
+    "SigLIP2So400M",
     "RoPEViT",
 )
