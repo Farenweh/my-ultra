@@ -54,7 +54,9 @@ class RopePositionEmbedding(nn.Module):
         )
         self._init_weights()
 
-    def forward(self, *, H: int, W: int) -> tuple[Tensor, Tensor]:
+    def forward(self, *, H: int, W: int, prefix_tokens: int = 0) -> tuple[Tensor, Tensor]:
+        if prefix_tokens < 0:
+            raise ValueError(f"prefix_tokens must be non-negative, got {prefix_tokens}")
         device = self.periods.device
         dtype = self.dtype
         dd = {"device": device, "dtype": dtype}
@@ -103,7 +105,13 @@ class RopePositionEmbedding(nn.Module):
         cos = torch.cos(angles)  # [HW, D]
         sin = torch.sin(angles)  # [HW, D]
 
-        return (sin, cos)  # 2 * [HW, D]
+        # CLS/storage tokens must remain unchanged. Encoding them as an identity rotation lets
+        # attention process the complete sequence without slicing and concatenating Q/K.
+        if prefix_tokens:
+            sin = torch.cat((torch.zeros(prefix_tokens, self.D_head, **dd), sin), dim=0)
+            cos = torch.cat((torch.ones(prefix_tokens, self.D_head, **dd), cos), dim=0)
+
+        return (sin, cos)  # 2 * [prefix_tokens + HW, D]
 
     def _init_weights(self):
         device = self.periods.device
