@@ -219,6 +219,23 @@ class DinoVisionTransformer(nn.Module):
 
         return x, (H, W)
 
+    def _rope_is_stochastic(self) -> bool:
+        """Return whether training deliberately samples new RoPE coordinates for every block."""
+        return self.training and any(
+            value is not None
+            for value in (
+                self.rope_embed.shift_coords,
+                self.rope_embed.jitter_coords,
+                self.rope_embed.rescale_coords,
+            )
+        )
+
+    def _make_rope(self, H: int, W: int) -> tuple[Tensor, Tensor] | None:
+        """Build full-sequence coefficients, including identity rotation for special tokens."""
+        if self.rope_embed is None:
+            return None
+        return self.rope_embed(H=H, W=W, prefix_tokens=self.n_storage_tokens + 1)
+
     def forward_features_list(self, x_list: List[Tensor], masks_list: List[Tensor]) -> List[Dict[str, Tensor]]:
         x = []
         rope = []
@@ -226,9 +243,12 @@ class DinoVisionTransformer(nn.Module):
             t2_x, hw_tuple = self.prepare_tokens_with_masks(t_x, t_masks)
             x.append(t2_x)
             rope.append(hw_tuple)
+        reuse_rope = self.rope_embed is not None and not self._rope_is_stochastic()
+        rope_sincos = [self._make_rope(H, W) for H, W in rope] if reuse_rope else None
         for _, blk in enumerate(self.blocks):
             if self.rope_embed is not None:
-                rope_sincos = [self.rope_embed(H=H, W=W) for H, W in rope]
+                if not reuse_rope:
+                    rope_sincos = [self._make_rope(H, W) for H, W in rope]
             else:
                 rope_sincos = [None for r in rope]
             x = blk(x, rope_sincos)
@@ -271,9 +291,12 @@ class DinoVisionTransformer(nn.Module):
         # If n is an int, take the n last blocks. If it's a list, take them
         output, total_block_len = [], len(self.blocks)
         blocks_to_take = range(total_block_len - n, total_block_len) if isinstance(n, int) else n
+        reuse_rope = self.rope_embed is not None and not self._rope_is_stochastic()
+        rope_sincos = self._make_rope(H, W) if reuse_rope else None
         for i, blk in enumerate(self.blocks):
             if self.rope_embed is not None:
-                rope_sincos = self.rope_embed(H=H, W=W)
+                if not reuse_rope:
+                    rope_sincos = self._make_rope(H, W)
             else:
                 rope_sincos = None
             x = blk(x, rope_sincos)

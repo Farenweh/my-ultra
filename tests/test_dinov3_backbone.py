@@ -7,6 +7,7 @@ import torch
 
 from ultralytics.nn.modules.backbone import DINOv3ViT, resolve_dinov3_weights
 from ultralytics.nn.modules.third_party.dinov3.dinov3.layers.layer_scale import LayerScale
+from ultralytics.nn.modules.third_party.dinov3.dinov3.models.vision_transformer import DinoVisionTransformer
 
 
 def test_dinov3_layer_scale_preserves_fp32_promotion():
@@ -53,3 +54,39 @@ def test_dinov3_boolean_pretrained_uses_official_url(monkeypatch: pytest.MonkeyP
     DINOv3ViT("s", pretrained=True)
 
     assert urls == ["https://dl.fbaipublicfiles.com/dinov3/dinov3_vits16/dinov3_vits16_pretrain_lvd1689m-08c60483.pth"]
+
+
+def test_dinov3_reuses_deterministic_rope_and_preserves_stochastic_training(monkeypatch: pytest.MonkeyPatch):
+    model = DinoVisionTransformer(
+        img_size=32,
+        patch_size=16,
+        embed_dim=64,
+        depth=3,
+        num_heads=1,
+        ffn_ratio=1.0,
+        n_storage_tokens=2,
+        pos_embed_rope_dtype="fp32",
+    )
+    original_forward = model.rope_embed.forward
+    calls = []
+
+    def counted_forward(**kwargs):
+        calls.append(kwargs)
+        return original_forward(**kwargs)
+
+    monkeypatch.setattr(model.rope_embed, "forward", counted_forward)
+    x = torch.randn(1, 3, 32, 32)
+
+    model.eval()
+    model.forward_features(x)
+    assert calls == [{"H": 2, "W": 2, "prefix_tokens": 3}]
+
+    calls.clear()
+    model.train()
+    model.forward_features(x)
+    assert calls == [{"H": 2, "W": 2, "prefix_tokens": 3}]
+
+    calls.clear()
+    model.rope_embed.rescale_coords = 2.0
+    model.forward_features(x)
+    assert calls == [{"H": 2, "W": 2, "prefix_tokens": 3}] * len(model.blocks)
