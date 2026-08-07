@@ -1,0 +1,25 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# 使用PE-Spatial-L/14视觉骨干网络的YOLO11-L目标检测器。
+# 使用model=pe-spatial-yolo11.yaml加载；传入freeze=1可只训练检测neck/head。
+
+nc: 80
+scales:
+  # [深度系数, 宽度系数, 最大通道数]
+  l: [1.00, 1.00, 512]
+
+backbone:
+  # [来源, 重复次数, 模块, 参数]
+  - [-1, 1, PESpatial, [l, True]] # 0-P4/14；imgsz=640会按检测stride调整为644
+
+head:
+  - [0, 1, nn.Upsample, [None, 2, "nearest"]] # 1-P3/7
+  - [-1, 2, C3k2, [256, True]] # 2-P3/7
+
+  - [0, 1, nn.Identity, []] # 3-P4/14
+  - [-1, 2, C3k2, [384, True]] # 4-P4/14
+
+  - [0, 1, Conv, [512, 3, 2]] # 5-P5/28
+  - [-1, 2, C3k2, [512, True]] # 6-P5/28
+
+  - [[2, 4, 6], 1, Detect, [nc]] # Detect(P3, P4, P5)

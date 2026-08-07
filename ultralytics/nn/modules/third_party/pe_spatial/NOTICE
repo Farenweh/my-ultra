@@ -1,0 +1,6 @@
+本目录的视觉编码器实现修改自 facebookresearch/perception_models：
+https://github.com/facebookresearch/perception_models
+
+上游版本：3e352cca660658d4b5c90f42a7808b11469e4c66
+保留内容：PE-Spatial视觉配置、Vision Transformer与2D RoPE。
+本项目修改：移除文本/视频/评测代码，加入检测输出封装、实例缓存和Ascend NPU快路径。
