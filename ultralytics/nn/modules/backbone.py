@@ -27,6 +27,7 @@ from .third_party.dinov3.hubconf import (
     dinov3_vits16,
     dinov3_vits16plus,
 )
+from .third_party.c_radio_v3 import CRADIO_V3_CONFIGS, VisionTransformer as CRADIOv3VisionTransformer
 from .third_party.pe_spatial import PE_SPATIAL_CONFIGS, VisionTransformer as PESpatialVisionTransformer
 
 
@@ -117,6 +118,169 @@ class SigLIP2So400M(nn.Module):
     @staticmethod
     def dims() -> int:
         return 1152
+
+
+class CRADIOv3(nn.Module):
+    """提供检测器友好空间输出的C-RADIOv3 B/L/H/g视觉骨干网络。"""
+
+    def __init__(self, scale: str, pretrained: str | bool = True):
+        super().__init__()
+        if not isinstance(scale, str):
+            raise TypeError(f"scale必须是字符串，但得到的是{type(scale).__name__}")
+        self.scale = scale.lower()
+        if self.scale not in CRADIO_V3_CONFIGS:
+            raise ValueError(f"不存在的C-RADIOv3架构预设{scale!r}，应该为{tuple(CRADIO_V3_CONFIGS)}")
+        if not isinstance(pretrained, (bool, str)):
+            raise TypeError(f"pretrained必须是bool或本地权重路径，但得到的是{type(pretrained).__name__}")
+
+        config = CRADIO_V3_CONFIGS[self.scale]
+        self.input_size_divisor = config.patch_size
+        self.feature_stride = config.patch_size
+        self.preferred_resolution = config.preferred_resolution
+        self.max_resolution = config.max_resolution
+        loading_weights = pretrained is not False
+        self.model = CRADIOv3VisionTransformer(
+            config,
+            initialize=not loading_weights,
+            device="meta" if loading_weights else None,
+        )
+        if loading_weights:
+            self.model.to_empty(device="cpu")
+
+        from timm.data.constants import OPENAI_CLIP_MEAN, OPENAI_CLIP_STD
+
+        self.register_buffer("norm_mean", torch.tensor(OPENAI_CLIP_MEAN).view(3, 1, 1))
+        self.register_buffer("norm_std", torch.tensor(OPENAI_CLIP_STD).view(3, 1, 1))
+        if pretrained is True:
+            from huggingface_hub import hf_hub_download
+
+            checkpoint = hf_hub_download(
+                repo_id=config.repo_id,
+                filename="model.safetensors",
+                revision=config.revision,
+            )
+            self._load_checkpoint(checkpoint)
+        elif isinstance(pretrained, str):
+            checkpoint = Path(pretrained).expanduser()
+            if not checkpoint.is_file():
+                raise FileNotFoundError(f"找不到C-RADIOv3本地权重文件: {checkpoint}")
+            self._load_checkpoint(checkpoint)
+
+    @staticmethod
+    def _map_checkpoint_key(key: str) -> str | None:
+        while key.startswith("module."):
+            key = key.removeprefix("module.")
+        if key == "radio_model.summary_idxs":
+            return None
+        if key.startswith("radio_model.model."):
+            return f"model.{key.removeprefix('radio_model.model.')}"
+        if key == "radio_model.input_conditioner.norm_mean":
+            return "norm_mean"
+        if key == "radio_model.input_conditioner.norm_std":
+            return "norm_std"
+        if key.startswith("base_model."):
+            return f"model.{key.removeprefix('base_model.')}"
+        if key == "input_conditioner.norm_mean":
+            return "norm_mean"
+        if key == "input_conditioner.norm_std":
+            return "norm_std"
+        return key
+
+    def _target_tensors(self) -> dict[str, torch.Tensor]:
+        return {**dict(self.named_parameters()), **dict(self.named_buffers())}
+
+    def _copy_checkpoint_tensors(self, keys, get_tensor) -> None:
+        targets = self._target_tensors()
+        mapped = {}
+        ignored = []
+        for source_key in keys:
+            target_key = self._map_checkpoint_key(source_key)
+            if target_key is None:
+                ignored.append(source_key)
+                continue
+            if target_key in mapped:
+                raise RuntimeError(f"C-RADIOv3 checkpoint中多个权重映射到同一键{target_key!r}")
+            mapped[target_key] = source_key
+        missing = sorted(set(targets) - set(mapped))
+        unexpected = sorted(set(mapped) - set(targets))
+        if missing or unexpected:
+            raise RuntimeError(
+                "C-RADIOv3 checkpoint与模型结构不匹配："
+                f"missing_keys={missing}, unexpected_keys={unexpected}, ignored_keys={ignored}"
+            )
+        with torch.no_grad():
+            for target_key, target in targets.items():
+                source = get_tensor(mapped[target_key])
+                if not isinstance(source, torch.Tensor):
+                    raise TypeError(f"C-RADIOv3 checkpoint键{mapped[target_key]!r}不是Tensor")
+                if source.shape != target.shape:
+                    raise RuntimeError(
+                        f"C-RADIOv3 checkpoint键{mapped[target_key]!r}形状不匹配："
+                        f"checkpoint={tuple(source.shape)}, model={tuple(target.shape)}"
+                    )
+                target.copy_(source.to(dtype=target.dtype))
+
+    def _load_checkpoint(self, checkpoint: str | Path) -> None:
+        checkpoint = Path(checkpoint)
+        if checkpoint.suffix == ".safetensors":
+            from safetensors import safe_open
+
+            with safe_open(checkpoint, framework="pt", device="cpu") as state:
+                self._copy_checkpoint_tensors(state.keys(), state.get_tensor)
+            return
+
+        state = torch.load(checkpoint, map_location="cpu", weights_only=True)
+        if not isinstance(state, dict):
+            raise TypeError(f"C-RADIOv3 checkpoint必须是字典，但得到的是{type(state).__name__}")
+        for container in ("state_dict_ema", "state_dict", "weights"):
+            if isinstance(state.get(container), dict):
+                state = state[container]
+                break
+        self._copy_checkpoint_tensors(state.keys(), state.__getitem__)
+
+    def train(self, mode: bool = True):
+        result = super().train(mode)
+        if hasattr(self, "model"):
+            self.model.frozen_deterministic = bool(mode and not any(p.requires_grad for p in self.parameters()))
+        return result
+
+    def _check_input(self, x: torch.Tensor) -> None:
+        if x.ndim != 4:
+            raise AssertionError(f"CRADIOv3的输入形状应该为BCHW，但得到的是{tuple(x.shape)}")
+        if x.shape[1] != 3:
+            raise AssertionError(f"CRADIOv3要求三通道输入，但得到的是{x.shape[1]}通道")
+        if not torch.is_floating_point(x):
+            raise TypeError(f"CRADIOv3要求浮点输入，但得到的是{x.dtype}")
+        height, width = x.shape[-2:]
+        if height % self.feature_stride or width % self.feature_stride:
+            raise AssertionError(f"CRADIOv3要求输入高度和宽度是16的倍数，但得到的是{(height, width)}")
+        if height > self.max_resolution or width > self.max_resolution:
+            raise ValueError(f"CRADIOv3输入最大边不能超过{self.max_resolution}，但得到的是{(height, width)}")
+
+    def forward_sequence(self, x: torch.Tensor) -> torch.Tensor:
+        self._check_input(x)
+        x = (x - self.norm_mean) / self.norm_std
+        return self.model.forward_features(x)[:, self.model.patch_generator.num_skip :]
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        height, width = x.shape[-2:]
+        sequence = self.forward_sequence(x)
+        grid_h, grid_w = height // self.feature_stride, width // self.feature_stride
+        return sequence.transpose(1, 2).reshape(x.shape[0], self.dims(self.scale), grid_h, grid_w)
+
+    @staticmethod
+    def dims(scale: str) -> int:
+        try:
+            return CRADIO_V3_CONFIGS[scale.lower()].width
+        except (AttributeError, KeyError) as error:
+            raise ValueError(f"不存在的C-RADIOv3架构预设{scale!r}") from error
+
+    @staticmethod
+    def stride(scale: str) -> int:
+        try:
+            return CRADIO_V3_CONFIGS[scale.lower()].patch_size
+        except (AttributeError, KeyError) as error:
+            raise ValueError(f"不存在的C-RADIOv3架构预设{scale!r}") from error
 
 
 class PESpatial(nn.Module):
