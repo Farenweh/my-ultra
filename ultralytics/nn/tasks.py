@@ -79,6 +79,7 @@ from ultralytics.nn.modules import (
     v10Detect,
     DINOv2,
     DINOv3ViT,
+    PESpatial,
     SigLIP2So400M,
     RoPEViT,
 )
@@ -2176,6 +2177,8 @@ def parse_model(d, ch, verbose=True):
         return int(value)
 
     def layer_stride_factor(m, args):
+        if m is PESpatial:
+            return m.stride(args[0])
         if m in frozenset({DINOv2, DINOv3ViT, SigLIP2So400M}):
             return m.feature_stride
         if m in frozenset({AConv, ADown, Focus}):
@@ -2280,6 +2283,9 @@ def parse_model(d, ch, verbose=True):
             c1 = ch[f]
             args = [*args[1:]]
         elif m in frozenset({DINOv2, DINOv3ViT}):
+            c1 = ch[f]
+            c2 = m.dims(args[0])
+        elif m is PESpatial:
             c1 = ch[f]
             c2 = m.dims(args[0])
         elif m is SigLIP2So400M:

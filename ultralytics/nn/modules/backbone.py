@@ -27,6 +27,7 @@ from .third_party.dinov3.hubconf import (
     dinov3_vits16,
     dinov3_vits16plus,
 )
+from .third_party.pe_spatial import PE_SPATIAL_CONFIGS, VisionTransformer as PESpatialVisionTransformer
 
 
 def _is_url(path: str) -> bool:
@@ -116,6 +117,99 @@ class SigLIP2So400M(nn.Module):
     @staticmethod
     def dims() -> int:
         return 1152
+
+
+class PESpatial(nn.Module):
+    """提供检测器友好空间输出的 PE-Spatial T/S/B/L/G 视觉骨干网络。"""
+
+    def __init__(self, scale: str, pretrained: str | bool = True):
+        super().__init__()
+        if not isinstance(scale, str):
+            raise TypeError(f"scale必须是字符串，但得到的是{type(scale).__name__}")
+        self.scale = scale.lower()
+        if self.scale not in PE_SPATIAL_CONFIGS:
+            raise ValueError(f"不存在的PE-Spatial架构预设{scale!r}，应该为{tuple(PE_SPATIAL_CONFIGS)}")
+        config = PE_SPATIAL_CONFIGS[self.scale]
+        self.input_size_divisor = config.patch_size
+        self.feature_stride = config.patch_size
+        self.model = PESpatialVisionTransformer(config)
+
+        if pretrained is True:
+            from huggingface_hub import hf_hub_download
+
+            checkpoint = hf_hub_download(
+                repo_id=f"facebook/{config.checkpoint}",
+                filename=f"{config.checkpoint}.pt",
+            )
+            self._load_checkpoint(checkpoint)
+        elif pretrained is False:
+            pass
+        elif isinstance(pretrained, str):
+            checkpoint = Path(pretrained).expanduser()
+            if not checkpoint.is_file():
+                raise FileNotFoundError(f"找不到PE-Spatial本地权重文件: {checkpoint}")
+            self._load_checkpoint(checkpoint)
+        else:
+            raise TypeError(f"pretrained必须是bool或本地权重路径，但得到的是{type(pretrained).__name__}")
+
+    def _load_checkpoint(self, checkpoint: str | Path) -> None:
+        """严格加载官方视觉 checkpoint，并兼容其历史包装前缀。"""
+        state = torch.load(checkpoint, map_location="cpu", weights_only=True)
+        if not isinstance(state, dict):
+            raise TypeError(f"PE-Spatial checkpoint必须是字典，但得到的是{type(state).__name__}")
+        if isinstance(state.get("state_dict"), dict):
+            state = state["state_dict"]
+        elif isinstance(state.get("weights"), dict):
+            state = state["weights"]
+
+        state = {key.removeprefix("module."): value for key, value in state.items()}
+        if any(key.startswith("visual.") for key in state):
+            state = {key.removeprefix("visual."): value for key, value in state.items() if key.startswith("visual.")}
+        incompatible = self.model.load_state_dict(state, strict=False)
+        if incompatible.missing_keys or incompatible.unexpected_keys:
+            raise RuntimeError(
+                "PE-Spatial checkpoint与模型结构不匹配："
+                f"missing_keys={incompatible.missing_keys}, unexpected_keys={incompatible.unexpected_keys}"
+            )
+
+    def _check_input(self, x: torch.Tensor) -> None:
+        if x.ndim != 4:
+            raise AssertionError(f"PESpatial的输入形状应该为BCHW，但得到的是{tuple(x.shape)}")
+        if x.shape[1] != 3:
+            raise AssertionError(f"PESpatial要求三通道输入，但得到的是{x.shape[1]}通道")
+        if not torch.is_floating_point(x):
+            raise TypeError(f"PESpatial要求浮点输入，但得到的是{x.dtype}")
+        height, width = x.shape[-2:]
+        if height % self.feature_stride or width % self.feature_stride:
+            raise AssertionError(
+                f"PE-Spatial-{self.scale.upper()}要求输入高度和宽度是{self.feature_stride}的倍数，"
+                f"但得到的是{(height, width)}"
+            )
+
+    def forward_sequence(self, x: torch.Tensor) -> torch.Tensor:
+        self._check_input(x)
+        x = x.mul(2.0).sub(1.0)
+        return self.model.forward_features(x, norm=False, strip_cls_token=True)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        height, width = x.shape[-2:]
+        sequence = self.forward_sequence(x)
+        grid_h, grid_w = height // self.feature_stride, width // self.feature_stride
+        return sequence.transpose(1, 2).reshape(x.shape[0], self.dims(self.scale), grid_h, grid_w)
+
+    @staticmethod
+    def dims(scale: str) -> int:
+        try:
+            return PE_SPATIAL_CONFIGS[scale.lower()].width
+        except (AttributeError, KeyError) as error:
+            raise ValueError(f"不存在的PE-Spatial架构预设{scale!r}") from error
+
+    @staticmethod
+    def stride(scale: str) -> int:
+        try:
+            return PE_SPATIAL_CONFIGS[scale.lower()].patch_size
+        except (AttributeError, KeyError) as error:
+            raise ValueError(f"不存在的PE-Spatial架构预设{scale!r}") from error
 
 
 class DINOv2(nn.Module):

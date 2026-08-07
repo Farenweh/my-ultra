@@ -1,0 +1,608 @@
+{
+  "environment": {
+    "torch": "2.12.0+cpu",
+    "torch_npu": "2.12.0",
+    "device": "Ascend910B2",
+    "amp": "fp16",
+    "jit_compile": false
+  },
+  "model": {
+    "variant": "PE-Spatial-L14-448",
+    "parameters": 303964160
+  },
+  "inference": {
+    "448": {
+      "original_manual": {
+        "median_ms": 27.03258791938424,
+        "speedup_vs_original": 1.0,
+        "runs": [
+          {
+            "milliseconds_per_step": 27.03258791938424,
+            "peak_allocated_mib": 1201.060546875,
+            "utilization": {
+              "samples": 3,
+              "aicore_mean": 73.66666666666667,
+              "npu_mean": 70.66666666666667
+            }
+          },
+          {
+            "milliseconds_per_step": 28.232438671402633,
+            "peak_allocated_mib": 1201.060546875,
+            "utilization": {
+              "samples": 3,
+              "aicore_mean": 69.33333333333333,
+              "npu_mean": 71.66666666666667
+            }
+          },
+          {
+            "milliseconds_per_step": 26.815879161003977,
+            "peak_allocated_mib": 1201.060546875,
+            "utilization": {
+              "samples": 3,
+              "aicore_mean": 74.33333333333333,
+              "npu_mean": 70.66666666666667
+            }
+          }
+        ]
+      },
+      "cached_manual": {
+        "median_ms": 24.465205890592188,
+        "speedup_vs_original": 1.10494013581056,
+        "runs": [
+          {
+            "milliseconds_per_step": 25.5463986704126,
+            "peak_allocated_mib": 1201.060546875,
+            "utilization": {
+              "samples": 3,
+              "aicore_mean": 75.33333333333333,
+              "npu_mean": 61.666666666666664
+            }
+          },
+          {
+            "milliseconds_per_step": 23.610830230172724,
+            "peak_allocated_mib": 1201.060546875,
+            "utilization": {
+              "samples": 2,
+              "aicore_mean": 84.0,
+              "npu_mean": 73.5
+            }
+          },
+          {
+            "milliseconds_per_step": 24.465205890592188,
+            "peak_allocated_mib": 1201.060546875,
+            "utilization": {
+              "samples": 3,
+              "aicore_mean": 79.0,
+              "npu_mean": 80.0
+            }
+          }
+        ]
+      },
+      "rotary_mul": {
+        "median_ms": 23.716801539994776,
+        "speedup_vs_original": 1.1398074851618545,
+        "runs": [
+          {
+            "milliseconds_per_step": 23.716801539994776,
+            "peak_allocated_mib": 1199.05810546875,
+            "utilization": {
+              "samples": 2,
+              "aicore_mean": 67.5,
+              "npu_mean": 58.5
+            }
+          },
+          {
+            "milliseconds_per_step": 25.506288870237768,
+            "peak_allocated_mib": 1199.05810546875,
+            "utilization": {
+              "samples": 3,
+              "aicore_mean": 65.33333333333333,
+              "npu_mean": 55.666666666666664
+            }
+          },
+          {
+            "milliseconds_per_step": 22.47431698953733,
+            "peak_allocated_mib": 1199.05810546875,
+            "utilization": {
+              "samples": 2,
+              "aicore_mean": 67.5,
+              "npu_mean": 66.5
+            }
+          }
+        ]
+      },
+      "full": {
+        "median_ms": 23.090097890235484,
+        "speedup_vs_original": 1.1707437555219715,
+        "runs": [
+          {
+            "milliseconds_per_step": 23.817117728758603,
+            "peak_allocated_mib": 1199.05810546875,
+            "utilization": {
+              "samples": 2,
+              "aicore_mean": 67.5,
+              "npu_mean": 62.0
+            }
+          },
+          {
+            "milliseconds_per_step": 22.79674166115001,
+            "peak_allocated_mib": 1199.05810546875,
+            "utilization": {
+              "samples": 2,
+              "aicore_mean": 68.5,
+              "npu_mean": 39.5
+            }
+          },
+          {
+            "milliseconds_per_step": 23.090097890235484,
+            "peak_allocated_mib": 1199.05810546875,
+            "utilization": {
+              "samples": 2,
+              "aicore_mean": 71.0,
+              "npu_mean": 68.5
+            }
+          }
+        ]
+      }
+    },
+    "644": {
+      "original_manual": {
+        "median_ms": 28.83759711170569,
+        "speedup_vs_original": 1.0,
+        "runs": [
+          {
+            "milliseconds_per_step": 28.46630070125684,
+            "peak_allocated_mib": 2404.8193359375,
+            "utilization": {
+              "samples": 3,
+              "aicore_mean": 100.0,
+              "npu_mean": 100.0
+            }
+          },
+          {
+            "milliseconds_per_step": 28.83759711170569,
+            "peak_allocated_mib": 2413.08935546875,
+            "utilization": {
+              "samples": 3,
+              "aicore_mean": 100.0,
+              "npu_mean": 100.0
+            }
+          },
+          {
+            "milliseconds_per_step": 28.84535663994029,
+            "peak_allocated_mib": 2413.08935546875,
+            "utilization": {
+              "samples": 3,
+              "aicore_mean": 100.0,
+              "npu_mean": 100.0
+            }
+          }
+        ]
+      },
+      "cached_manual": {
+        "median_ms": 27.796705330256373,
+        "speedup_vs_original": 1.0374465883306077,
+        "runs": [
+          {
+            "milliseconds_per_step": 27.37279276829213,
+            "peak_allocated_mib": 2404.8193359375,
+            "utilization": {
+              "samples": 3,
+              "aicore_mean": 100.0,
+              "npu_mean": 100.0
+            }
+          },
+          {
+            "milliseconds_per_step": 27.822815959807485,
+            "peak_allocated_mib": 2413.08935546875,
+            "utilization": {
+              "samples": 3,
+              "aicore_mean": 100.0,
+              "npu_mean": 100.0
+            }
+          },
+          {
+            "milliseconds_per_step": 27.796705330256373,
+            "peak_allocated_mib": 2413.08935546875,
+            "utilization": {
+              "samples": 3,
+              "aicore_mean": 100.0,
+              "npu_mean": 100.0
+            }
+          }
+        ]
+      },
+      "rotary_mul": {
+        "median_ms": 23.686666109133512,
+        "speedup_vs_original": 1.2174612070284554,
+        "runs": [
+          {
+            "milliseconds_per_step": 23.717519158963114,
+            "peak_allocated_mib": 2396.54833984375,
+            "utilization": {
+              "samples": 2,
+              "aicore_mean": 100.0,
+              "npu_mean": 98.0
+            }
+          },
+          {
+            "milliseconds_per_step": 23.686666109133512,
+            "peak_allocated_mib": 2404.818359375,
+            "utilization": {
+              "samples": 2,
+              "aicore_mean": 100.0,
+              "npu_mean": 100.0
+            }
+          },
+          {
+            "milliseconds_per_step": 23.59633637126535,
+            "peak_allocated_mib": 2404.818359375,
+            "utilization": {
+              "samples": 2,
+              "aicore_mean": 100.0,
+              "npu_mean": 100.0
+            }
+          }
+        ]
+      },
+      "full": {
+        "median_ms": 23.588903530035168,
+        "speedup_vs_original": 1.2225068907924224,
+        "runs": [
+          {
+            "milliseconds_per_step": 23.6148960608989,
+            "peak_allocated_mib": 2404.818359375,
+            "utilization": {
+              "samples": 2,
+              "aicore_mean": 100.0,
+              "npu_mean": 100.0
+            }
+          },
+          {
+            "milliseconds_per_step": 23.588903530035168,
+            "peak_allocated_mib": 2404.818359375,
+            "utilization": {
+              "samples": 2,
+              "aicore_mean": 100.0,
+              "npu_mean": 100.0
+            }
+          },
+          {
+            "milliseconds_per_step": 23.542606399860233,
+            "peak_allocated_mib": 2404.818359375,
+            "utilization": {
+              "samples": 2,
+              "aicore_mean": 100.0,
+              "npu_mean": 100.0
+            }
+          }
+        ]
+      }
+    }
+  },
+  "training": {
+    "448": {
+      "original_manual": {
+        "median_ms": 82.49861529717843,
+        "speedup_vs_original": 1.0,
+        "runs": [
+          {
+            "milliseconds_per_step": 81.96229961079855,
+            "peak_allocated_mib": 2824.228515625,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          },
+          {
+            "milliseconds_per_step": 82.49861529717843,
+            "peak_allocated_mib": 2824.228515625,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          },
+          {
+            "milliseconds_per_step": 82.57590568003555,
+            "peak_allocated_mib": 2824.228515625,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          }
+        ]
+      },
+      "cached_manual": {
+        "median_ms": 79.06074170023203,
+        "speedup_vs_original": 1.04348395326193,
+        "runs": [
+          {
+            "milliseconds_per_step": 78.77643406391144,
+            "peak_allocated_mib": 2800.6826171875,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          },
+          {
+            "milliseconds_per_step": 81.21130902630587,
+            "peak_allocated_mib": 2800.6826171875,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          },
+          {
+            "milliseconds_per_step": 79.06074170023203,
+            "peak_allocated_mib": 2800.6826171875,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          }
+        ]
+      },
+      "rotary_mul": {
+        "median_ms": 69.59494234373172,
+        "speedup_vs_original": 1.1854110732603966,
+        "runs": [
+          {
+            "milliseconds_per_step": 68.74120499317844,
+            "peak_allocated_mib": 2992.8935546875,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          },
+          {
+            "milliseconds_per_step": 70.75972800763945,
+            "peak_allocated_mib": 2992.8935546875,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          },
+          {
+            "milliseconds_per_step": 69.59494234373172,
+            "peak_allocated_mib": 2992.8935546875,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          }
+        ]
+      },
+      "full": {
+        "median_ms": 69.70204963969688,
+        "speedup_vs_original": 1.1835895174335536,
+        "runs": [
+          {
+            "milliseconds_per_step": 69.70204963969688,
+            "peak_allocated_mib": 2992.8935546875,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          },
+          {
+            "milliseconds_per_step": 68.73080499159794,
+            "peak_allocated_mib": 2992.8935546875,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          },
+          {
+            "milliseconds_per_step": 70.92092535458505,
+            "peak_allocated_mib": 2992.8935546875,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          }
+        ]
+      }
+    },
+    "644": {
+      "original_manual": {
+        "median_ms": 88.12648601209123,
+        "speedup_vs_original": 1.0,
+        "runs": [
+          {
+            "milliseconds_per_step": 88.12648601209123,
+            "peak_allocated_mib": 3986.52880859375,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          },
+          {
+            "milliseconds_per_step": 88.04810233414173,
+            "peak_allocated_mib": 3986.52880859375,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          },
+          {
+            "milliseconds_per_step": 88.1273226502041,
+            "peak_allocated_mib": 3986.52880859375,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          }
+        ]
+      },
+      "cached_manual": {
+        "median_ms": 86.83135965839028,
+        "speedup_vs_original": 1.0149154217876606,
+        "runs": [
+          {
+            "milliseconds_per_step": 86.83135965839028,
+            "peak_allocated_mib": 3937.92236328125,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          },
+          {
+            "milliseconds_per_step": 86.4442113476495,
+            "peak_allocated_mib": 3937.92236328125,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          },
+          {
+            "milliseconds_per_step": 87.22078497521579,
+            "peak_allocated_mib": 3937.92236328125,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          }
+        ]
+      },
+      "rotary_mul": {
+        "median_ms": 77.34464706542592,
+        "speedup_vs_original": 1.1393999372386423,
+        "runs": [
+          {
+            "milliseconds_per_step": 77.39774704289933,
+            "peak_allocated_mib": 4334.88330078125,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          },
+          {
+            "milliseconds_per_step": 77.34464706542592,
+            "peak_allocated_mib": 4334.88330078125,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          },
+          {
+            "milliseconds_per_step": 77.10008571545283,
+            "peak_allocated_mib": 4334.88330078125,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          }
+        ]
+      },
+      "full": {
+        "median_ms": 77.28606997989118,
+        "speedup_vs_original": 1.1402635175397142,
+        "runs": [
+          {
+            "milliseconds_per_step": 77.25922965134184,
+            "peak_allocated_mib": 4334.88330078125,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          },
+          {
+            "milliseconds_per_step": 77.3317067263027,
+            "peak_allocated_mib": 4334.88330078125,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          },
+          {
+            "milliseconds_per_step": 77.28606997989118,
+            "peak_allocated_mib": 4334.88330078125,
+            "utilization": {
+              "samples": 0,
+              "aicore_mean": null,
+              "npu_mean": null
+            }
+          }
+        ]
+      }
+    }
+  },
+  "long_window_644": {
+    "method": "正序/逆序两轮；每轮推理200步、训练前后向50步；常驻npu-smi watch每秒采样",
+    "inference": {
+      "original_manual": {
+        "median_ms": 29.773722405079752,
+        "aicore_mean": 99.41666666666666,
+        "npu_mean": 94.33333333333333,
+        "samples": 12
+      },
+      "cached_manual": {
+        "median_ms": 27.879586026072502,
+        "aicore_mean": 100.0,
+        "npu_mean": 99.33333333333334,
+        "samples": 11
+      },
+      "rotary_mul": {
+        "median_ms": 24.774435474537313,
+        "aicore_mean": 99.6,
+        "npu_mean": 92.6,
+        "samples": 10
+      },
+      "full": {
+        "median_ms": 24.147709687240422,
+        "aicore_mean": 98.4,
+        "npu_mean": 95.7,
+        "samples": 10
+      }
+    },
+    "training": {
+      "original_manual": {
+        "median_ms": 85.12240038253367,
+        "aicore_mean": 100.0,
+        "npu_mean": 100.0,
+        "samples": 8
+      },
+      "cached_manual": {
+        "median_ms": 83.99164305057377,
+        "aicore_mean": 100.0,
+        "npu_mean": 100.0,
+        "samples": 8
+      },
+      "rotary_mul": {
+        "median_ms": 74.45463395677507,
+        "aicore_mean": 100.0,
+        "npu_mean": 100.0,
+        "samples": 8
+      },
+      "full": {
+        "median_ms": 74.45466154254973,
+        "aicore_mean": 100.0,
+        "npu_mean": 99.0,
+        "samples": 8
+      }
+    }
+  }
+}
