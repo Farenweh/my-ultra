@@ -8,7 +8,7 @@ from torch import Tensor, nn
 
 
 class CPEPatchGenerator(nn.Module):
-    """C-RADIOv3的patch投影、前缀token和裁剪位置编码。"""
+    """C-RADIO共享的patch投影、前缀token和裁剪位置编码。"""
 
     def __init__(
         self,

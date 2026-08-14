@@ -1,4 +1,4 @@
-"""在Ascend NPU上验证并分解C-RADIOv3-L的CPE缓存和融合attention。"""
+"""在Ascend NPU上验证并分解C-RADIOv4-SO400M的CPE缓存和融合attention。"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import torch
 
-from ultralytics.nn.modules.backbone import CRADIOv3
+from ultralytics.nn.modules.backbone import CRADIOv4
 from ultralytics.nn.modules.third_party.c_radio_v3 import attention as attention_module
 
 
@@ -69,7 +69,7 @@ class NpuUtilizationSampler:
 class ModeController:
     """在不改动模型权重的前提下切换四个消融实现。"""
 
-    def __init__(self, model: CRADIOv3):
+    def __init__(self, model: CRADIOv4):
         self.cpe = model.model.patch_generator
         self.original_base_grid = self.cpe._base_grid
         self.original_position = self.cpe._position
@@ -94,12 +94,12 @@ class ModeController:
         self.cpe._position = (
             self.original_position if use_cache else types.MethodType(self._uncached_position, self.cpe)
         )
-        attention_module.CRADIO_V3_ATTENTION_BACKEND = "auto" if mode in {"fusion", "full"} else "sdpa"
+        attention_module.CRADIO_V4_ATTENTION_BACKEND = "auto" if mode in {"fusion", "full"} else "sdpa"
 
     def restore(self) -> None:
         self.cpe._base_grid = self.original_base_grid
         self.cpe._position = self.original_position
-        attention_module.CRADIO_V3_ATTENTION_BACKEND = "auto"
+        attention_module.CRADIO_V4_ATTENTION_BACKEND = "auto"
 
 
 def synchronize() -> None:
@@ -149,14 +149,16 @@ def measure_repeated(controller, step, args, *, training: bool) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--checkpoint", type=str, default="", help="空值表示从固定Hugging Face revision加载官方L权重")
+    parser.add_argument(
+        "--checkpoint", type=str, default="", help="空值表示从固定Hugging Face revision加载官方SO400M权重"
+    )
     parser.add_argument("--device", type=int, default=0)
     parser.add_argument("--image-sizes", type=int, nargs="+", default=(512, 640, 800))
     parser.add_argument("--training-sizes", type=int, nargs="+", default=(512, 640))
     parser.add_argument("--warmup", type=int, default=5)
-    parser.add_argument("--iterations", type=int, default=30)
+    parser.add_argument("--iterations", type=int, default=100)
     parser.add_argument("--train-warmup", type=int, default=1)
-    parser.add_argument("--train-iterations", type=int, default=3)
+    parser.add_argument("--train-iterations", type=int, default=5)
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--skip-training", action="store_true")
     parser.add_argument("--output", type=Path, help="可选JSON输出路径；省略时只打印到stdout")
@@ -167,7 +169,7 @@ def main() -> None:
     torch.npu.set_device(args.device)
     torch.npu.set_compile_mode(jit_compile=False)
     device = torch.device(f"npu:{args.device}")
-    model = CRADIOv3("l", pretrained=args.checkpoint or True).to(device)
+    model = CRADIOv4("so400m", pretrained=args.checkpoint or True).to(device)
     controller = ModeController(model)
     result = {
         "environment": {
@@ -179,7 +181,7 @@ def main() -> None:
             "attention": "npu_fusion_attention_v3",
         },
         "model": {
-            "variant": "C-RADIOv3-L/16",
+            "variant": "C-RADIOv4-SO400M/16",
             "parameters": sum(parameter.numel() for parameter in model.parameters()),
         },
         "inference": {},

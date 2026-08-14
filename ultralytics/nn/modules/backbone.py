@@ -15,10 +15,6 @@ from .third_party.dinov2.hubconf import (
     dinov2_vits14_reg,
 )
 from .third_party.dinov3.hubconf import (
-    dinov3_convnext_base,
-    dinov3_convnext_large,
-    dinov3_convnext_small,
-    dinov3_convnext_tiny,
     dinov3_vit7b16,
     dinov3_vitb16,
     dinov3_vith16plus,
@@ -28,6 +24,7 @@ from .third_party.dinov3.hubconf import (
     dinov3_vits16plus,
 )
 from .third_party.c_radio_v3 import CRADIO_V3_CONFIGS, VisionTransformer as CRADIOv3VisionTransformer
+from .third_party.c_radio_v4 import CRADIO_V4_CONFIGS, VisionTransformer as CRADIOv4VisionTransformer
 from .third_party.pe_spatial import PE_SPATIAL_CONFIGS, VisionTransformer as PESpatialVisionTransformer
 
 
@@ -120,26 +117,29 @@ class SigLIP2So400M(nn.Module):
         return 1152
 
 
-class CRADIOv3(nn.Module):
-    """提供检测器友好空间输出的C-RADIOv3 B/L/H/g视觉骨干网络。"""
+class _CRADIOBase(nn.Module):
+    """C-RADIO各版本共享的安全加载、输入检查和空间输出包装层。"""
+
+    configs = {}
+    family_name = "C-RADIO"
 
     def __init__(self, scale: str, pretrained: str | bool = True):
         super().__init__()
         if not isinstance(scale, str):
             raise TypeError(f"scale必须是字符串，但得到的是{type(scale).__name__}")
         self.scale = scale.lower()
-        if self.scale not in CRADIO_V3_CONFIGS:
-            raise ValueError(f"不存在的C-RADIOv3架构预设{scale!r}，应该为{tuple(CRADIO_V3_CONFIGS)}")
+        if self.scale not in self.configs:
+            raise ValueError(f"不存在的{self.family_name}架构预设{scale!r}，应该为{tuple(self.configs)}")
         if not isinstance(pretrained, (bool, str)):
             raise TypeError(f"pretrained必须是bool或本地权重路径，但得到的是{type(pretrained).__name__}")
 
-        config = CRADIO_V3_CONFIGS[self.scale]
+        config = self.configs[self.scale]
         self.input_size_divisor = config.patch_size
         self.feature_stride = config.patch_size
         self.preferred_resolution = config.preferred_resolution
         self.max_resolution = config.max_resolution
         loading_weights = pretrained is not False
-        self.model = CRADIOv3VisionTransformer(
+        self.model = self._vision_transformer_cls()(
             config,
             initialize=not loading_weights,
             device="meta" if loading_weights else None,
@@ -163,8 +163,12 @@ class CRADIOv3(nn.Module):
         elif isinstance(pretrained, str):
             checkpoint = Path(pretrained).expanduser()
             if not checkpoint.is_file():
-                raise FileNotFoundError(f"找不到C-RADIOv3本地权重文件: {checkpoint}")
+                raise FileNotFoundError(f"找不到{self.family_name}本地权重文件: {checkpoint}")
             self._load_checkpoint(checkpoint)
+
+    @staticmethod
+    def _vision_transformer_cls():
+        raise NotImplementedError
 
     @staticmethod
     def _map_checkpoint_key(key: str) -> str | None:
@@ -199,23 +203,23 @@ class CRADIOv3(nn.Module):
                 ignored.append(source_key)
                 continue
             if target_key in mapped:
-                raise RuntimeError(f"C-RADIOv3 checkpoint中多个权重映射到同一键{target_key!r}")
+                raise RuntimeError(f"{self.family_name} checkpoint中多个权重映射到同一键{target_key!r}")
             mapped[target_key] = source_key
         missing = sorted(set(targets) - set(mapped))
         unexpected = sorted(set(mapped) - set(targets))
         if missing or unexpected:
             raise RuntimeError(
-                "C-RADIOv3 checkpoint与模型结构不匹配："
+                f"{self.family_name} checkpoint与模型结构不匹配："
                 f"missing_keys={missing}, unexpected_keys={unexpected}, ignored_keys={ignored}"
             )
         with torch.no_grad():
             for target_key, target in targets.items():
                 source = get_tensor(mapped[target_key])
                 if not isinstance(source, torch.Tensor):
-                    raise TypeError(f"C-RADIOv3 checkpoint键{mapped[target_key]!r}不是Tensor")
+                    raise TypeError(f"{self.family_name} checkpoint键{mapped[target_key]!r}不是Tensor")
                 if source.shape != target.shape:
                     raise RuntimeError(
-                        f"C-RADIOv3 checkpoint键{mapped[target_key]!r}形状不匹配："
+                        f"{self.family_name} checkpoint键{mapped[target_key]!r}形状不匹配："
                         f"checkpoint={tuple(source.shape)}, model={tuple(target.shape)}"
                     )
                 target.copy_(source.to(dtype=target.dtype))
@@ -231,7 +235,7 @@ class CRADIOv3(nn.Module):
 
         state = torch.load(checkpoint, map_location="cpu", weights_only=True)
         if not isinstance(state, dict):
-            raise TypeError(f"C-RADIOv3 checkpoint必须是字典，但得到的是{type(state).__name__}")
+            raise TypeError(f"{self.family_name} checkpoint必须是字典，但得到的是{type(state).__name__}")
         for container in ("state_dict_ema", "state_dict", "weights"):
             if isinstance(state.get(container), dict):
                 state = state[container]
@@ -246,16 +250,18 @@ class CRADIOv3(nn.Module):
 
     def _check_input(self, x: torch.Tensor) -> None:
         if x.ndim != 4:
-            raise AssertionError(f"CRADIOv3的输入形状应该为BCHW，但得到的是{tuple(x.shape)}")
+            raise AssertionError(f"{self.family_name}的输入形状应该为BCHW，但得到的是{tuple(x.shape)}")
         if x.shape[1] != 3:
-            raise AssertionError(f"CRADIOv3要求三通道输入，但得到的是{x.shape[1]}通道")
+            raise AssertionError(f"{self.family_name}要求三通道输入，但得到的是{x.shape[1]}通道")
         if not torch.is_floating_point(x):
-            raise TypeError(f"CRADIOv3要求浮点输入，但得到的是{x.dtype}")
+            raise TypeError(f"{self.family_name}要求浮点输入，但得到的是{x.dtype}")
         height, width = x.shape[-2:]
         if height % self.feature_stride or width % self.feature_stride:
-            raise AssertionError(f"CRADIOv3要求输入高度和宽度是16的倍数，但得到的是{(height, width)}")
+            raise AssertionError(
+                f"{self.family_name}要求输入高度和宽度是{self.feature_stride}的倍数，但得到的是{(height, width)}"
+            )
         if height > self.max_resolution or width > self.max_resolution:
-            raise ValueError(f"CRADIOv3输入最大边不能超过{self.max_resolution}，但得到的是{(height, width)}")
+            raise ValueError(f"{self.family_name}输入最大边不能超过{self.max_resolution}，但得到的是{(height, width)}")
 
     def forward_sequence(self, x: torch.Tensor) -> torch.Tensor:
         self._check_input(x)
@@ -268,19 +274,41 @@ class CRADIOv3(nn.Module):
         grid_h, grid_w = height // self.feature_stride, width // self.feature_stride
         return sequence.transpose(1, 2).reshape(x.shape[0], self.dims(self.scale), grid_h, grid_w)
 
-    @staticmethod
-    def dims(scale: str) -> int:
+    @classmethod
+    def dims(cls, scale: str) -> int:
         try:
-            return CRADIO_V3_CONFIGS[scale.lower()].width
+            return cls.configs[scale.lower()].width
         except (AttributeError, KeyError) as error:
-            raise ValueError(f"不存在的C-RADIOv3架构预设{scale!r}") from error
+            raise ValueError(f"不存在的{cls.family_name}架构预设{scale!r}") from error
+
+    @classmethod
+    def stride(cls, scale: str) -> int:
+        try:
+            return cls.configs[scale.lower()].patch_size
+        except (AttributeError, KeyError) as error:
+            raise ValueError(f"不存在的{cls.family_name}架构预设{scale!r}") from error
+
+
+class CRADIOv3(_CRADIOBase):
+    """提供检测器友好空间输出的C-RADIOv3 B/L/H/g视觉骨干网络。"""
+
+    configs = CRADIO_V3_CONFIGS
+    family_name = "C-RADIOv3"
 
     @staticmethod
-    def stride(scale: str) -> int:
-        try:
-            return CRADIO_V3_CONFIGS[scale.lower()].patch_size
-        except (AttributeError, KeyError) as error:
-            raise ValueError(f"不存在的C-RADIOv3架构预设{scale!r}") from error
+    def _vision_transformer_cls():
+        return CRADIOv3VisionTransformer
+
+
+class CRADIOv4(_CRADIOBase):
+    """提供检测器友好空间输出的C-RADIOv4 SO400M/H视觉骨干网络。"""
+
+    configs = CRADIO_V4_CONFIGS
+    family_name = "C-RADIOv4"
+
+    @staticmethod
+    def _vision_transformer_cls():
+        return CRADIOv4VisionTransformer
 
 
 class PESpatial(nn.Module):
