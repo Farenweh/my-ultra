@@ -15,6 +15,8 @@
 
 完整路径超过 640 主场景 3% 的目标，且没有出现超过 1% 的稳定退化，因此保留默认 `auto`。该负载在长窗口中四条路径的 AICore 均为 100%，收益来自减少 CPE 重算和 attention 开销，而不是继续抬高已经饱和的核心利用率。
 
+2026-08-14 随 C-RADIOv4 共用实现复测后，融合接口已从普通版切换为支持入图的 `npu_fusion_attention_v3`，并将 FP32 纳入自动快路径。head dim 64 的 FP16/BF16/FP32 前后向均通过；完整 SO400M 对照中 v3 相对普通版的性能差异小于 0.01%、显存一致，因此不重写本报告的历史性能表。
+
 ## 环境
 
 - NPU：Ascend 910B2，64 GiB HBM
@@ -27,6 +29,7 @@
 - Ascend JIT：关闭
 - 日期：2026-08-07
 - 100 epoch checkpoint 最终验证复测：2026-08-08
+- Fusion Attention v3 与 FP32 补充验证：2026-08-14
 
 ## 模型接入
 
@@ -53,11 +56,11 @@ L 权重共 319,934,464 个 Parameter，另有 6 个归一化 buffer；首次下
 
 `CRADIO_V3_ATTENTION_BACKEND` 支持：
 
-- `auto`：默认；910B2、FP16/BF16、非 JIT 且 shape 满足约束时调用 `npu_fusion_attention`，否则回退 PyTorch SDPA。
+- `auto`：默认；910B2、FP16/BF16/FP32、非 JIT 且 shape 满足约束时调用 `npu_fusion_attention_v3`，否则回退 PyTorch SDPA。
 - `fusion`：严格要求融合，条件不满足时明确报错。
 - `sdpa`：强制标准路径。
 
-QKV projection 后保持 BSND 布局进入融合算子，避免先转 BNSD 再恢复。FP32、JIT、非 NPU、dtype/shape 不支持和算子不可用时不会误入融合路径。`torch_npu` 延迟导入，普通 CPU/CUDA 模型导入不会锁定 NPU 可见设备。
+QKV projection 后保持 BSND 布局进入融合算子，避免先转 BNSD 再恢复。v3 在当前 Eager 路径与普通融合版等速，并为后续图捕获保留 Tensor 化随机数状态；ACLGraph 当前只支持 BNSD，因此 JIT 仍回退。非 NPU、dtype/shape 不支持和算子不可用时也不会误入融合路径。`torch_npu` 延迟导入，普通 CPU/CUDA 模型导入不会锁定 NPU 可见设备。
 
 CPE 缓存均为实例上的单条普通属性：
 
@@ -74,8 +77,8 @@ CPE 缓存均为实例上的单条普通属性：
 - L safetensors 严格完整加载，结构、参数量、权重键和 `eps=1e-6` 与官方实现一致。
 - 固定输入的官方参考与原生实现在 512、FP16、SDPA 下逐元素完全一致。
 - 512、640、800 和 384×640 的 FP32/FP16/BF16 前向均为有限值，BNC/BCHW 完全一致。
-- 真实 910B2 上 FP16/BF16 融合 attention 的输出、loss、输入梯度和 QKV 权重梯度与 SDPA 对齐。
-- FP32 与 JIT 开启时正确回退；严格模式在不支持条件下明确失败。
+- 真实 910B2 上 FP16/BF16/FP32 Fusion Attention v3 的输出、loss、输入梯度和 QKV 权重梯度与 SDPA 对齐。
+- FP32 自动融合通过；JIT 开启时正确回退，严格模式在不支持条件下明确失败。
 - YOLO11-L 冻结 backbone 的两步 FP16 loss 为 10.932062、11.224338，backbone 无梯度，neck/head 参数更新；384×640 推理、757 项 state dict 保存和严格重载通过。
 - 两卡 HCCL DDP smoke 通过，平均 loss 为 11.172514；动态缓存未注册为 DDP buffer。
 - 100 epoch 训练产生的真实 `best.pt` 在 `torch.inference_mode()` 下重新加载后，NPU warmup、640 前向和 384×640 动态尺寸前向均通过；位置参数确认为 inference tensor，缓存可复用并随尺寸替换。

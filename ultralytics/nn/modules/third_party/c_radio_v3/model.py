@@ -39,12 +39,12 @@ class Block(nn.Module):
         super().__init__()
         factory = {"device": device, "dtype": dtype}
         self.norm1 = nn.LayerNorm(config.width, eps=1e-6, **factory)
-        self.attn = Attention(config.width, config.heads, **factory)
+        self.attn = Attention(config.width, config.heads, family=config.family, **factory)
         self.ls1 = (
             LayerScale(config.width, config.layer_scale, **factory) if config.layer_scale is not None else nn.Identity()
         )
         self.norm2 = nn.LayerNorm(config.width, eps=1e-6, **factory)
-        self.mlp = Mlp(config.width, config.width * 4, **factory)
+        self.mlp = Mlp(config.width, config.effective_mlp_hidden_dim, **factory)
         self.ls2 = (
             LayerScale(config.width, config.layer_scale, **factory) if config.layer_scale is not None else nn.Identity()
         )
@@ -55,7 +55,7 @@ class Block(nn.Module):
 
 
 class VisionTransformer(nn.Module):
-    """C-RADIOv3纯视觉编码器。"""
+    """C-RADIOv3/v4共享的纯视觉编码器。"""
 
     def __init__(
         self,

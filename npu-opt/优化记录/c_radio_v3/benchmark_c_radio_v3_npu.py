@@ -176,6 +176,7 @@ def main() -> None:
             "device": torch.npu.get_device_name(args.device),
             "amp": "fp16",
             "jit_compile": False,
+            "attention": "npu_fusion_attention_v3",
         },
         "model": {
             "variant": "C-RADIOv3-L/16",

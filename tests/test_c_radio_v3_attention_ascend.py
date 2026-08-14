@@ -41,12 +41,12 @@ def test_c_radio_v3_attention_stub_preserves_bsnd(monkeypatch):
         output = torch.nn.functional.scaled_dot_product_attention(
             q.transpose(1, 2), k.transpose(1, 2), v.transpose(1, 2), scale=kwargs["scale"]
         ).transpose(1, 2)
-        return (output, None, None, None, 0, 0, 0)
+        return (output, None, None, None, None, None)
 
     module = attention.Attention(1024, 16)
     monkeypatch.setattr(attention, "CRADIO_V3_ATTENTION_BACKEND", "auto")
     monkeypatch.setattr(attention, "_supports_npu_fusion_attention", lambda *args: True)
-    monkeypatch.setattr(attention, "_get_torch_npu", lambda: types.SimpleNamespace(npu_fusion_attention=fusion))
+    monkeypatch.setattr(attention, "_get_torch_npu", lambda: types.SimpleNamespace(npu_fusion_attention_v3=fusion))
     x = torch.randn(2, 17, 1024, requires_grad=True)
     output = module(x)
     output.square().mean().backward()
@@ -75,7 +75,7 @@ print(x.cpu().item())
 
 
 @pytest.mark.skipif(not NPU_AVAILABLE, reason="需要可用的Ascend NPU")
-@pytest.mark.parametrize("dtype", (torch.float16, torch.bfloat16))
+@pytest.mark.parametrize("dtype", (torch.float16, torch.bfloat16, torch.float32))
 def test_c_radio_v3_real_npu_fusion_matches_sdpa_forward_backward(dtype, monkeypatch):
     from ultralytics.nn.modules.third_party.c_radio_v3 import attention
 
@@ -100,14 +100,13 @@ def test_c_radio_v3_real_npu_fusion_matches_sdpa_forward_backward(dtype, monkeyp
 
 
 @pytest.mark.skipif(not NPU_AVAILABLE, reason="需要可用的Ascend NPU")
-def test_c_radio_v3_real_npu_fp32_and_jit_fall_back(monkeypatch):
+def test_c_radio_v3_real_npu_fp32_uses_fusion_and_jit_falls_back(monkeypatch):
     from ultralytics.nn.modules.third_party.c_radio_v3 import attention
 
     torch.npu.set_device("npu:0")
     q = torch.randn(1, 17, 16, 64, device="npu:0", dtype=torch.float32)
     monkeypatch.setattr(attention, "CRADIO_V3_ATTENTION_BACKEND", "auto")
-    assert attention.select_attention_backend(q, q, q, 16) == "sdpa"
+    assert attention.select_attention_backend(q, q, q, 16) == "fusion"
 
-    q = q.half()
     monkeypatch.setattr(attention, "_ascend_jit_compile_enabled", lambda: True)
     assert attention.select_attention_backend(q, q, q, 16) == "sdpa"
