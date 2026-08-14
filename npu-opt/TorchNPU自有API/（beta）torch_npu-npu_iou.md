@@ -1,0 +1,53 @@
+# （beta）torch_npu.npu_iou
+
+> [!NOTICE]  
+> 该接口计划废弃，底层算子kernel实现不再维护，性能、精度等指标无法保障，不建议使用该接口。<br>
+> 此接口在本版本中有变更，具体变更内容请参考《版本说明》中的“[接口变更说明](https://gitcode.com/Ascend/pytorch/blob/v2.7.1-26.1.0/docs/zh/release_notes/release_notes.md#%E6%8E%A5%E5%8F%A3%E5%8F%98%E6%9B%B4%E8%AF%B4%E6%98%8E)”。
+
+## 产品支持情况
+
+| 产品                                                         | 是否支持 |
+| ------------------------------------------------------------ | :------: |
+|<term>Ascend 950DT</term>            |    √     |
+|<term>Atlas A3 训练系列产品</term>            |    √     |
+|<term>Atlas A2 训练系列产品</term>  | √    |
+|<term>Atlas 推理系列产品</term>                                       |    √     |
+|<term>Atlas 训练系列产品</term>                                       |    √     |
+
+## 功能说明
+
+根据ground-truth和预测区域计算交并比（IoU）或前景交叉比（IoF）。
+
+## 函数原型
+
+```python
+torch_npu.npu_iou(bboxes, gtboxes, mode=0) -> Tensor 
+```
+
+## 参数说明
+
+- **bboxes** (`Tensor`)：必选参数，输入张量。
+- **gtboxes** (`Tensor`)：必选参数，输入张量。
+- **mode** (`int`)：可选参数，0为IoU模式，1为IoF模式。默认值为0。
+
+## 约束说明
+
+Ascend 950DT：该API暂不支持反向计算。
+
+## 调用示例
+
+```python
+>>> import torch
+>>> import torch_npu
+>>> bboxes = torch.tensor([[0, 0, 10, 10],
+                           [10, 10, 20, 20],
+                           [32, 32, 38, 42]], dtype=torch.float16).to("npu")
+>>> gtboxes = torch.tensor([[0, 0, 10, 20],
+                            [0, 10, 10, 10],
+                            [10, 10, 20, 20]], dtype=torch.float16).to("npu")
+>>> output_iou = torch_npu.npu_iou(bboxes, gtboxes, 0)
+>>> print(output_iou)
+tensor([[0.4985, 0.0000, 0.0000],
+        [0.0000, 0.0000, 0.0000], 
+       [0.0000, 0.9961, 0.0000]], device='npu:0', dtype=torch.float16)
+```
