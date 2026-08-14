@@ -4,8 +4,8 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class CRADIOv3Config:
-    """C-RADIOv3视觉编码器的官方结构与权重信息。"""
+class CRADIOConfig:
+    """C-RADIO视觉编码器的结构、权重和执行策略信息。"""
 
     repo_id: str
     revision: str
@@ -15,10 +15,21 @@ class CRADIOv3Config:
     parameter_count: int
     layer_scale: float | None = None
     base_registers: int = 0
+    mlp_hidden_dim: int | None = None
+    family: str = "v3"
     patch_size: int = 16
     preferred_resolution: int = 512
     max_resolution: int = 2048
     prefix_tokens: int = 8
+
+    @property
+    def effective_mlp_hidden_dim(self) -> int:
+        """返回checkpoint实际使用的MLP隐藏维度。"""
+        return self.mlp_hidden_dim or self.width * 4
+
+
+# 保留原名称兼容已有导入。
+CRADIOv3Config = CRADIOConfig
 
 
 CRADIO_V3_CONFIGS = {

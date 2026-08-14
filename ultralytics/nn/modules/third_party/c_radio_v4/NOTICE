@@ -1,0 +1,7 @@
+本目录包含对C-RADIOv4视觉结构的独立最小配置，并复用本仓库C-RADIO的纯PyTorch视觉实现；没有复制NVlabs/RADIO中带限制性版权头的源码。
+
+架构与权重来源：https://github.com/NVlabs/RADIO
+官方模型集合：https://huggingface.co/collections/nvidia/radio
+
+C-RADIOv4外部权重受NVIDIA Open Model License约束；本仓库不分发这些权重：
+https://huggingface.co/nvidia/C-RADIOv4-SO400M/blob/main/LICENSE

@@ -110,7 +110,7 @@ from .transformer import (
     TransformerLayer,
     RoPEViT,
 )
-from .backbone import CRADIOv3, DINOv2, DINOv3ViT, PESpatial, SigLIP2So400M
+from .backbone import CRADIOv3, CRADIOv4, DINOv2, DINOv3ViT, PESpatial, SigLIP2So400M
 
 __all__ = (
     "AIFI",
@@ -200,6 +200,7 @@ __all__ = (
     "v10Detect",
     "DINOv3ViT",
     "CRADIOv3",
+    "CRADIOv4",
     "PESpatial",
     "SigLIP2So400M",
     "RoPEViT",

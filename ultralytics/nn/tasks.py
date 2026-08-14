@@ -80,6 +80,7 @@ from ultralytics.nn.modules import (
     DINOv2,
     DINOv3ViT,
     CRADIOv3,
+    CRADIOv4,
     PESpatial,
     SigLIP2So400M,
     RoPEViT,
@@ -2178,7 +2179,7 @@ def parse_model(d, ch, verbose=True):
         return int(value)
 
     def layer_stride_factor(m, args):
-        if m is CRADIOv3:
+        if m in frozenset({CRADIOv3, CRADIOv4}):
             return m.stride(args[0])
         if m is PESpatial:
             return m.stride(args[0])
@@ -2288,7 +2289,7 @@ def parse_model(d, ch, verbose=True):
         elif m in frozenset({DINOv2, DINOv3ViT}):
             c1 = ch[f]
             c2 = m.dims(args[0])
-        elif m is CRADIOv3:
+        elif m in frozenset({CRADIOv3, CRADIOv4}):
             c1 = ch[f]
             c2 = m.dims(args[0])
         elif m is PESpatial:

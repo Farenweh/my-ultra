@@ -742,5 +742,32 @@
       "map50": 0.712,
       "map50_95": 0.519
     }
+  },
+  "fusion_v3_fp32_validation": {
+    "date": "2026-08-14",
+    "implementation": "npu_fusion_attention_v3",
+    "c_radio_v3_head_dim": 64,
+    "shared_head_dims_tested": [
+      64,
+      72,
+      80
+    ],
+    "dtypes_tested": [
+      "fp16",
+      "bf16",
+      "fp32"
+    ],
+    "forward_backward_matches_sdpa": true,
+    "v1_v3_output_and_gradients_exact": true,
+    "jit_still_falls_back": true,
+    "shared_full_model_v3_over_v1": {
+      "fp16_inference": 1.0000498927249295,
+      "fp16_training": 0.9999476945624031,
+      "bf16_inference": 1.0000732442675265,
+      "bf16_training": 1.0001823195110202,
+      "fp32_inference": 1.0000490578925807,
+      "fp32_training": 1.000063969227922
+    },
+    "note": "完整模型性能在SO400M上测量；C-RADIOv3-L重新执行官方权重真实NPU正确性回归。"
   }
 }
