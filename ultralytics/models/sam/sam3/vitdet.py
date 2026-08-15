@@ -32,6 +32,7 @@ from ultralytics.models.sam.modules.utils import (
     window_partition,
     window_unpartition,
 )
+from ultralytics.utils.attention import sdpa_with_npu_fusion
 from ultralytics.utils.checks import check_requirements
 
 from .model_misc import LayerScale
@@ -200,7 +201,18 @@ class Attention(nn.Module):
             q = q.reshape(B, self.num_heads, H * W, -1)
             k = k.reshape(B, self.num_heads, H * W, -1)
 
-        x = F.scaled_dot_product_attention(q, k, v)
+        if self.use_rel_pos:
+            # Relative-position concatenation changes Q/K head dimensions and is kept on the validated SDPA path.
+            x = F.scaled_dot_product_attention(q, k, v)
+        else:
+            x = sdpa_with_npu_fusion(
+                q,
+                k,
+                v,
+                num_heads=self.num_heads,
+                input_layout="BNSD",
+                allow_inference_fusion=False,
+            )
 
         if ndim == 4:
             x = x.view(B, self.num_heads, H, W, -1).permute(0, 2, 3, 1, 4).reshape(B, H, W, -1)

@@ -10,6 +10,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from ultralytics.utils.metrics import bbox_iou
+from ultralytics.utils.npu import scatter_nd_update_
 from ultralytics.utils.ops import linear_sum_assignment, xywh2xyxy, xyxy2xywh
 
 
@@ -360,8 +361,9 @@ def get_cdn_group(
 
     all_offsets = max_nums * torch.arange(2 * num_group, dtype=torch.long, device=gt_bbox.device).unsqueeze(1)
     map_indices = (local_indices.unsqueeze(0) + all_offsets).reshape(-1)
-    padding_cls[(dn_b_idx, map_indices)] = dn_cls_embed
-    padding_bbox[(dn_b_idx, map_indices)] = dn_bbox
+    scatter_indices = torch.stack((dn_b_idx, map_indices), dim=-1)
+    scatter_nd_update_(padding_cls, scatter_indices, dn_cls_embed)
+    scatter_nd_update_(padding_bbox, scatter_indices, dn_bbox)
 
     tgt_size = num_dn + num_queries
     attn_mask = torch.zeros([tgt_size, tgt_size], dtype=torch.bool, device=class_embed.device)

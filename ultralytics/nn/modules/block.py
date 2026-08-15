@@ -11,10 +11,12 @@ from torch import nn
 
 from ultralytics.utils.attention import npu_format_cast_to_nd_if_needed, sdpa_with_npu_padding
 from ultralytics.utils.checks import IS_ASCEND
+from ultralytics.utils.npu import swiglu_with_npu_fallback
 from ultralytics.utils.torch_utils import fuse_conv_and_bn
 
 from .conv import Conv, DWConv, GhostConv, LightConv, RepConv, autopad
 from .transformer import TransformerBlock
+
 
 __all__ = (
     "C1",
@@ -1928,8 +1930,7 @@ class SwiGLUFFN(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Apply SwiGLU transformation to input features."""
         x12 = self.w12(x)
-        x1, x2 = x12.chunk(2, dim=-1)
-        hidden = F.silu(x1) * x2
+        hidden = swiglu_with_npu_fallback(x12, dim=-1)
         return self.w3(hidden)
 
 

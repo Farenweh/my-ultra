@@ -8,9 +8,10 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from ultralytics.utils.checks import IS_ASCEND, USE_BATCHED_HUNGARIAN
 from ultralytics.utils.loss import FocalLoss, VarifocalLoss
 from ultralytics.utils.metrics import bbox_iou
-from ultralytics.utils.checks import IS_ASCEND, USE_BATCHED_HUNGARIAN
+from ultralytics.utils.npu import scatter_nd_update_
 
 from .ops import HungarianMatcher
 
@@ -484,6 +485,7 @@ class DETRLoss(nn.Module):
         layer_idx = (
             torch.arange(num_layers, device=pred_bboxes.device, dtype=torch.long).unsqueeze(1).expand(-1, match_count)
         )
+        scatter_indices = torch.stack((layer_idx, batch_idx, src_idx), dim=-1).reshape(-1, 3)
 
         if match_count > 0:
             pred_match = pred_bboxes[layer_idx, batch_idx, src_idx]
@@ -514,11 +516,11 @@ class DETRLoss(nn.Module):
         else:
             targets = torch.full((num_layers, bs, nq), self.nc, dtype=gt_cls.dtype, device=pred_scores.device)
             if match_count > 0:
-                targets[layer_idx, batch_idx, src_idx] = gt_cls[gt_idx_cls]
+                scatter_nd_update_(targets, scatter_indices, gt_cls[gt_idx_cls].reshape(-1))
 
             gt_score_map = pred_scores.new_zeros((num_layers, bs, nq))
             if match_count > 0:
-                gt_score_map[layer_idx, batch_idx, src_idx] = iou_match.to(gt_score_map.dtype)
+                scatter_nd_update_(gt_score_map, scatter_indices, iou_match.to(gt_score_map.dtype).reshape(-1))
 
             one_hot = torch.zeros((num_layers, bs, nq, self.nc + 1), dtype=torch.int64, device=pred_scores.device)
             one_hot.scatter_(3, targets.unsqueeze(-1), 1)

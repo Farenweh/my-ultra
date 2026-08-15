@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from torch import Tensor, nn
 
 from ultralytics.nn.modules import MLP, LayerNorm2d, MLPBlock
+from ultralytics.utils.attention import sdpa_with_npu_fusion
 
 from .transformer import Attention, TwoWayAttentionBlock, TwoWayTransformer
 from .utils import add_decomposed_rel_pos, apply_rotary_enc, compute_axial_cis, window_partition, window_unpartition
@@ -438,15 +439,23 @@ class RoPEAttention(Attention):
             assert self.rope_k_repeat
 
         num_k_rope = k.size(-2) - num_k_exclude_rope
-        q, k[:, :, :num_k_rope] = apply_rotary_enc(
+        q, k_rope = apply_rotary_enc(
             q,
             k[:, :, :num_k_rope],
             freqs_cis=self.freqs_cis,
             repeat_freqs_k=self.rope_k_repeat,
         )
+        k = torch.cat((k_rope, k[:, :, num_k_rope:]), dim=-2) if num_k_exclude_rope else k_rope
 
         # Attention
-        out = F.scaled_dot_product_attention(q, k, v)
+        out = sdpa_with_npu_fusion(
+            q,
+            k,
+            v,
+            num_heads=self.num_heads,
+            input_layout="BNSD",
+            allow_inference_fusion=False,
+        )
 
         out = self._recombine_heads(out)
         out = self.out_proj(out)

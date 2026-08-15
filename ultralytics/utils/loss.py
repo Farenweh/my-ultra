@@ -12,24 +12,13 @@ from torch import nn
 
 from ultralytics.utils.checks import IS_ASCEND
 from ultralytics.utils.metrics import CITYSCAPES_WEIGHT, OKS_SIGMA, RLE_WEIGHT
+from ultralytics.utils.npu import scatter_nd_update_
 from ultralytics.utils.ops import crop_mask, xywh2xyxy, xyxy2xywh
 from ultralytics.utils.tal import RotatedTaskAlignedAssigner, TaskAlignedAssigner, dist2bbox, dist2rbox, make_anchors
 from ultralytics.utils.torch_utils import autocast
 
 from .metrics import bbox_iou, probiou
 from .tal import bbox2dist, rbox2dist
-
-
-def npu_confusion_transpose_or_permute(x: torch.Tensor) -> torch.Tensor:
-    """Use Ascend fused transpose+view for YOLO head tensors, otherwise keep the PyTorch path."""
-    if IS_ASCEND and x.device.type == "npu":
-        import torch_npu
-
-        fn = getattr(torch_npu, "npu_confusion_transpose", None)
-        if fn is None:
-            raise RuntimeError("Ascend YOLO loss requires torch_npu.npu_confusion_transpose.")
-        return fn(x, (0, 2, 1), (x.shape[0], x.shape[2], x.shape[1]), transpose_first=True)
-    return x.permute(0, 2, 1).contiguous()
 
 
 class VarifocalLoss(nn.Module):
@@ -410,7 +399,7 @@ class v8DetectionLoss:
             offsets = torch.zeros(batch_size + 1, dtype=torch.long, device=self.device)
             offsets[1:] = counts.to(torch.long).cumsum(0)
             within_idx = torch.arange(nl, device=self.device) - offsets[batch_idx]
-            out[batch_idx, within_idx] = targets[:, 1:]
+            scatter_nd_update_(out, torch.stack((batch_idx, within_idx), dim=-1), targets[:, 1:])
             out[..., 1:5] = xywh2xyxy(out[..., 1:5].mul_(scale_tensor))
         return out
 
@@ -429,8 +418,8 @@ class v8DetectionLoss:
         """
         loss = torch.zeros(3, device=self.device)  # box, cls, dfl
         pred_distri, pred_scores = (
-            npu_confusion_transpose_or_permute(preds["boxes"]),
-            npu_confusion_transpose_or_permute(preds["scores"]),
+            preds["boxes"].permute(0, 2, 1).contiguous(),
+            preds["scores"].permute(0, 2, 1).contiguous(),
         )
         anchor_points, stride_tensor = self.get_anchor_points_and_stride(preds["feats"])
 
@@ -788,7 +777,11 @@ class v8PoseLoss(v8DetectionLoss):
         offsets.scatter_add_(0, batch_idx_long + 1, torch.ones_like(batch_idx_long))
         offsets = offsets.cumsum(0)
         within_idx = torch.arange(len(batch_idx), device=keypoints.device) - offsets[batch_idx_long]
-        batched_keypoints[batch_idx_long, within_idx] = keypoints
+        scatter_nd_update_(
+            batched_keypoints,
+            torch.stack((batch_idx_long, within_idx), dim=-1),
+            keypoints,
+        )
 
         # Expand dimensions of target_gt_idx to match the shape of batched_keypoints
         target_gt_idx_expanded = target_gt_idx.unsqueeze(-1).unsqueeze(-1)
@@ -1079,7 +1072,7 @@ class v8OBBLoss(v8DetectionLoss):
             offsets.scatter_add_(0, batch_idx + 1, torch.ones_like(batch_idx))
             offsets = offsets.cumsum(0)
             within_idx = torch.arange(len(targets), device=self.device) - offsets[batch_idx]
-            out[batch_idx, within_idx] = packed_targets
+            scatter_nd_update_(out, torch.stack((batch_idx, within_idx), dim=-1), packed_targets)
         return out
 
     def loss(
