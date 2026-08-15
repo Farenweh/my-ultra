@@ -3,12 +3,46 @@
 from __future__ import annotations
 
 import math
+import os
+from functools import lru_cache
 from typing import Any
 
 import torch
 import torch.nn.functional as F
 
+from ultralytics.utils.checks import IS_ASCEND
 from ultralytics.utils.torch_utils import TORCH_2_3
+
+
+_torch_npu = None
+
+
+def _get_torch_npu():
+    """仅在SAM选择Ascend融合算子时导入torch_npu。"""
+    global _torch_npu
+    if _torch_npu is None:
+        import torch_npu
+
+        _torch_npu = torch_npu
+    return _torch_npu
+
+
+def _ascend_jit_compile_enabled() -> bool:
+    """返回当前是否开启不支持interleave RotaryMul的旧JIT路径。"""
+    try:
+        return not torch.npu.is_jit_compile_false()
+    except (AttributeError, RuntimeError):
+        return os.getenv("USE_ASCEND_JIT_COMPILE", "0") == "1"
+
+
+@lru_cache(maxsize=None)
+def _npu_rotary_device_supported(device_index: int) -> bool:
+    """缓存当前设备是否属于公开支持interleave RotaryMul的产品。"""
+    try:
+        name = torch.npu.get_device_name(device_index).upper()
+    except (AttributeError, RuntimeError):
+        return False
+    return any(token in name for token in ("910B", "910_93", "ASCEND950", "ASCEND350"))
 
 
 def select_closest_cond_frames(frame_idx: int, cond_frame_outputs: dict[int, Any], max_cond_frame_num: int):
@@ -174,6 +208,120 @@ def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
     return freqs_cis.view(*shape)
 
 
+def _supports_npu_rotary_mul(
+    xq: torch.Tensor,
+    xk: torch.Tensor,
+    freqs_cis: torch.Tensor,
+    repeat_freqs_k: bool,
+) -> bool:
+    """检查SAM训练RoPE是否满足npu_rotary_mul的公开约束。"""
+    if not IS_ASCEND or xq.device.type != "npu" or xq.ndim != 4 or xk.ndim != 4:
+        return False
+    if xq.dtype not in {torch.float16, torch.bfloat16, torch.float32} or xk.dtype != xq.dtype:
+        return False
+    if not torch.is_grad_enabled() or not (xq.requires_grad or xk.requires_grad):
+        return False
+    batch, heads, query_sequence, head_dim = xq.shape
+    if (
+        not batch
+        or not query_sequence
+        or head_dim >= 896
+        or head_dim % 2
+        or batch * heads >= 1000
+        or xk.shape[:2] != (batch, heads)
+        or xk.shape[-1] != head_dim
+        or xk.device != xq.device
+    ):
+        return False
+    if (
+        freqs_cis.device != xq.device
+        or freqs_cis.ndim != 2
+        or freqs_cis.shape != (query_sequence, head_dim // 2)
+        or not freqs_cis.is_complex()
+        or freqs_cis.requires_grad
+    ):
+        return False
+    key_sequence = xk.shape[-2]
+    if key_sequence and key_sequence != query_sequence:
+        if not repeat_freqs_k or key_sequence % query_sequence:
+            return False
+    if _ascend_jit_compile_enabled() or not _npu_rotary_device_supported(xq.device.index or 0):
+        return False
+    try:
+        return hasattr(_get_torch_npu(), "npu_rotary_mul")
+    except (AttributeError, ImportError, RuntimeError):
+        return False
+
+
+def _interleave_coefficients(freqs_cis: torch.Tensor, repeats: int = 1) -> tuple[torch.Tensor, torch.Tensor]:
+    """将复数频率转换为可广播到BNSD输入的相邻偶奇sin/cos系数。"""
+    if repeats > 1:
+        freqs_cis = freqs_cis.repeat(repeats, 1)
+    cos = freqs_cis.real.repeat_interleave(2, dim=-1).view(1, 1, freqs_cis.shape[0], -1)
+    sin = freqs_cis.imag.repeat_interleave(2, dim=-1).view(1, 1, freqs_cis.shape[0], -1)
+    return sin.contiguous(), cos.contiguous()
+
+
+def _apply_rotary_enc_npu(
+    xq: torch.Tensor,
+    xk: torch.Tensor,
+    freqs_cis: torch.Tensor,
+    repeat_freqs_k: bool,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """以FP32计算语义执行SAM的Ascend interleave RotaryMul快路径。"""
+    torch_npu = _get_torch_npu()
+    sin_q, cos_q = _interleave_coefficients(freqs_cis)
+    xq_out = torch_npu.npu_rotary_mul(
+        input=xq.float().contiguous(),
+        r1=cos_q,
+        r2=sin_q,
+        rotary_mode="interleave",
+    ).to(dtype=xq.dtype)
+    if xk.shape[-2] == 0:
+        return xq_out, xk
+    repeats = xk.shape[-2] // xq.shape[-2] if repeat_freqs_k else 1
+    if repeats == 1:
+        sin_k, cos_k = sin_q, cos_q
+    else:
+        sin_k, cos_k = _interleave_coefficients(freqs_cis, repeats)
+    xk_out = torch_npu.npu_rotary_mul(
+        input=xk.float().contiguous(),
+        r1=cos_k,
+        r2=sin_k,
+        rotary_mode="interleave",
+    ).to(dtype=xk.dtype)
+    return xq_out, xk_out
+
+
+def _apply_rotary_enc_manual(
+    xq: torch.Tensor,
+    xk: torch.Tensor,
+    freqs_cis: torch.Tensor,
+    repeat_freqs_k: bool = False,
+):
+    """在编译时使用实数运算，其他情况下使用复数运算应用旋转位置编码。"""
+    real = TORCH_2_3 and torch.compiler.is_compiling()  # torch.compile fuses real math but not complex math
+    xq_ = xq.float().reshape(*xq.shape[:-1], -1, 2)
+    xk_ = xk.float().reshape(*xk.shape[:-1], -1, 2) if xk.shape[-2] != 0 else None
+    freqs = torch.view_as_real(reshape_for_broadcast(freqs_cis, xq_[..., 0]))
+
+    def rotate(x, f):
+        if real:
+            (a, b), (c, s) = x.unbind(-1), f.unbind(-1)
+            return torch.stack((a * c - b * s, a * s + b * c), -1).flatten(3)
+        return torch.view_as_real(torch.view_as_complex(x) * torch.view_as_complex(f)).flatten(3)  # faster in eager
+
+    xq_out = rotate(xq_, freqs).type_as(xq)
+    if xk_ is None:
+        # No keys to rotate, due to dropout
+        return xq_out, xk
+    # Repeat freqs along seq_len dim to match k seq_len (as real values, MPS cannot repeat complex tensors)
+    if repeat_freqs_k and (r := xk.shape[-2] // xq.shape[-2]) > 1:
+        freqs = freqs.repeat(*([1] * (freqs.ndim - 3)), r, 1, 1)
+    return xq_out, rotate(xk_, freqs).type_as(xk)
+
+
+
 def apply_rotary_enc(
     xq: torch.Tensor,
     xk: torch.Tensor,
@@ -204,25 +352,9 @@ def apply_rotary_enc(
         >>> freqs_cis = compute_axial_cis(64, 4, 4)  # For a 4x4 spatial grid with dim=64
         >>> q_encoded, k_encoded = apply_rotary_enc(xq, xk, freqs_cis)
     """
-    real = TORCH_2_3 and torch.compiler.is_compiling()  # torch.compile fuses real math but not complex math
-    xq_ = xq.float().reshape(*xq.shape[:-1], -1, 2)
-    xk_ = xk.float().reshape(*xk.shape[:-1], -1, 2) if xk.shape[-2] != 0 else None
-    freqs = torch.view_as_real(reshape_for_broadcast(freqs_cis, xq_[..., 0]))
-
-    def rotate(x, f):
-        if real:
-            (a, b), (c, s) = x.unbind(-1), f.unbind(-1)
-            return torch.stack((a * c - b * s, a * s + b * c), -1).flatten(3)
-        return torch.view_as_real(torch.view_as_complex(x) * torch.view_as_complex(f)).flatten(3)  # faster in eager
-
-    xq_out = rotate(xq_, freqs).type_as(xq)
-    if xk_ is None:
-        # No keys to rotate, due to dropout
-        return xq_out, xk
-    # Repeat freqs along seq_len dim to match k seq_len (as real values, MPS cannot repeat complex tensors)
-    if repeat_freqs_k and (r := xk.shape[-2] // xq.shape[-2]) > 1:
-        freqs = freqs.repeat(*([1] * (freqs.ndim - 3)), r, 1, 1)
-    return xq_out, rotate(xk_, freqs).type_as(xk)
+    if _supports_npu_rotary_mul(xq, xk, freqs_cis, repeat_freqs_k):
+        return _apply_rotary_enc_npu(xq, xk, freqs_cis, repeat_freqs_k)
+    return _apply_rotary_enc_manual(xq, xk, freqs_cis, repeat_freqs_k)
 
 
 def window_partition(x: torch.Tensor, window_size: int):

@@ -8,19 +8,7 @@ from typing import Callable, Optional
 from torch import Tensor, nn
 import torch.nn.functional as F
 
-from ultralytics.utils.checks import IS_ASCEND
-
-_torch_npu = None
-
-
-def _get_torch_npu():
-    """Import torch_npu only when an Ascend fused op is actually used."""
-    global _torch_npu
-    if _torch_npu is None:
-        import torch_npu
-
-        _torch_npu = torch_npu
-    return _torch_npu
+from ultralytics.utils.npu import swiglu_with_npu_fallback
 
 
 class SwiGLUFFN(nn.Module):
@@ -41,12 +29,7 @@ class SwiGLUFFN(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         x12 = self.w12(x)
-        if IS_ASCEND and x12.device.type == "npu":
-            torch_npu = _get_torch_npu()
-            hidden = torch_npu.npu_swiglu(x12, dim=-1)
-        else:
-            x1, x2 = x12.chunk(2, dim=-1)
-            hidden = F.silu(x1) * x2
+        hidden = swiglu_with_npu_fallback(x12, dim=-1)
         return self.w3(hidden)
 
 
