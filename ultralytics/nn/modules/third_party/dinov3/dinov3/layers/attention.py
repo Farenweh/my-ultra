@@ -12,6 +12,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
+from ultralytics.utils.attention import sdpa_with_npu_fusion
 from ultralytics.utils.checks import IS_ASCEND
 
 from ..utils import cat_keep_shapes, uncat_with_shapes
@@ -359,9 +360,14 @@ class SelfAttention(nn.Module):
         q, k, v = torch.unbind(qkv, 2)  # BSND
         if rope is not None:
             q, k = self.apply_rope_bsnd(q, k, rope)
-        q, k, v = [t.transpose(1, 2) for t in (q, k, v)]
-        x = torch.nn.functional.scaled_dot_product_attention(q, k, v)
-        x = x.transpose(1, 2)
+        x = sdpa_with_npu_fusion(
+            q,
+            k,
+            v,
+            num_heads=self.num_heads,
+            input_layout="BSND",
+            scale=self.scale,
+        )
         return x.reshape([B, N, C])
 
 

@@ -6,6 +6,8 @@
 import torch
 from torch import Tensor, nn
 
+from ultralytics.utils.npu import rms_norm_with_npu_fallback
+
 
 class RMSNorm(nn.Module):
     def __init__(self, dim: int, eps: float = 1e-5):
@@ -20,5 +22,4 @@ class RMSNorm(nn.Module):
         return x * torch.rsqrt((x * x).mean(-1, keepdim=True) + self.eps)
 
     def forward(self, x: Tensor) -> Tensor:
-        output = self._norm(x.float()).type_as(x)
-        return output * self.weight
+        return rms_norm_with_npu_fallback(x, self.weight, self.eps)

@@ -13,6 +13,8 @@ from timm.layers import DropPath
 from torch import Tensor, nn
 from torch.utils.checkpoint import checkpoint
 
+from ultralytics.utils.attention import sdpa_with_npu_fusion
+
 from .config import PESpatialConfig
 from .rope import Rope2D, apply_rope
 
@@ -55,17 +57,18 @@ class SelfAttention(nn.Module):
             sin, cos = rope
             q = apply_rope(q, sin, cos)
             k = apply_rope(k, sin, cos)
-        q, k, v = (value.transpose(1, 2) for value in (q, k, v))
-        x = F.scaled_dot_product_attention(
+        x = sdpa_with_npu_fusion(
             q,
             k,
             v,
+            num_heads=self.num_heads,
+            input_layout="BSND",
             attn_mask=attn_mask,
             dropout_p=0.0,
             is_causal=False,
             scale=self.scale,
         )
-        x = x.transpose(1, 2).reshape(batch, sequence, channels)
+        x = x.reshape(batch, sequence, channels)
         return self.out_proj(x)
 
 

@@ -10,6 +10,8 @@
 import torch
 from torch import Tensor, nn
 
+from ultralytics.utils.attention import sdpa_with_npu_fusion
+
 
 class Attention(nn.Module):
     def __init__(
@@ -47,10 +49,16 @@ class Attention(nn.Module):
     def forward(self, x: Tensor, is_causal: bool = False) -> Tensor:
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads)
-        q, k, v = torch.unbind(qkv, 2)
-        q, k, v = [t.transpose(1, 2) for t in (q, k, v)]
-        x = nn.functional.scaled_dot_product_attention(
-            q, k, v, attn_mask=None, dropout_p=self.attn_drop if self.training else 0.0, is_causal=is_causal
+        q, k, v = torch.unbind(qkv, 2)  # BSND
+        x = sdpa_with_npu_fusion(
+            q,
+            k,
+            v,
+            num_heads=self.num_heads,
+            input_layout="BSND",
+            dropout_p=self.attn_drop if self.training else 0.0,
+            is_causal=is_causal,
+            scale=self.scale,
         )
-        x = x.transpose(1, 2).contiguous().view(B, N, C)
+        x = x.reshape(B, N, C)
         return self.proj_drop(self.proj(x))
