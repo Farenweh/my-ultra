@@ -17,7 +17,7 @@ from ultralytics.utils.downloads import download
 
 settings = SETTINGS
 
-MODELS = ("YOLO", "YOLOWorld", "YOLOE", "NAS", "SAM", "FastSAM", "RTDETR", "LLM")
+MODELS = ("YOLO", "YOLOWorld", "YOLOE", "NAS", "SAM", "FastSAM", "RTDETR", "LLM", "LocateAnything")
 PLATFORM_EXPORTS = ("Platform", "AsyncPlatform", "APIError", "APIConnectionError")
 
 __all__ = (  # noqa: PLE0604
@@ -32,7 +32,7 @@ __all__ = (  # noqa: PLE0604
 
 if TYPE_CHECKING:
     # Enable hints for type checkers
-    from ultralytics.models import LLM, YOLO, YOLOWorld, YOLOE, NAS, SAM, FastSAM, RTDETR  # noqa
+    from ultralytics.models import LLM, YOLO, YOLOWorld, YOLOE, NAS, SAM, FastSAM, RTDETR, LocateAnything  # noqa
     from ultralytics_platform import APIConnectionError, APIError, AsyncPlatform, Platform  # noqa: F401
 
 
