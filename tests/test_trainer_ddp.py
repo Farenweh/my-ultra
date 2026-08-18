@@ -101,6 +101,7 @@ def test_setup_ddp_selects_cuda_backend_without_hccl_probe(monkeypatch, nccl_ava
     trainer._setup_ddp()
 
     assert captured["backend"] == expected_backend
+    assert captured["device_id"] == torch.device("cuda", 0)
 
 
 @pytest.mark.parametrize("device", ("0,1", "npu:0,1"))
@@ -123,6 +124,7 @@ def test_setup_ddp_selects_hccl_on_ascend_without_cuda_backend_probe(monkeypatch
     trainer._setup_ddp()
 
     assert captured["backend"] == "hccl"
+    assert captured["device_id"] == torch.device("npu", 0)
 
 
 def test_validator_ddp_unprefixed_device_uses_resolved_backend(monkeypatch):

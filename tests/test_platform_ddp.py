@@ -91,6 +91,26 @@ def test_generate_k8s_ddp_command(monkeypatch, tmp_path):
     assert "--nproc_per_node" in cmd and cmd[cmd.index("--nproc_per_node") + 1] == "2"
 
 
+def test_build_torchrun_command_prefers_current_environment_executable(monkeypatch, tmp_path):
+    python = tmp_path / "python"
+    torchrun = tmp_path / "torchrun"
+    torchrun.write_text("#!/bin/sh\n", encoding="utf-8")
+    torchrun.chmod(0o755)
+    monkeypatch.setattr(dist_utils.sys, "executable", str(python))
+    monkeypatch.setattr(dist_utils, "TORCH_1_9", True)
+    command = dist_utils.build_torchrun_command(runner="worker.py", nproc_per_node=8, master_port=12345)
+    assert command[0] == str(torchrun)
+    assert command[-1] == "worker.py"
+
+
+def test_build_torchrun_command_falls_back_without_executable(monkeypatch, tmp_path):
+    python = tmp_path / "python"
+    monkeypatch.setattr(dist_utils.sys, "executable", str(python))
+    monkeypatch.setattr(dist_utils, "TORCH_1_9", True)
+    command = dist_utils.build_torchrun_command(runner="worker.py", nproc_per_node=2, master_port=12345)
+    assert command[:3] == [str(python), "-m", "torch.distributed.run"]
+
+
 def test_generate_k8s_ddp_command_keeps_existing_save_dir(monkeypatch, tmp_path):
     """Test K8s launch no longer deletes the shared save_dir before creating the runner file."""
     monkeypatch.setenv("K8S_TRAINING", "1")
@@ -163,7 +183,9 @@ def test_k8s_parent_auto_resolves_visible_devices(monkeypatch):
     )
     monkeypatch.setattr(trainer_module, "is_k8s_training_enabled", lambda: True)
     monkeypatch.setattr(trainer_module, "is_k8s_distributed_parent", lambda: True)
-    monkeypatch.setattr(trainer_module.BaseTrainer, "check_resume", lambda self, overrides: setattr(self, "resume", False))
+    monkeypatch.setattr(
+        trainer_module.BaseTrainer, "check_resume", lambda self, overrides: setattr(self, "resume", False)
+    )
     monkeypatch.setattr(trainer_module, "select_device", fake_select_device)
     monkeypatch.setattr(trainer_module, "IS_ASCEND", True)
     monkeypatch.setattr(trainer_module.torch.npu, "is_available", lambda: True)

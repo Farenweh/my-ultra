@@ -182,8 +182,12 @@ def build_torchrun_command(
     master_addr: str | None = None,
 ) -> list[str]:
     """Build a torchrun command."""
-    dist_cmd = "torch.distributed.run" if TORCH_1_9 else "torch.distributed.launch"
-    cmd = [sys.executable, "-m", dist_cmd, "--nproc_per_node", f"{nproc_per_node}"]
+    torchrun = Path(sys.executable).with_name("torchrun")
+    if TORCH_1_9 and torchrun.is_file() and os.access(torchrun, os.X_OK):
+        cmd = [str(torchrun), "--nproc_per_node", f"{nproc_per_node}"]
+    else:
+        dist_cmd = "torch.distributed.run" if TORCH_1_9 else "torch.distributed.launch"
+        cmd = [sys.executable, "-m", dist_cmd, "--nproc_per_node", f"{nproc_per_node}"]
     if nnodes > 1:
         if not master_addr:
             raise ValueError("'master_addr' is required when nnodes > 1.")
@@ -242,7 +246,9 @@ def generate_ddp_command(trainer: BaseTrainer) -> tuple[list[str], str]:
     return cmd, str(file)
 
 
-def ddp_cleanup(trainer: BaseTrainer, file: str | Path | list[str | Path] | tuple[str | Path, ...] | set[str | Path]) -> None:
+def ddp_cleanup(
+    trainer: BaseTrainer, file: str | Path | list[str | Path] | tuple[str | Path, ...] | set[str | Path]
+) -> None:
     """Delete temporary file if created during distributed data parallel (DDP) training.
 
     This function checks if the provided file contains the trainer's ID in its name, indicating it was created as a

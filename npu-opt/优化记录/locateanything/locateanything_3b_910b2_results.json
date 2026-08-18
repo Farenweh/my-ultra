@@ -1,0 +1,244 @@
+{
+  "date": "2026-08-17",
+  "updated": "2026-08-18",
+  "hardware": "8 x Ascend 910B2 64GiB",
+  "software": {
+    "python": "3.12.13",
+    "torch": "2.12.0+cpu",
+    "torch_npu": "2.12.0",
+    "cann": "9.1.0"
+  },
+  "workload": {
+    "model": "nvidia/LocateAnything-3B",
+    "revision": "c32291ca5e996f5a7a485845b4f57a233936bba0",
+    "dataset": "MS COCO 2017 val前128张",
+    "world_size": 8,
+    "batch_per_rank": 8,
+    "batches_per_rank": 2,
+    "dtype": "bfloat16",
+    "generation_mode": "hybrid",
+    "temperature": 0.7,
+    "top_p": 0.9
+  },
+  "baseline": {
+    "npu_fast_path": "off",
+    "tokens_per_second": 846.0907627916478,
+    "steady_second_batch_tokens_per_second": 846.7087451034515,
+    "images_per_second": 1.4646548851508674,
+    "peak_memory_percent": 14.147698898339875,
+    "average_npu_utilization_percent_sampled": 41.7890625,
+    "inference_errors": 0
+  },
+  "optimized": {
+    "npu_fast_path": "auto",
+    "tokens_per_second": 1093.4689884014151,
+    "steady_second_batch_tokens_per_second": 1172.183133109778,
+    "images_per_second": 1.884957821283312,
+    "peak_memory_percent": 13.907420247917335,
+    "average_npu_utilization_percent_sampled": 15.410714285714286,
+    "inference_errors": 0
+  },
+  "relative": {
+    "tokens_per_second_percent": 29.23778824786496,
+    "steady_second_batch_tokens_per_second_percent": 38.439946426508186,
+    "images_per_second_percent": 28.69638031413462,
+    "peak_memory_percentage_point": -0.2402786504225407
+  },
+  "rejected_experiment": {
+    "name": "batch8 MoonViT多图TND打包",
+    "tokens_per_second": 843.1686718455022,
+    "reason": "BF16数值扰动放大了随机生成尾延迟；一个rank首批输出6435 token并耗时59.78秒，因此未进入默认代码路径"
+  },
+  "large_batch_128": {
+    "workload": {
+      "dataset": "MS COCO 2017 val前1024张",
+      "world_size": 8,
+      "batch_per_rank": 128,
+      "output_tokens": 582800
+    },
+    "baseline_first_batch": {
+      "tokens_per_second": 2711.667883600586,
+      "slowest_generation_seconds": 214.92307
+    },
+    "safe_optimized": {
+      "tokens_per_second": 2884.772617395608,
+      "global_generation_seconds": 202.0263214111328,
+      "images_per_second": 4.974302264654112,
+      "peak_memory_percent": 44.16066549558435,
+      "average_npu_utilization_percent_sampled": 30.768939393939394,
+      "worker_threads_before": 205,
+      "worker_threads_after": 69,
+      "raw_output_exact_matches": 1024,
+      "raw_output_compared": 1024
+    },
+    "relative": {
+      "tokens_per_second_percent": 6.383699672143162
+    },
+    "enabled_by_default": [
+      "persistent_qsample_buffer",
+      "topology_cpu_affinity",
+      "interop_threads_1",
+      "ar_sample_without_logits",
+      "duplicate_box_loop_guard_16"
+    ],
+    "rejected_experiments": [
+      {
+        "name": "static_kv_cache",
+        "corrected_dynamic_tokens_per_second": 249.53,
+        "corrected_static_tokens_per_second": 148.86,
+        "reason": "精确复现动态左填充后数值一致，但高级索引gather使其慢于动态KV"
+      },
+      {
+        "name": "paged_kv_cache",
+        "batch8_dynamic_seconds": 3.95,
+        "batch8_paged_seconds": 6.06,
+        "reason": "单token paged attention数值一致，但MTP恢复连续视图的gather开销超过收益"
+      },
+      {
+        "name": "continuous_window",
+        "reason": "连续槽位补充未解决最慢rank的长序列尾部，8卡总时间没有改善"
+      },
+      {
+        "name": "npu_multinomial_q_api",
+        "reason": "CANN 9.1/TorchNPU 2.12对q参数报错，因此保留等价qSample路径"
+      }
+    ],
+    "ar_and_repetition_optimization": {
+      "ar_full_probabilities_tokens_per_second": 1152.9957956170156,
+      "ar_token_only_tokens_per_second": 1162.4317137646124,
+      "ar_token_only_relative_percent": 0.8183827021283507,
+      "exact_raw_outputs": 128,
+      "compared_raw_outputs": 128,
+      "duplicate_guard": {
+        "max_duplicate_boxes": 16,
+        "old_rank5_tail_batch_seconds": 284.28619384765625,
+        "new_rank5_tail_batch_seconds": 199.23084935266525,
+        "wall_time_reduction_percent": 29.9189149299915,
+        "old_outlier_tokens": 8194,
+        "new_outlier_tokens": 953,
+        "old_outlier_boxes": 1312,
+        "new_outlier_boxes": 105,
+        "unchanged_other_images": 112,
+        "compared_other_images": 112,
+        "outlier_image_id": 498919
+      }
+    },
+    "completed_coco_validation": {
+      "images": 5000,
+      "unique_image_ids": 5000,
+      "duplicate_image_ids": 0,
+      "boxes": 31885,
+      "f1_50_micro": 0.5520133457812333,
+      "mean_gt_iou": 0.44524169832474636,
+      "resume_segment_tokens_per_second": 1837.1205190494543,
+      "resume_segment_longest_rank_seconds": 284.28619384765625,
+      "resume_segment_max_sample_tokens": 8194,
+      "resume_segment_max_sample_image_id": 498919
+    }
+  },
+  "semantic_equivalent_followup": {
+    "batch_ab_2048": {
+      "selected_batch": 192,
+      "batch_192": {
+        "tokens_per_second": 2862.469754,
+        "images_per_second": 4.91849,
+        "peak_memory_percent": 60.7649
+      },
+      "batch_256": {
+        "tokens_per_second": 2527.3288,
+        "images_per_second": 4.319,
+        "peak_memory_percent": 79.1814
+      }
+    },
+    "shape_bucketing": {
+      "status": "experimental_off_by_default",
+      "kv_bucket_size": 128,
+      "reason": "补齐仅用于稳定Graph形状，本身会增加计算"
+    },
+    "npu_graph": {
+      "status": "rejected_for_default",
+      "scope": "Qwen MLP q=12 pure tensor hot path",
+      "eager_milliseconds": 0.40336945094168186,
+      "graph_replay_milliseconds": 18.723931186832488,
+      "max_absolute_error": 0.0
+    },
+    "combined_512": {
+      "workload": {
+        "world_size": 8,
+        "batch_per_rank": 64,
+        "max_new_tokens": 1024,
+        "continuous_batching": true,
+        "dynamic_scheduling": true,
+        "refill_batch": 8
+      },
+      "baseline": {
+        "tokens_per_second": 2392.1249436705325,
+        "images_per_second": 4.139702871513316,
+        "peak_memory_percent": 27.82848374043776,
+        "average_npu_utilization_percent": 31.035714285714285,
+        "f1_50": 0.5607963246554364,
+        "mean_gt_iou": 0.4514552693389327,
+        "output_tokens": 290745
+      },
+      "native_paged_and_grouped_moonvit": {
+        "tokens_per_second": 3647.791231133724,
+        "images_per_second": 6.22013745893027,
+        "peak_memory_percent": 25.08489616709388,
+        "average_npu_utilization_percent": 41.15833333333333,
+        "f1_50": 0.5638378624563535,
+        "mean_gt_iou": 0.4577915554936098,
+        "output_tokens": 292517
+      },
+      "relative": {
+        "tokens_per_second_percent": 52.49166816246931,
+        "images_per_second_percent": 50.255650030660924,
+        "peak_memory_percentage_point": -2.743587573344,
+        "output_tokens_percent": 0.609468778482869
+      }
+    },
+    "final_batch_192_capacity": {
+      "images": 1536,
+      "world_size": 8,
+      "actual_batch_per_rank": 192,
+      "max_new_tokens": 256,
+      "output_tokens": 394822,
+      "tokens_per_second": 5016.0395823329545,
+      "images_per_second": 18.02323750558396,
+      "peak_memory_percent": 51.58121223290812,
+      "average_npu_utilization_percent": 35.0546875,
+      "oom": false,
+      "inference_errors": 0
+    }
+  },
+  "semantic_equivalent_round3": {
+    "candidate_top_p": {
+      "candidate_size": 1024,
+      "coverage_recheck_steps": 64,
+      "fallback": "full_vocabulary",
+      "status": "enabled_with_guard"
+    },
+    "advance_step_flashattn": {
+      "status": "rejected",
+      "reason": "LocateAnything仍需D2H执行pattern状态转换，无法删除同步点"
+    },
+    "batch_192_1536": {
+      "tokens_per_second": 8116.119388972896,
+      "images_per_second": 28.0828786044611,
+      "peak_memory_percent": 51.308878489466515,
+      "average_npu_utilization_percent": 48.53409090909091,
+      "inference_errors": 0
+    },
+    "batch_256_2048": {
+      "tokens_per_second": 9459.495372654277,
+      "images_per_second": 31.877382813543722,
+      "peak_memory_percent": 64.51329733308636,
+      "average_npu_utilization_percent": 48.92307692307692,
+      "output_tokens": 526365,
+      "boxes": 8026,
+      "f1_50": 0.4596301513017402,
+      "mean_gt_iou": 0.30259979504531703,
+      "inference_errors": 0
+    },
+    "selected_batch": 256
+  }
+}

@@ -19,7 +19,7 @@ import time
 import warnings
 from contextlib import nullcontext, redirect_stdout
 from copy import copy, deepcopy
-from datetime import datetime, timedelta
+from datetime import datetime
 from functools import partial
 from pathlib import Path
 
@@ -31,6 +31,7 @@ from torch import nn, optim
 from ultralytics import __version__
 from ultralytics.cfg import _YOLO_CLI_COMMAND, get_cfg, get_save_dir
 from ultralytics.data.utils import check_cls_dataset, check_det_dataset, convert_ndjson_to_yolo_if_needed
+from ultralytics.engine.runtime import CallbackHost, initialize_distributed_runtime
 from ultralytics.nn.distill_model import DistillationModel
 from ultralytics.nn.tasks import load_checkpoint
 from ultralytics.optim import MuSGD
@@ -102,7 +103,7 @@ from ultralytics.utils.torch_utils import (
 )
 
 
-class BaseTrainer:
+class BaseTrainer(CallbackHost):
     """A base class for creating trainers.
 
     This class provides the foundation for training YOLO models, handling the training loop, validation, checkpointing,
@@ -211,7 +212,7 @@ class BaseTrainer:
             self.args.workers = 0  # faster CPU training as time dominated by inference, not dataloading
 
         # Callbacks - initialize early so on_pretrain_routine_start can capture original args.data
-        self.callbacks = _callbacks or callbacks.get_default_callbacks()
+        self.setup_callbacks(_callbacks or callbacks.get_default_callbacks())
 
         self.local_world_size = self._get_local_world_size(self.args.device)
         self.k8s_launch_config = normalize_k8s_launch_config(self.local_world_size) if self.k8s_distributed else None
@@ -228,7 +229,7 @@ class BaseTrainer:
         self.world_size = world_size
         # Run on_pretrain_routine_start before get_dataset() to capture original args.data (e.g., ul:// URIs)
         if RANK in {-1, 0} and not self.ddp:
-            callbacks.add_integration_callbacks(self)
+            self.add_integration_callbacks()
             self.run_callbacks("on_pretrain_routine_start")
 
         # Model and Dataset
@@ -264,10 +265,6 @@ class BaseTrainer:
         self._plot_lock = threading.Lock()
         self._vram_target_reserve = None
         self._vram_target_applied = False
-
-    def add_callback(self, event: str, callback):
-        """Append the given callback to the event's callback list."""
-        self.callbacks[event].append(callback)
 
     @staticmethod
     def _get_local_world_size(device) -> int:
@@ -305,15 +302,6 @@ class BaseTrainer:
         if device_count < 1:
             raise ValueError("任务提交分布式状态下未检测到可用加速卡。")
         return ",".join(str(i) for i in range(device_count))
-
-    def set_callback(self, event: str, callback):
-        """Override the existing callbacks with the given callback for the specified event."""
-        self.callbacks[event] = [callback]
-
-    def run_callbacks(self, event: str):
-        """Run all existing callbacks associated with a particular event."""
-        for callback in self.callbacks.get(event, []):
-            callback(self)
 
     def train(self):
         """Execute the training process, using DDP subprocess for multi-GPU or direct training for single-GPU."""
@@ -365,33 +353,15 @@ class BaseTrainer:
 
     def _setup_ddp(self):
         """Initialize and set the DistributedDataParallel parameters for training."""
-        device_type = self.device.type
-        devices = self.args.device.split(":", 1)[-1].split(",")
-        index = int(devices[LOCAL_RANK])  # world_size > 1 guarantees a multi-device string
-        self.device = torch.device(device_type, index)
-        self.accelerator = get_torch_device_backend(self.device)
-        self.accelerator.set_device(index)
-        if device_type == "cuda":
-            os.environ["TORCH_NCCL_BLOCKING_WAIT"] = "1"  # set to enforce timeout
-        elif device_type == "npu":
-            os.environ["TORCH_HCCL_BLOCKING_WAIT"] = "1"
-            os.environ.setdefault("HCCL_CONNECT_TIMEOUT", "1800")
-        elif device_type == "xpu" and not (hasattr(dist, "is_xccl_available") and dist.is_xccl_available()):
-            raise RuntimeError("Multi-XPU training requires XCCL, which is not available in this PyTorch build.")
-        backend = (
-            "hccl"
-            if device_type == "npu"
-            else "xccl"
-            if device_type == "xpu"
-            else "nccl"
-            if dist.is_nccl_available()
-            else "gloo"
-        )
-        dist.init_process_group(
-            backend=backend,
-            timeout=timedelta(seconds=10800),  # 3 hours
+        self.device, self.accelerator, _ = initialize_distributed_runtime(
+            device_type=self.device.type,
+            device_spec=self.args.device,
+            local_rank=LOCAL_RANK,
             rank=RANK,
             world_size=self.world_size,
+            dist_module=dist,
+            accelerator_resolver=get_torch_device_backend,
+            is_ascend=IS_ASCEND,
         )
 
     @staticmethod
