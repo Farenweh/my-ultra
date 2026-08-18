@@ -31,7 +31,17 @@ class WorldValidator(DetectionValidator):
             current = model.names.values() if isinstance(model.names, dict) else model.names  # names may be a list
             if list(current) != names:  # regenerate prompts only if class order differs from dataset
                 state = (model.names, model.txt_feats, model.model[-1].nc)  # restore after to avoid leak to caller
-                model.set_classes(names, cache_clip_model=False)
+                from ultralytics.engine.val_runtime import broadcast_val_tensor, get_distributed_val_context
+                from ultralytics.utils import RANK
+
+                context = get_distributed_val_context()
+                if context is None or RANK == 0:
+                    model.set_classes(names, cache_clip_model=False)
+                    text_features = model.txt_feats
+                else:
+                    text_features = None
+                model.txt_feats = broadcast_val_tensor(text_features) if context is not None else text_features
+                model.model[-1].nc = len(names)
                 model.names = dict(enumerate(names))  # set_classes updates embeddings/nc but not names
                 try:
                     return super().__call__(trainer, model)
