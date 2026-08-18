@@ -212,6 +212,10 @@ class AIFI(TransformerEncoderLayer):
             (torch.Tensor): Output tensor with shape [B, C, H, W].
         """
         c, h, w = x.shape[1:]
+        if not hasattr(self, "_cached_pos_embed_key"):
+            self._cached_pos_embed_key = None
+        if not hasattr(self, "_cached_pos_embed"):
+            self._cached_pos_embed = None
         if torch.jit.is_tracing():
             pos_embed = self.build_2d_sincos_position_embedding(w, h, c, device=x.device).to(dtype=x.dtype)
         else:
@@ -533,8 +537,20 @@ class MSDeformAttn(nn.Module):
 
     def _apply(self, fn):
         """Discard device-bound metadata before applying a module transform."""
+        self._ensure_runtime_caches()
         self._msda_fastpath_cache.clear()
+        self._cached_value_shapes = None
+        self._cached_offset_normalizer = None
         return super()._apply(fn)
+
+    def _ensure_runtime_caches(self) -> None:
+        """为旧checkpoint中不存在的非持久运行时缓存补齐实例字段。"""
+        if not hasattr(self, "_msda_fastpath_cache"):
+            self._msda_fastpath_cache = {}
+        if not hasattr(self, "_cached_value_shapes"):
+            self._cached_value_shapes = None
+        if not hasattr(self, "_cached_offset_normalizer"):
+            self._cached_offset_normalizer = None
 
     def _reset_parameters(self):
         """Reset module parameters."""
@@ -583,6 +599,7 @@ class MSDeformAttn(nn.Module):
         References:
             https://github.com/PaddlePaddle/PaddleDetection/blob/develop/ppdet/modeling/transformers/deformable_transformer.py
         """
+        self._ensure_runtime_caches()
         bs, len_q = query.shape[:2]
         len_v = value.shape[1]
         assert sum(s[0] * s[1] for s in value_shapes) == len_v

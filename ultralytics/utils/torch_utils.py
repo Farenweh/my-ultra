@@ -334,11 +334,11 @@ def select_device(device="", newline=False, verbose=True):
         device(type='cpu')
 
     Notes:
-        CUDA indices are torch device indices, which reflect any externally set CUDA_VISIBLE_DEVICES. This function
-        never modifies CUDA_VISIBLE_DEVICES; an explicit single-GPU request is made the default CUDA device with
-        torch.cuda.set_device() so that indexless 'cuda' operations land on it, while default '' requests (resolved
-        to the current device) and multi-GPU requests (DDP ranks pin their own device in trainer._setup_ddp()) leave
-        the current device untouched.
+        CUDA indices are torch device indices, which reflect any externally set CUDA_VISIBLE_DEVICES. Selecting CPU
+        never modifies CUDA_VISIBLE_DEVICES or ASCEND_RT_VISIBLE_DEVICES, so a process may later initialize an
+        accelerator safely. An explicit single-GPU request is made the default CUDA device with torch.cuda.set_device()
+        so that indexless 'cuda' operations land on it, while default '' requests (resolved to the current device) and
+        multi-GPU requests (DDP ranks pin their own device in trainer._setup_ddp()) leave the current device untouched.
     """
     if isinstance(device, torch.device):
         if device.type not in {"cuda", "npu", "xpu"}:
@@ -392,10 +392,7 @@ def select_device(device="", newline=False, verbose=True):
 
     cpu = device == "cpu"
     mps = device in {"mps", "mps:0"}  # Apple Metal Performance Shaders (MPS)
-    if cpu or mps:
-        if IS_ASCEND:
-            os.environ[env_var] = ""  # force torch.npu.is_available() = False
-    elif device:  # non-cpu device requested
+    if not cpu and not mps and device:  # non-cpu device requested
         if IS_ASCEND:
             os.environ[env_var] = device  # must be set before querying NPU availability and count
         valid = (
@@ -647,6 +644,33 @@ def _get_input_channels(model, p) -> int:
     return int(p.shape[1]) if p.ndim > 1 else 3
 
 
+def _snapshot_thop_state(modules):
+    """Snapshot module state that THOP may temporarily mutate during profiling."""
+    return [
+        (
+            module,
+            set(module._forward_hooks),
+            set(module._forward_pre_hooks),
+            {name: module._buffers.get(name) for name in ("total_ops", "total_params") if name in module._buffers},
+        )
+        for module in modules
+    ]
+
+
+def _restore_thop_state(state):
+    """Remove only THOP artifacts added after a profiling snapshot while preserving user hooks."""
+    for module, forward_hooks, forward_pre_hooks, buffers in state:
+        for hook_id in set(module._forward_hooks).difference(forward_hooks):
+            module._forward_hooks.pop(hook_id, None)
+        for hook_id in set(module._forward_pre_hooks).difference(forward_pre_hooks):
+            module._forward_pre_hooks.pop(hook_id, None)
+        for name in ("total_ops", "total_params"):
+            if name in buffers:
+                module._buffers[name] = buffers[name]
+            else:
+                module._buffers.pop(name, None)
+
+
 def get_flops(model, imgsz=640):
     """Calculate FLOPs (floating point operations) for a model in GFLOPs.
 
@@ -660,6 +684,7 @@ def get_flops(model, imgsz=640):
     Returns:
         (float): The model's GFLOPs (billions of floating point operations).
     """
+    profile_state = None
     try:
         import thop
     except ImportError:
@@ -683,11 +708,15 @@ def get_flops(model, imgsz=640):
         stride = None if attn else max(int(model.stride.max()), 32) if hasattr(model, "stride") else 32  # max stride
         im = torch.empty((1, _get_input_channels(model, p), *imgsz), device=p.device, dtype=p.dtype)  # BCHW image
         custom_ops = {Attention: _attention_ops, AAttn: _attention_ops} if attn else None
+        profile_state = _snapshot_thop_state(tuple(model.modules()))
         if rtdetr:  # RT-DETR cannot run the stride-sized proxy input
             return thop.profile(model, inputs=[im], custom_ops=custom_ops, verbose=False)[0] / 1e9 * 2
         return thop.profile(model, inputs=[im], stride=stride, custom_ops=custom_ops, verbose=False)[0] / 1e9 * 2
     except Exception:
         return 0.0
+    finally:
+        if profile_state is not None:
+            _restore_thop_state(profile_state)
 
 
 def initialize_weights(model):
