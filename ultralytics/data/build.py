@@ -372,7 +372,8 @@ def build_dataloader(
     drop_last: bool = False,
     pin_memory: bool = True,
     device: torch.device | str = "cuda",
-) -> InfiniteDataLoader:
+    distributed_val_context: Any | None = None,
+) -> torch.utils.data.DataLoader:
     """Create and return an InfiniteDataLoader for training or validation.
 
     Args:
@@ -384,6 +385,7 @@ def build_dataloader(
         drop_last (bool, optional): Whether to drop the last incomplete batch.
         pin_memory (bool, optional): Whether to use pinned memory for dataloader.
         device (torch.device | str, optional): Device used by the dataloader consumer.
+        distributed_val_context (Any, optional): 独立多卡验证的动态调度上下文。
 
     Returns:
         (InfiniteDataLoader): A dataloader that can be used for training or validation.
@@ -396,6 +398,35 @@ def build_dataloader(
     dataset_len = len(dataset)
     batch = min(batch, dataset_len)
     seed = torch.initial_seed() - RANK - 1
+    if distributed_val_context is not None:
+        if shuffle:
+            raise ValueError("独立分布式验证的动态DataLoader不支持shuffle=True")
+        from ultralytics.engine.val_runtime import DynamicBatchSampler
+
+        scheduler = distributed_val_context.make_scheduler(dataset_len)
+        batch_sampler = DynamicBatchSampler(scheduler, distributed_val_context)
+        device_type = getattr(device, "type", str(device).split(":")[0])
+        nd = get_torch_device_backend(device).device_count() if device_type not in {"cpu", "mps"} else 0
+        batches = scheduler.total_batches
+        # 动态调度只允许每rank预取一个batch。
+        nw = min(1, os.cpu_count() // max(nd, 1), workers, 0 if batches <= 1 else batches)
+        generator = torch.Generator()
+        generator.manual_seed((6148914691236517205 + RANK + seed) % (1 << 64))
+        pin_memory = nd > 0 and pin_memory
+        pin_memory_device = (
+            device_type if pin_memory and device_type in {"npu", "xpu"} and TORCH_1_13 and not TORCH_2_7 else None
+        )
+        return dataloader.DataLoader(
+            dataset=dataset,
+            batch_sampler=batch_sampler,
+            num_workers=nw,
+            prefetch_factor=1 if nw > 0 else None,
+            pin_memory=pin_memory,
+            collate_fn=getattr(dataset, "collate_fn", None),
+            worker_init_fn=seed_worker,
+            generator=generator,
+            **({"pin_memory_device": pin_memory_device} if pin_memory_device else {}),
+        )
     batch = _adjust_distributed_eval_batch_size(batch, dataset, rank, shuffle)
     sampler = (
         None
