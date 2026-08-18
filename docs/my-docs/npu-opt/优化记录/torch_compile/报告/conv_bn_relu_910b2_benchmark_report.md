@@ -303,7 +303,7 @@ export TORCHINDUCTOR_CACHE_DIR="$CONV_BENCH_CACHE/inductor"
 export TORCHINDUCTOR_COMPILE_DIR="$CONV_BENCH_CACHE/compile"
 export TRITON_CACHE_DIR="$CONV_BENCH_CACHE/triton"
 
-python npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
+python docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
     --scheme make_graphed_callables \
     --device 0 \
     --task-queue 1 \
@@ -325,7 +325,7 @@ python npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
 高对比输入的 correctness-only 检查命令为：
 
 ```bash
-python npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
+python docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
     --scheme make_graphed_callables --device 0 \
     --shape 4,16,32,32 --out-channels 16 --dtype amp_bf16 \
     --input-variants 2 --input-offset 5 --correctness-steps 6 \
@@ -340,9 +340,9 @@ SMALL_ARGS=(
     --correctness-steps 4 --warmup-steps 10 --measure-steps 10 --repeats 5
     --performance-order candidate_first --phase both
 )
-python npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
+python docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
     --scheme aot_eager "${SMALL_ARGS[@]}" --output /tmp/convbench-aot.json
-python npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
+python docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
     --scheme torchair_ge "${SMALL_ARGS[@]}" --output /tmp/convbench-torchair.json
 ```
 
@@ -356,17 +356,17 @@ INDUCTOR_ARGS=(
 )
 
 # 复现 CantSplit API 错误。
-python npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
+python docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
     --scheme inductor "${INDUCTOR_ARGS[@]}" --output /tmp/convbench-inductor.json
 
 # 仅验证 CantSplit API 不匹配之后的下一个失败点。
-python npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
+python docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
     --scheme inductor --cantsplit-compat "${INDUCTOR_ARGS[@]}" \
     --output /tmp/convbench-inductor-compat.json
 
 # 仅验证全部算子回退，不代表 Inductor 生成了 NPU kernel。
 NPU_INDUCTOR_FALLBACK_LIST=allfallback \
-    python npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
+    python docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
     --scheme inductor_reduce_overhead --cantsplit-compat "${INDUCTOR_ARGS[@]}" \
     --output /tmp/convbench-inductor-fallback.json
 ```
@@ -377,11 +377,11 @@ Eager DVM 必须在安装包含 DVM binding 的源码 wheel 后，以独立进�
 Transformer SwiGLU 的命令只需替换 `--workload`：
 
 ```bash
-ASCEND_RT_VISIBLE_DEVICES=0 python npu-opt/优化记录/torch_compile/基准/benchmark_eager_dvm.py \
+ASCEND_RT_VISIBLE_DEVICES=0 python docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_eager_dvm.py \
     --workload conv_bn_relu --lazy-fusion off --task-queue 1 \
     --dtype amp_bf16 --warmup-steps 500 --measure-steps 20 --repeats 20 \
     --output /tmp/dvm-conv-off.json
-ASCEND_RT_VISIBLE_DEVICES=0 python npu-opt/优化记录/torch_compile/基准/benchmark_eager_dvm.py \
+ASCEND_RT_VISIBLE_DEVICES=0 python docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_eager_dvm.py \
     --workload conv_bn_relu --lazy-fusion on --task-queue 1 \
     --dtype amp_bf16 --warmup-steps 500 --measure-steps 20 --repeats 20 \
     --output /tmp/dvm-conv-on.json

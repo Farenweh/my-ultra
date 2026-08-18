@@ -263,7 +263,7 @@ DDP 继续筛查也确认当前 25 MiB bucket 最合适：在 YOLO11-L、MuSGD�
 - 真实 coco8 Trainer：YOLO11-L 与 RT-DETR-L 各完成 1 epoch、2 iter，forward/backward、验证、`last/best` 保存和重新加载验证均通过，退出码均为 0。
 - 真实两卡 coco128 Trainer：YOLO11-L（全局 b32、`nbs=64`）和 RT-DETR-L（全局 b8、`nbs=16`）均以 `accumulate=2` 完成 2 个 microstep、同步更新边界、epoch 验证、`last/best` 保存和 best 重载验证，退出码均为 0。
 - RT-DETR-L 的真实 TensorBoard graph trace 成功；YOLO11-L 的 NPU graph trace 仍因 `npu::get_npu_format` 返回整数而产生非致命警告，不影响训练，模型深拷贝隔离测试通过。
-- 当前环境为 torchvision 0.27.0、torchvision_npu 0.22.1；后者的视频兼容补丁仍引用 torchvision 已移除的 `read_video`，导致整包导入告警。训练 step 不依赖该接口，但 YOLO 验证的 torchvision NPU NMS 注册状态不能视为已验证，独立的验证性能不纳入本报告加速比。
+- 当前运行时不再导入已停止演进的 `torchvision_npu`，也不调用计划废弃的 TorchNPU IoU/NMS 接口。CANN 9.1 的 `aclnnNonMaxSuppression` 不支持 Atlas A2/910B2，因此标准框 NMS 在 NPU 完成候选过滤后，将框和分数合并传至 CPU 执行 torchvision 精确 NMS，再把少量索引传回 NPU；IoU、CIoU 和 ProbIoU 使用可自动求导的原生 PyTorch 向量化实现。独立验证性能仍不纳入本报告加速比。
 
 coco8/coco128 smoke 只证明端到端可训练，不代表最终 mAP 或长周期收敛。投产前仍需在目标数据集做固定 seed 的多 epoch A/B。
 
@@ -279,8 +279,9 @@ export USE_BATCHED_HUNGARIAN=1
 export USE_ASCEND_DDP_BUFFER_ALIGN=1
 export CPU_AFFINITY_CONF=1
 export ACLNN_CACHE_LIMIT=500000
-export AMP_DTYPE=fp16
 ```
+
+训练命令中显式传入 `amp=fp16`；AMP dtype 由公共 `amp` 参数统一控制。
 
 以上显式值适合固定生产环境并对缺失能力严格报错；五项 `USE_ASCEND_*` 和全局 `USE_BATCHED_HUNGARIAN` 均不设置时，在当前 910B2 软件栈上的有效默认行为相同，但融合优化器缺失时会自动回退。
 
@@ -307,10 +308,10 @@ export AMP_DTYPE=fp16
 
 复现文件：
 
-- 单卡完整 step：`npu-opt/优化记录/检测模型训练/脚本/benchmark_detector_train_npu.py`
-- 两卡 DDP 筛查：`npu-opt/优化记录/检测模型训练/脚本/benchmark_detector_ddp_npu.py`
-- NPU 利用率采样：`npu-opt/优化记录/检测模型训练/脚本/monitor_npu_util.py`
-- 结构化数据：`npu-opt/优化记录/检测模型训练/结果/yolo11l_rtdetr_910b2_results.json`
-- 本报告：`npu-opt/优化记录/检测模型训练/报告/yolo11l_rtdetr_910b2_training_optimization_report.md`
+- 单卡完整 step：`docs/my-docs/npu-opt/优化记录/检测模型训练/脚本/benchmark_detector_train_npu.py`
+- 两卡 DDP 筛查：`docs/my-docs/npu-opt/优化记录/检测模型训练/脚本/benchmark_detector_ddp_npu.py`
+- NPU 利用率采样：`docs/my-docs/npu-opt/优化记录/检测模型训练/脚本/monitor_npu_util.py`
+- 结构化数据：`docs/my-docs/npu-opt/优化记录/检测模型训练/结果/yolo11l_rtdetr_910b2_results.json`
+- 本报告：`docs/my-docs/npu-opt/优化记录/检测模型训练/报告/yolo11l_rtdetr_910b2_training_optimization_report.md`
 
 以上分支名和提交 SHA 均为测试时的历史快照，不使用当前分支头回填。材料归档时工作位于 `npu` 分支，整理前 HEAD 为 `e2fa0f800a6e9f37a3d8b2b6d0335daed88916b2`。

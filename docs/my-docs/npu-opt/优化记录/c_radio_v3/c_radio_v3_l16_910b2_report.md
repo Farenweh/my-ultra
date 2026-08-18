@@ -129,12 +129,12 @@ pytest -q tests/test_c_radio_v3_backbone.py tests/test_c_radio_v3_attention_asce
 RUN_C_RADIO_V3_L_TESTS=1 pytest -q --slow tests/test_c_radio_v3_real_npu.py
 
 # 四路径ABBA
-python npu-opt/优化记录/c_radio_v3/benchmark_c_radio_v3_npu.py \
+python docs/my-docs/npu-opt/优化记录/c_radio_v3/benchmark_c_radio_v3_npu.py \
   --output /tmp/c_radio_v3_l16_results.json
 
 # 两卡DDP
 python -m torch.distributed.run --standalone --nproc_per_node 2 \
-  npu-opt/优化记录/c_radio_v3/c_radio_v3_ddp_smoke.py
+  docs/my-docs/npu-opt/优化记录/c_radio_v3/c_radio_v3_ddp_smoke.py
 ```
 
 结构化原始数据见 `c_radio_v3_l16_910b2_results.json`。

@@ -1,6 +1,6 @@
 # Ascend 910B2 优化记录
 
-本目录集中保存本项目在 Ascend 910B2 上形成的自研基准、诊断探针、结构化结果和测评报告。`npu-opt/框架特性/`、`npu-opt/npu亲和算子与操作/` 与 `npu-opt/torch-compile/` 继续保存上游参考资料，不与实测记录混放。
+本目录集中保存本项目在 Ascend 910B2 上形成的自研基准、诊断探针、结构化结果和测评报告。`docs/my-docs/npu-opt/框架特性/`、`docs/my-docs/npu-opt/npu亲和算子与操作/` 与 `docs/my-docs/npu-opt/torch-compile/` 继续保存上游参考资料，不与实测记录混放。
 
 ## 记录索引
 
