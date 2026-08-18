@@ -619,10 +619,22 @@ class Model(torch.nn.Module):
         custom = {"rect": True}  # method defaults
         args = {**self.overrides, **custom, **kwargs, "mode": "val"}  # highest priority args on the right
 
-        validator = (validator or self._smart_load("validator"))(args=args, _callbacks=self.callbacks)
-        validator(model=self.model)
-        self.metrics = validator.metrics
-        return validator.metrics
+        def direct(effective_args: dict[str, Any]):
+            active_validator = (validator or self._smart_load("validator"))(
+                args=effective_args, _callbacks=self.callbacks
+            )
+            active_validator(model=self.model)
+            self.metrics = active_validator.metrics
+            return active_validator.metrics
+
+        from ultralytics.engine.val_runtime import run_or_launch_distributed_validation
+
+        return run_or_launch_distributed_validation(
+            self,
+            args,
+            direct,
+            custom_validator=validator,
+        )
 
     def calibrate(self, data=None, **kwargs: Any):
         """Fit scale-only depth calibration on a small labeled set (depth task only).
@@ -874,7 +886,9 @@ class Model(torch.nn.Module):
                 self.predictor = None  # the checkpoint replaced the module again; covers resume and YAML runs too
                 self.overrides = self._reset_ckpt_args(self.model.args)
                 self.overrides["model"] = str(ckpt)  # the reset drops it, train() and tune() read it back
-                if self.metrics is None and self.ckpt:  # recover from checkpoint under DDP (validator runs in subprocess)
+                if (
+                    self.metrics is None and self.ckpt
+                ):  # recover from checkpoint under DDP (validator runs in subprocess)
                     self.metrics = self.ckpt.get("train_metrics")
         return self.metrics
 

@@ -137,6 +137,7 @@ class SemanticSegmentationValidator(DetectionValidator):
             gathered_nt = [None] * dist.get_world_size()
             dist.gather_object(self.metrics.nt_per_image, gathered_nt, dst=0)
             self.metrics.nt_per_image = np.sum(gathered_nt, axis=0)
+            self.seen = len(self.dataloader.dataset)
         elif RANK > 0:
             dist.gather_object(self.metrics.nt_per_image, None, dst=0)
 

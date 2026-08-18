@@ -10,9 +10,10 @@ import torch.distributed as dist
 
 from ultralytics.data import ClassificationDataset, build_dataloader
 from ultralytics.engine.validator import BaseValidator
-from ultralytics.utils import LOGGER, RANK
+from ultralytics.utils import LOCAL_RANK, LOGGER, RANK
 from ultralytics.utils.metrics import ClassifyMetrics, ConfusionMatrix
 from ultralytics.utils.plotting import plot_images
+from ultralytics.utils.torch_utils import torch_distributed_zero_first
 
 
 class ClassificationValidator(BaseValidator):
@@ -135,16 +136,39 @@ class ClassificationValidator(BaseValidator):
 
     def gather_stats(self) -> None:
         """Gather stats from all GPUs."""
+        from ultralytics.engine.val_runtime import get_distributed_val_context
+
+        distributed_val_context = get_distributed_val_context()
+        payload = (
+            (distributed_val_context.claimed_indices, self.pred, self.targets)
+            if distributed_val_context is not None
+            else None
+        )
         if RANK == 0:
             gathered_preds = [None] * dist.get_world_size()
             gathered_targets = [None] * dist.get_world_size()
-            dist.gather_object(self.pred, gathered_preds, dst=0)
-            dist.gather_object(self.targets, gathered_targets, dst=0)
-            self.pred = [pred for rank in gathered_preds for pred in rank]
-            self.targets = [targets for rank in gathered_targets for targets in rank]
+            if distributed_val_context is not None:
+                gathered_payloads = [None] * dist.get_world_size()
+                dist.gather_object(payload, gathered_payloads, dst=0)
+                records = []
+                for indices, preds, targets in gathered_payloads:
+                    pred_rows = torch.cat(preds) if preds else torch.empty((0, 0), dtype=torch.int32)
+                    target_rows = torch.cat(targets) if targets else torch.empty(0, dtype=torch.int32)
+                    records.extend(zip(indices, pred_rows, target_rows))
+                records.sort(key=lambda item: item[0])
+                self.pred = [pred.unsqueeze(0) for _, pred, _ in records]
+                self.targets = [target.reshape(1) for _, _, target in records]
+            else:
+                dist.gather_object(self.pred, gathered_preds, dst=0)
+                dist.gather_object(self.targets, gathered_targets, dst=0)
+                self.pred = [pred for rank in gathered_preds for pred in rank]
+                self.targets = [targets for rank in gathered_targets for targets in rank]
         elif RANK > 0:
-            dist.gather_object(self.pred, None, dst=0)
-            dist.gather_object(self.targets, None, dst=0)
+            if distributed_val_context is not None:
+                dist.gather_object(payload, None, dst=0)
+            else:
+                dist.gather_object(self.pred, None, dst=0)
+                dist.gather_object(self.targets, None, dst=0)
 
     def build_dataset(self, img_path: str) -> ClassificationDataset:
         """Create a ClassificationDataset instance for validation."""
@@ -160,8 +184,25 @@ class ClassificationValidator(BaseValidator):
         Returns:
             (torch.utils.data.DataLoader): DataLoader object for the classification validation dataset.
         """
-        dataset = self.build_dataset(dataset_path)
-        return build_dataloader(dataset, batch_size, self.args.workers, rank=-1, device=self.device)
+        from ultralytics.engine.val_runtime import get_distributed_val_context
+
+        distributed_val_context = get_distributed_val_context()
+        zero_first = (
+            torch_distributed_zero_first(LOCAL_RANK, global_rank=True)
+            if distributed_val_context is not None
+            else torch_distributed_zero_first(LOCAL_RANK)
+        )
+        with zero_first:
+            dataset = self.build_dataset(dataset_path)
+        return build_dataloader(
+            dataset,
+            batch_size,
+            self.args.workers,
+            shuffle=False,
+            rank=distributed_val_context.rank if distributed_val_context is not None else -1,
+            device=self.device,
+            distributed_val_context=distributed_val_context,
+        )
 
     def print_results(self) -> None:
         """Print evaluation metrics for the classification model."""

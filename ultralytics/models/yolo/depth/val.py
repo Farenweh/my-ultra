@@ -79,14 +79,18 @@ class DepthValidator(DetectionValidator):
         """
         if RANK == -1 or not dist.is_initialized():
             return
+        # HCCL不支持FP64 all-reduce；通信阶段使用FP32，之后恢复FP64供指标计算。
+        reduce_dtype = torch.float32 if self.device.type == "npu" else torch.float64
         totals = self.metrics._totals
         totals = (
-            totals.to(self.device) if totals is not None else torch.zeros(6, dtype=torch.float64, device=self.device)
+            totals.to(self.device, dtype=reduce_dtype)
+            if totals is not None
+            else torch.zeros(6, dtype=reduce_dtype, device=self.device)
         )
-        count = torch.tensor([self.metrics._count], dtype=torch.float64, device=self.device)
+        count = torch.tensor([self.metrics._count], dtype=reduce_dtype, device=self.device)
         dist.all_reduce(totals, op=dist.ReduceOp.SUM)
         dist.all_reduce(count, op=dist.ReduceOp.SUM)
-        self.metrics._totals = totals
+        self.metrics._totals = totals.to(torch.float64)
         self.metrics._count = float(count.item())
 
     def print_results(self) -> None:

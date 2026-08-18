@@ -80,6 +80,37 @@ Validate a trained YOLO26n model [accuracy](https://www.ultralytics.com/glossary
         yolo detect val model=path/to/best.pt # val custom model
         ```
 
+## 独立多设备验证
+
+原生 PyTorch YOLO、YOLOE、YOLO-World 和 RT-DETR 模型可通过传入多个 CUDA 或 Ascend NPU 设备，自动启动
+独立数据并行验证。Python API 与 CLI 的行为一致：
+
+```python
+from ultralytics import RTDETR, YOLO
+
+yolo_metrics = YOLO("yolo26n.pt").val(data="coco.yaml", device="0,1,2,3", batch=64)
+rtdetr_metrics = RTDETR("rtdetr-l.pt").val(data="coco.yaml", device="0,1,2,3", batch=64)
+print(yolo_metrics.speed["images_per_second"])
+```
+
+```bash
+yolo detect val model=yolo26n.pt data=coco.yaml device=0,1,2,3 batch=64
+```
+
+独立多设备验证中的 `batch` 是全局 batch，必须是不小于总 world size 且能被其整除的整数；每个 worker
+每次处理 `batch / world_size` 张图。每个 worker 保留一份完整模型副本，并通过 TCPStore 动态领取完整的
+本地 batch。因此验证不会使用 DDP 或 FSDP 包装模型，也不执行梯度同步。ONNX、TensorRT 等导出后端仍仅
+支持单设备验证。
+
+启动器支持单节点 CUDA/NCCL 和 Ascend/HCCL。在现有 `K8S_TRAINING` 多节点环境中应保持 `device` 未设置，
+使每个节点使用全部可见设备。所有节点必须使用相同设备类型和本地设备数，并共享模型、数据集和运行目录。
+父进程会把当前内存模型（包括训练后权重、类别和文本 prompt 状态）保存为临时 FP32 快照，验证结束后恢复
+原设备；返回值仍是任务原有的 metrics 类型，`metrics.speed["images_per_second"]` 给出全局吞吐。
+
+自定义 callback 必须是可由标准 pickle 序列化并从模块导入的顶层函数；lambda、局部函数和
+`__main__` callback 会在启动前被拒绝。显式传入自定义 validator 实例暂不支持自动多卡验证。OOM 不会静默
+缩小 batch，错误会报告 global/local batch、rank、设备和可用显存。
+
 ## Arguments for YOLO Model Validation
 
 When validating YOLO models, several arguments can be fine-tuned to optimize the evaluation process. These arguments control aspects such as input image size, batch processing, and performance thresholds. Below is a detailed breakdown of each argument to help you customize your validation settings effectively.
