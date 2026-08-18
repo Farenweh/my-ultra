@@ -152,11 +152,19 @@ class DetectionValidator(BaseValidator):
         self.is_custom_json = self.args.save_json and self.args.task == "detect" and not (self.is_coco or self.is_lvis)
         self.gdict = getattr(self, "gdict", None) if self.is_custom_json else None
         self.build_gdict = self.is_custom_json and self.gdict is None
-        self.eval_ids = list(self.dataloader.sampler) if self.is_custom_json else None
-        if self.is_custom_json and self.args.tile:
-            self.eval_ids = list(
-                dict.fromkeys(self.dataloader.dataset.labels[i]["source_index"] for i in self.eval_ids)
-            )
+        self.eval_ids = None
+        if self.is_custom_json:
+            from ultralytics.engine.val_runtime import get_distributed_val_context
+
+            context = get_distributed_val_context()
+            if context is not None:
+                self.eval_ids = context.claimed_indices
+            else:
+                self.eval_ids = list(self.dataloader.sampler)
+                if self.args.tile:
+                    self.eval_ids = list(
+                        dict.fromkeys(self.dataloader.dataset.labels[i]["source_index"] for i in self.eval_ids)
+                    )
         self.pred_counts = []
         if self.build_gdict:
             self.gdict = {"images": [], "annotations": [], "categories": [{"id": x} for x in self.class_map]}

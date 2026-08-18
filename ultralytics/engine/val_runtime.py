@@ -188,16 +188,26 @@ class DynamicBatchScheduler:
 class DynamicBatchSampler(torch.utils.data.Sampler[list[int]]):
     """每次从全局调度器领取一个完整batch。"""
 
-    def __init__(self, scheduler: DynamicBatchScheduler, context: DistributedValContext) -> None:
+    def __init__(
+        self, scheduler: DynamicBatchScheduler, context: DistributedValContext, source_offsets: tuple[int, ...] = ()
+    ) -> None:
         self.scheduler = scheduler
         self.context = context
+        self.source_offsets = source_offsets
 
     def __iter__(self):
         while claimed := self.scheduler.claim():
             batch_id, indices = claimed
             self.context.claimed_batches.append(batch_id)
             self.context.claimed_indices.extend(indices)
-            yield indices
+            if len(self.source_offsets) > 1:
+                # 原图由一个进程完整领取，切片仍按设备 batch 上限分批推理。
+                for source in indices:
+                    start, end = self.source_offsets[source : source + 2]
+                    for offset in range(int(start), int(end), self.scheduler.batch_size):
+                        yield list(range(offset, min(offset + self.scheduler.batch_size, int(end))))
+            else:
+                yield indices
 
     def __len__(self) -> int:
         return self.scheduler.total_batches

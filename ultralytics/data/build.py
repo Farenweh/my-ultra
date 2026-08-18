@@ -442,8 +442,10 @@ def build_dataloader(
             raise ValueError("独立分布式验证的动态DataLoader不支持shuffle=True")
         from ultralytics.engine.val_runtime import DynamicBatchSampler
 
-        scheduler = distributed_val_context.make_scheduler(dataset_len)
-        batch_sampler = DynamicBatchSampler(scheduler, distributed_val_context)
+        source_offsets = tuple(getattr(dataset, "source_offsets", ()))
+        total_samples = len(source_offsets) - 1 if len(source_offsets) > 1 else dataset_len
+        scheduler = distributed_val_context.make_scheduler(total_samples)
+        batch_sampler = DynamicBatchSampler(scheduler, distributed_val_context, source_offsets)
         device_type = getattr(device, "type", str(device).split(":")[0])
         nd = get_torch_device_backend(device).device_count() if device_type not in {"cpu", "mps"} else 0
         batches = scheduler.total_batches

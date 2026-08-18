@@ -158,6 +158,58 @@ def test_context_publishes_dataset_total_for_parent_progress(monkeypatch, tmp_pa
     assert metadata == {"total_samples": 23}
 
 
+def test_tiled_dynamic_loaders_keep_sources_whole_and_batches_bounded(monkeypatch, tmp_path):
+    """多卡切片验证完整分配原图，保持 batch 上限，并向父进程报告原图总数。"""
+    from ultralytics.data.build import build_dataloader
+
+    store = _AtomicStore()
+    monkeypatch.setattr(val_runtime.dist, "barrier", lambda: None)
+    dataset = torch.utils.data.TensorDataset(torch.arange(11))
+    dataset.source_offsets = (0, 3, 4, 9, 11)
+    contexts, loaders = [], []
+    for rank in range(2):
+        context = val_runtime.DistributedValContext(
+            rank=rank,
+            local_rank=rank,
+            world_size=2,
+            device=torch.device("cpu"),
+            global_batch=4,
+            local_batch=2,
+            save_dir=tmp_path,
+            metrics_path=tmp_path / "metrics.pt",
+            progress_path=tmp_path / ".dist" / f"progress.rank{rank}.json",
+            store=store,
+            namespace="tiled-test",
+            started_at=0.0,
+        )
+        contexts.append(context)
+        loaders.append(
+            build_dataloader(
+                dataset, 2, 0, shuffle=False, rank=rank, device="cpu", distributed_val_context=context
+            )
+        )
+
+    batches = [[batch[0].tolist() for batch in loader] for loader in loaders]
+    assert all(0 < len(batch) <= 2 for rank_batches in batches for batch in rank_batches)
+    owners = {}
+    for rank, rank_batches in enumerate(batches):
+        for batch in rank_batches:
+            for index in batch:
+                assert index not in owners
+                owners[index] = rank
+        expected_indices = [
+            index
+            for source in contexts[rank].claimed_indices
+            for index in range(dataset.source_offsets[source], dataset.source_offsets[source + 1])
+        ]
+        assert [index for batch in rank_batches for index in batch] == expected_indices
+    assert sorted(owners) == list(range(11))
+    for start, end in zip(dataset.source_offsets, dataset.source_offsets[1:]):
+        assert len({owners[index] for index in range(start, end)}) == 1
+    metadata = json.loads((tmp_path / ".dist" / "dataset.json").read_text(encoding="utf-8"))
+    assert metadata == {"total_samples": 4}
+
+
 def test_single_device_path_does_not_launch(monkeypatch):
     owner = SimpleNamespace(model=torch.nn.Linear(2, 2), callbacks=defaultdict(list), metrics=None)
     monkeypatch.setattr(val_runtime, "is_k8s_distributed_parent", lambda: False)

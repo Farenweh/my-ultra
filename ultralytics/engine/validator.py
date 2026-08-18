@@ -234,10 +234,31 @@ class BaseValidator:
         """
         self.training = trainer is not None
         if not self.training:
-            with torch_distributed_zero_first(LOCAL_RANK):
-                self.args.data = convert_ndjson_to_yolo_if_needed(
-                    self.args.data, self.args.fraction, split=self.args.split
-                )
+            from ultralytics.engine.val_runtime import get_distributed_val_context
+
+            distributed_val_context = get_distributed_val_context()
+            zero_first = (
+                torch_distributed_zero_first(LOCAL_RANK, global_rank=True)
+                if distributed_val_context is not None
+                else torch_distributed_zero_first(LOCAL_RANK)
+            )
+            with zero_first:
+                task = getattr(self.args, "task", "detect")
+                split = getattr(self.args, "split", "val")
+                self.args.data = convert_ndjson_to_yolo_if_needed(self.args.data, self.args.fraction, split=split)
+                if task == "classify":
+                    self.data = check_cls_dataset(self.args.data, split=split)
+                elif str(self.args.data).rsplit(".", 1)[-1] in {"yaml", "yml"} or task in {
+                    "detect",
+                    "segment",
+                    "pose",
+                    "obb",
+                    "semantic",
+                    "depth",
+                }:
+                    self.data = check_det_dataset(self.args.data, split=split)
+                else:
+                    raise FileNotFoundError(emojis(f"Dataset '{self.args.data}' for task={task} not found ❌"))
         model = self.get_model(model, trainer, **kwargs)
         augment = self.args.augment and (not self.training)
         owns_model = False
@@ -253,7 +274,8 @@ class BaseValidator:
         else:
             if str(self.args.model).endswith(".yaml") and model is None:
                 LOGGER.warning("validating an untrained model YAML will result in 0 mAP.")
-            callbacks.add_integration_callbacks(self)
+            if RANK in {-1, 0}:
+                callbacks.add_integration_callbacks(self)
             if RANK != -1:
                 selected_device = select_device(self.args.device, verbose=False)
             model = AutoBackend(
@@ -268,6 +290,7 @@ class BaseValidator:
                 channels_last=self.args.channels_last,
                 end2end=self.args.nms is False,
                 bf16=self.args.quantize == "bf16",
+                verbose=RANK == -1,
             )
             self.device = model.device  # update device
             self.input_dtype = model.dtype
@@ -295,20 +318,6 @@ class BaseValidator:
                     f"Setting batch={self.args.batch} input of shape ({self.args.batch}, 3, {imgsz[0]}, {imgsz[1]})"
                 )
 
-            if self.args.task == "classify":
-                self.data = check_cls_dataset(self.args.data, split=self.args.split)
-            elif str(self.args.data).rsplit(".", 1)[-1] in {"yaml", "yml"} or self.args.task in {
-                "detect",
-                "segment",
-                "pose",
-                "obb",
-                "semantic",
-                "depth",
-            }:
-                self.data = check_det_dataset(self.args.data, split=self.args.split)
-            else:
-                raise FileNotFoundError(emojis(f"Dataset '{self.args.data}' for task={self.args.task} not found ❌"))
-
             if self.device.type in {"cpu", "mps"}:
                 self.args.workers = 0  # faster CPU val as time dominated by inference, not dataloading
             if not (pt or (getattr(model, "dynamic", False) and fmt != "imx")):
@@ -332,7 +341,18 @@ class BaseValidator:
             Profile(device=self.device),
             Profile(device=self.device),
         )
-        bar = TQDM(self.dataloader, desc=self.get_desc(), total=len(self.dataloader))
+        if self.training:
+            from ultralytics.engine.val_runtime import get_distributed_val_context
+
+            distributed_val_context = get_distributed_val_context()
+        bar = TQDM(
+            self.dataloader,
+            desc=self.get_desc(),
+            total=len(self.dataloader),
+            disable=True if distributed_val_context is not None else None,
+        )
+        if distributed_val_context is not None:
+            distributed_val_context.begin_validation()
         self.init_metrics(unwrap_model(model))
         self.jdict = []  # empty before each val
         tile_results = {}
@@ -365,14 +385,18 @@ class BaseValidator:
                 if self.args.plots and image_i < 3 and RANK in {-1, 0}:
                     self.plot_val_samples(targets, image_i)
                     self.plot_predictions(targets, output, image_i)
+            if distributed_val_context is not None:
+                count = len(outputs) if self.args.tile else int(batch["img"].shape[0])
+                distributed_val_context.report_batch(count)
 
             self.run_callbacks("on_val_batch_end")
 
         stats = {}
+        distributed_speed = distributed_val_context.aggregate_speed(dt) if distributed_val_context is not None else None
         self.gather_stats()
         if RANK in {-1, 0}:
             stats = self.get_stats()
-            self.speed = dict(zip(self.speed.keys(), (x.t / self.num_images * 1e3 for x in dt)))
+            self.speed = distributed_speed or dict(zip(self.speed.keys(), (x.t / self.num_images * 1e3 for x in dt)))
             self.finalize_metrics()
             self.print_results()
             self.run_callbacks("on_val_end")
@@ -401,9 +425,11 @@ class BaseValidator:
                 return stats
             LOGGER.info(
                 "Speed: {:.1f}ms preprocess, {:.1f}ms inference, {:.1f}ms loss, {:.1f}ms postprocess per image".format(
-                    *tuple(self.speed.values())
+                    *(self.speed[name] for name in ("preprocess", "inference", "loss", "postprocess"))
                 )
             )
+            if "images_per_second" in self.speed:
+                LOGGER.info(f"Distributed throughput: {self.speed['images_per_second']:.2f} images/s")
             if self.args.save_json and self.jdict:
                 with open(str(self.save_dir / "predictions.json"), "w", encoding="utf-8") as f:
                     LOGGER.info(f"Saving {f.name}...")

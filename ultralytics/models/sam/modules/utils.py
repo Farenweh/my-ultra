@@ -321,7 +321,6 @@ def _apply_rotary_enc_manual(
     return xq_out, rotate(xk_, freqs).type_as(xk)
 
 
-
 def apply_rotary_enc(
     xq: torch.Tensor,
     xk: torch.Tensor,
