@@ -167,6 +167,29 @@ def test_dynamic_queue_claims_each_image_once_and_resume_skips_success(tmp_path)
     assert second.claim(1) == []
 
 
+def test_tcp_dynamic_queue_reserves_initial_local_batch_per_rank(monkeypatch):
+    class AtomicStore:
+        def __init__(self):
+            self.values = {}
+
+        def set(self, key, value):
+            self.values[key] = int(value)
+
+        def add(self, key, value):
+            self.values[key] += int(value)
+            return self.values[key]
+
+    store = AtomicStore()
+    image_ids = list(range(12))
+    monkeypatch.setattr(locate_val.dist, "barrier", lambda: None)
+    rank0 = locate_val._TCPDynamicImageQueue(store, image_ids, "reserved", 0, 2, 3)
+    rank1 = locate_val._TCPDynamicImageQueue(store, image_ids, "reserved", 1, 2, 3)
+
+    assert rank0.claim(3) == [0, 1, 2]
+    assert rank1.claim(3) == [3, 4, 5]
+    assert rank0.claim(2) == [6, 7]
+
+
 def test_continuous_prefetcher_preserves_order_and_stops_at_total():
     pending = [(index, index + 10, {"id": index}) for index in range(5)]
     requests = []
@@ -230,11 +253,13 @@ def test_async_record_sink_flushes_all_records_in_order(tmp_path):
     assert [record["image_id"] for record in records] == list(range(20))
 
 
-def test_device_list_requires_eight_unique_npus():
+def test_device_list_accepts_any_positive_unique_npu_count():
+    assert locate_val.parse_devices("0") == [0]
+    assert locate_val.parse_devices("0,1") == [0, 1]
     assert locate_val.parse_devices("0,1,2,3,4,5,6,7") == list(range(8))
-    with pytest.raises(ValueError, match="8个互不重复"):
-        locate_val.parse_devices("0,1")
-    with pytest.raises(ValueError, match="8个互不重复"):
+    with pytest.raises(ValueError, match="至少一个互不重复"):
+        locate_val.parse_devices("")
+    with pytest.raises(ValueError, match="至少一个互不重复"):
         locate_val.parse_devices("0,1,2,3,4,5,6,6")
 
 
@@ -1181,6 +1206,7 @@ def test_validator_serializes_distributed_configuration(tmp_path):
     assert config["revision"] == owner.revision
     assert config["devices"] == locate_val.DEFAULT_DEVICES
     assert config["max_images"] == 8
+    assert config["global_batch"] == 1
     assert config["batch"] == 1
     assert config["scheduler"] == "pipeline"
     assert config["protocol"] == "paper"
@@ -1223,11 +1249,98 @@ def test_validator_accepts_arbitrary_positive_batch(tmp_path, batch):
         callbacks_=defaultdict(list),
     )
     assert validator.args.batch == batch
+    assert validator.args.global_batch == batch
     assert validator.args.continuous_batching is True
-    assert validator.args.dynamic_scheduling is True
+    assert validator.args.dynamic_scheduling is False  # 单卡无需跨rank调度
     assert validator.args.refill_batch == min(8, batch)
     assert validator.args.paged_kv_cache is True
     assert validator.args.visual_batching is True
+
+
+def test_validator_splits_strict_global_batch_across_devices(tmp_path):
+    owner = SimpleNamespace(
+        model_name="nvidia/LocateAnything-3B",
+        revision="fixed-revision",
+        device=torch.device("cpu"),
+        model=torch.nn.Linear(2, 2),
+    )
+    validator = locate_val.LocateAnythingValidator(
+        model=owner,
+        device="0,1,2,3",
+        output_dir=tmp_path,
+        batch=32,
+        callbacks_=defaultdict(list),
+    )
+    assert validator.world_size == 4
+    assert validator.args.global_batch == 32
+    assert validator.args.batch == 8
+    assert validator.args.continuous_batching is True
+    assert validator.args.dynamic_scheduling is True
+
+    with pytest.raises(ValueError, match="全局batch"):
+        locate_val.LocateAnythingValidator(
+            model=owner,
+            device="0,1,2,3",
+            output_dir=tmp_path,
+            batch=10,
+            callbacks_=defaultdict(list),
+        )
+
+
+def test_validator_manual_torchrun_uses_all_local_devices_when_device_is_none(tmp_path, monkeypatch):
+    monkeypatch.setenv("LOCAL_RANK", "2")
+    monkeypatch.setenv("LOCAL_WORLD_SIZE", "4")
+    monkeypatch.setenv("WORLD_SIZE", "8")
+    monkeypatch.setenv("MASTER_ADDR", "10.0.0.7")
+    monkeypatch.setenv("MASTER_PORT", "23100")
+    owner = SimpleNamespace(
+        model_name="nvidia/LocateAnything-3B",
+        revision="fixed-revision",
+        device=torch.device("cpu"),
+        model=torch.nn.Linear(2, 2),
+    )
+    validator = locate_val.LocateAnythingValidator(
+        model=owner,
+        device=None,
+        output_dir=tmp_path,
+        batch=16,
+        callbacks_=defaultdict(list),
+    )
+    assert validator.device_ids == [0, 1, 2, 3]
+    assert validator.local_world_size == 4
+    assert validator.world_size == 8
+    assert validator.args.batch == 2
+    assert validator.args.store_host == "10.0.0.7"
+    assert validator.args.store_port == 23101
+    assert validator.args.nnodes == 2
+
+
+def test_validator_resume_rejects_incompatible_distributed_layout(tmp_path):
+    owner = SimpleNamespace(
+        model_name="nvidia/LocateAnything-3B",
+        revision="fixed-revision",
+        device=torch.device("cpu"),
+        model=torch.nn.Linear(2, 2),
+    )
+    initial = locate_val.LocateAnythingValidator(
+        model=owner,
+        device="0,1",
+        output_dir=tmp_path,
+        batch=8,
+        callbacks_=defaultdict(list),
+    )
+    initial._prepare_run_config(tmp_path)
+
+    resumed = locate_val.LocateAnythingValidator(
+        model=owner,
+        device="0,1,2,3",
+        output_dir=tmp_path,
+        batch=8,
+        resume=True,
+        callbacks_=defaultdict(list),
+    )
+    with pytest.raises(RuntimeError, match="布局不一致"):
+        resumed._prepare_run_config(tmp_path)
 
 
 def test_validator_allows_explicitly_disabling_adaptive_batch_defaults(tmp_path):

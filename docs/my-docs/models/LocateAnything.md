@@ -161,32 +161,33 @@ gradient checkpointing。这些目前不是可公开覆盖的 `train()` 参数�
 metrics = model.val(
     data="coco.yaml",
     device="0,1,2,3,4,5,6,7",
-    batch=128,
+    batch=1024,
     protocol="paper",
 )
 print(metrics.results_dict)
 ```
 
-`LocateAnything.val()` 是当前专用的 8 卡 Ascend COCO validator，`device` 必须包含恰好 8 个互不重复的
-NPU 编号。它会自动通过 torchrun/HCCL 启动 worker，每个 rank 加载一份 BF16 + SDPA 模型。
+`LocateAnything.val()` 默认直接在模型所在的单张 NPU 上运行。`device` 传入多个互不重复的 NPU 编号时，
+它会自动通过 torchrun/HCCL 启动对应数量的 worker，每个 rank 加载一份 BF16 + SDPA 模型；K8S 多节点
+父进程使用 `device=None` 时会自动选择各节点全部可见 NPU。
 
 ### 基础验证参数
 
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
 | `data` | `"coco.yaml"` | 必须可解析到 COCO val2017 的 5000 张图、`instances_val2017.json` 和 80 个类别。 |
-| `device` | `"0,1,2,3,4,5,6,7"` | 恰好 8 个互不重复的非负 NPU 编号。 |
+| `device` | `None` | 普通环境等价于单卡 `"0"`；也可传任意数量互不重复的 NPU 编号。K8S 多节点必须保持 `None`。 |
 | `output_dir` | `None` | 默认使用递增的 `runs/locateanything/val*`。`resume=True` 时必须显式指向已存在的验证目录。 |
-| `generation_mode` | `"hybrid"` | `fast`、`slow` 或 `hybrid`。`batch>1` 时必须是 `hybrid`。注意这与公开 `predict()` 的 NPU 默认 `slow` 不同。 |
+| `generation_mode` | `"hybrid"` | `fast`、`slow` 或 `hybrid`。每 rank 的 `local_batch>1` 时必须是 `hybrid`。注意这与公开 `predict()` 的 NPU 默认 `slow` 不同。 |
 | `max_new_tokens` | `8192` | 每张图最大输出 token 数，必须大于 0。 |
 | `temperature` | `0.7` | 采样温度，必须大于等于 0。 |
 | `top_p` | `0.9` | nucleus sampling 阈值，必须在 `(0,1]`。 |
-| `batch` | `1` | 每个 rank 同时保持的生成槽位数，必须是正整数。不会在 OOM 后静默降级。 |
+| `batch` | `1` | 全局 batch。多卡时必须不小于总 world size 且能被其整除；`local_batch=batch/world_size`。不会在 OOM 后静默降级。 |
 | `scheduler` | `"pipeline"` | hybrid MTP/AR 调度策略：`eager`、`hold_ar`、`ar_first`、`pipeline` 或 `adaptive`。 |
 | `protocol` | `"paper"` | `paper` 使用短边 840、PIL Bilinear、逐图 GT 正类 prompt 和 FastEval 匹配；`legacy` 使用原图和全部 80 类 prompt。 |
 | `seed` | `0` | 每张图使用 `seed + image_id`，便于在动态 rank 划分下复现采样。 |
 | `max_images` | `0` | `0` 验证全部 5000 张；正整数只验证按 image ID 排序后的前 N 张，适合 smoke。 |
-| `resume` | `False` | 继续指定 `output_dir` 中的 `predictions.rank*.jsonl`。协议不匹配会拒绝；用户也应保持其他生成参数不变。 |
+| `resume` | `False` | 继续指定 `output_dir` 中的 `predictions.rank*.jsonl`。协议、global/local batch、world size 或节点布局不匹配都会拒绝。 |
 | `allow_download` | `False` | 禁止 worker 自动下载数据或模型文件；`True` 允许按当前数据配置和 HF 缓存规则下载。 |
 
 validator 内的 `repetition_penalty` 当前固定为 `1.1`，dtype 固定为 BF16，attention 实现固定为 SDPA；
@@ -194,29 +195,29 @@ validator 内的 `repetition_penalty` 当前固定为 `1.1`，dtype 固定为 BF
 
 ### Continuous batching 与动态调度
 
-下表中的 `None` 表示根据 `batch` 派生有效值，不是始终关闭。
+下表中的 `None` 表示根据 `local_batch` 和 world size 派生有效值，不是始终关闭。
 
 | 参数 | 签名默认值 | 最终有效值与作用 |
 | --- | --- | --- |
-| `continuous_batching` | `None` | `batch=1` 时为 `False`，`batch>1` 时为 `True`。样本完成后立即补充新样本，减少长短输出差异导致的空转。 |
-| `dynamic_scheduling` | `None` | `batch=1` 时为 `False`，`batch>1` 时为 `True`。各 rank 从共享任务游标动态领取图片，不需要每 batch HCCL 同步。 |
-| `refill_batch` | `None` | `batch>1` 时默认为 `min(8, batch)`，`batch=1` 时为 `0`。表示一次补槽的最大样本数；显式传 `0` 时 runtime 使用 `max(1, batch // 16)` 自动值。 |
-| `continuous_window` | `1` | 仅在 `continuous_batching=False` 的旧式窗口路径生效，每窗最多读取 `batch × continuous_window` 张图。不能与 continuous batching 同时启用。 |
+| `continuous_batching` | `None` | `local_batch=1` 时为 `False`，大于 1 时为 `True`。样本完成后立即补充新样本，减少长短输出差异导致的空转。 |
+| `dynamic_scheduling` | `None` | 单卡为 `False`，多卡/多节点为 `True`。各 rank 通过 TCPStore 原子领取图片，不需要每 batch HCCL 同步。 |
+| `refill_batch` | `None` | `local_batch>1` 时默认为 `min(8, local_batch)`，否则为 `0`。显式传 `0` 时 runtime 使用 `max(1, local_batch // 16)` 自动值。 |
+| `continuous_window` | `1` | 仅在 `continuous_batching=False` 的旧式窗口路径生效，每窗最多读取 `local_batch × continuous_window` 张图。不能与 continuous batching 同时启用。 |
 
-`continuous_batching=True` 要求 `batch>1`且 `generation_mode="hybrid"`。`batch=1` 继续使用单图生成路径，
-不会因其他默认参数而切换到批量 runtime。
+`continuous_batching=True` 要求 `local_batch>1`且 `generation_mode="hybrid"`。`local_batch=1` 继续使用
+单图生成路径，不会因其他默认参数而切换到批量 runtime。
 
 ### KV cache、形状与图执行参数
 
 | 参数 | 签名默认值 | 最终有效值与作用 |
 | --- | --- | --- |
 | `static_kv_cache` | `False` | 使用静态 KV cache。不能与 paged KV 同时开启，且 continuous batching 不支持它。 |
-| `paged_kv_cache` | `None` | `batch=1` 时为 `False`，`batch>1` 时为 `True`。在支持的 NPU 快路上使用 block table、scatter 写入和 paged attention。 |
+| `paged_kv_cache` | `None` | `local_batch=1` 时为 `False`，大于 1 时为 `True`。在支持的 NPU 快路上使用 block table、scatter 写入和 paged attention。 |
 | `max_duplicate_boxes` | `0` | `0` 关闭连续相同 box 的退化终止保护；正整数允许该 box 连续出现指定次数，再次重复时结束当前样本。 |
 | `shape_bucketing` | `False` | 将 decode batch 和 KV 长度 padding 到固定桶，有利于稳定形状，但会增加 padding 计算。 |
 | `kv_bucket_size` | `128` | shape bucketing 的 KV 长度桶粒度，必须是正整数。 |
 | `npu_graph` | `False` | 尝试捕获 NPU Graph；必须同时设置 `shape_bucketing=True`。当前 910B2 实测不建议默认启用。 |
-| `visual_batching` | `None` | `batch=1` 时为 `False`，`batch>1` 时为 `True`。将相同 `image_grid_hws` 的 MoonViT 输入打包成 TND 多段序列。 |
+| `visual_batching` | `None` | `local_batch=1` 时为 `False`，大于 1 时为 `True`。将相同 `image_grid_hws` 的 MoonViT 输入打包成 TND 多段序列。 |
 | `direct_paged_decode` | `True` | paged 路径直接执行 Qwen decoder layer，避免构造最终不使用的 4D attention mask。 |
 | `device_repetition_cache` | `True` | paged 路径把 repetition-penalty token 历史保留在 NPU 并增量追加。 |
 | `qsample_reservoir` | `False` | 实验性地预生成 qSample 随机数；当前 910B2 实测无收益，因此默认关闭。 |
@@ -247,12 +248,12 @@ eval/no-grad；结束验证并进入训练前会释放非参数推理缓存。
 
 ### 建议配置
 
-论文口径精度复现使用 batch 1：
+论文口径精度复现使用单卡 batch 1：
 
 ```python
 metrics = model.val(
     data="coco.yaml",
-    device="0,1,2,3,4,5,6,7",
+    device="0",
     protocol="paper",
     batch=1,
     generation_mode="hybrid",
@@ -263,13 +264,13 @@ metrics = model.val(
 )
 ```
 
-910B2 高吞吐验证可只覆盖 `batch`，其余快路使用经过验证的派生默认值：
+910B2 8 卡高吞吐验证使用全局 batch 1024（每 rank local batch 128）：
 
 ```python
 metrics = model.val(
     data="coco.yaml",
     device="0,1,2,3,4,5,6,7",
-    batch=128,
+    batch=1024,
 )
 ```
 
@@ -277,6 +278,7 @@ metrics = model.val(
 
 ```python
 metrics = model.val(
+    device="0,1,2,3,4,5,6,7",
     max_images=128,
     batch=128,
     output_dir="runs/locateanything/val_smoke",
@@ -284,6 +286,7 @@ metrics = model.val(
 
 # 中断后使用同一目录和同一组生成/协议参数
 metrics = model.val(
+    device="0,1,2,3,4,5,6,7",
     max_images=128,
     batch=128,
     output_dir="runs/locateanything/val_smoke",

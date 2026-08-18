@@ -231,7 +231,7 @@ class LocateAnything(CallbackHost):
         self,
         data: str | Path = "coco.yaml",
         *,
-        device: str = "0,1,2,3,4,5,6,7",
+        device: str | None = None,
         batch: int = 1,
         scheduler: str = "pipeline",
         protocol: str = "paper",

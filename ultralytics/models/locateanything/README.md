@@ -46,18 +46,19 @@ result.save("result.jpg")
 
 ## 验证
 
-使用 `model.val()` 在8张Ascend NPU上验证完整MS COCO 2017 val：
+`model.val()` 默认直接在模型所在的单张NPU上验证完整MS COCO 2017 val：
 
 ```python
 from ultralytics import LocateAnything
 
 model = LocateAnything("nvidia/LocateAnything-3B", local_files_only=True)
-metrics = model.val(data="coco.yaml", device="0,1,2,3,4,5,6,7", batch=128)
+metrics = model.val(data="coco.yaml")
 print(metrics.results_dict)
 ```
 
-验证器默认使用BF16、SDPA、`hybrid`、8192个输出token和temperature 0.7，并自动启动8个HCCL
-worker。`metrics` 与YOLO/RT-DETR一样是validator持有的指标对象，提供 `results_dict`、`speed`、
+传入多个设备时会自动启动相应数量的HCCL worker；K8S多节点环境中使用`device=None`会选择各节点全部
+可见NPU。验证器默认使用BF16、SDPA、`hybrid`、8192个输出token和temperature 0.7。`metrics` 与
+YOLO/RT-DETR一样是validator持有的指标对象，提供 `results_dict`、`speed`、
 `counts`、`per_class`、`coco_ap`、`save_dir` 和 `summary()`。
 
 `protocol="paper"`为默认值：验证专用预处理器以PIL Bilinear保持宽高比将COCO图片短边
@@ -66,14 +67,15 @@ worker。`metrics` 与YOLO/RT-DETR一样是validator持有的指标对象，提�
 原图。传入`protocol="legacy"`可恢复原图、全80类prompt和旧式指标。两种协议的resume分片
 不能混用。
 
-`batch`默认仍为1，此时保持原有的单图生成路径。也可以设置任意大于1的整数；此时必须使用
-`generation_mode="hybrid"`。`batch>1`会自动启用continuous batching、跨rank动态调度、paged KV cache和
-visual batching，并使用`refill_batch=min(8, batch)`；这些选项仍可通过显式传入`False`或其他水位覆盖。
+`batch`默认仍为1，并统一解释为全局batch。多卡时要求它不小于总world size且能被world size整除，
+每rank实际容量为`local_batch = batch / world_size`。`local_batch=1`保持单图生成路径；大于1时必须使用
+`generation_mode="hybrid"`，并自动启用continuous batching、paged KV cache和visual batching，
+`refill_batch`默认取`min(8, local_batch)`。跨rank动态调度在任意多卡配置下默认启用。
 验证器会以 `scheduler="pipeline"` 执行批量MTP/AR和逐行KV cache。
 尾批只使用实际剩余样本；如果请求的batch导致OOM，会报告请求值和NPU显存状态，不会静默降级。
 `metrics.speed` 另外包含总输出token、全局 `tokens_per_second`、平均每图token数和显存峰值。
 
-`batch>1`的hybrid验证默认使用`max_duplicate_boxes=0`，不会提前终止连续生成的相同box，以保持模型
+`local_batch>1`的hybrid验证默认使用`max_duplicate_boxes=0`，不会提前终止连续生成的相同box，以保持模型
 生成语义不变。用户可显式设为正整数启用退化循环保护；正常的`<ref>...</ref>`会重置计数，命中时会在
 `generation_stats.stopped_repetition`和`metrics.counts.repetition_stopped_images`中记录。
 
@@ -83,8 +85,8 @@ Mean F1。匹配保留模型生成顺序，普通GT一对一，crowd命中不计
 诊断项，不是论文中的Mean。验证器也会生成固定
 `score=1.0` 的COCO bbox JSON供 `faster-coco-eval` 参考，但该AP会明确标记为非标准结果。使用
 `max_images=8` 可执行smoke；传入已有 `output_dir` 和 `resume=True` 可继续中断的验证。
-论文精度使用batch 1报告；根目录示例保留batch 128以使用NPU快路，`metrics.json`和
-`summary.txt`会明确记录这一生成配置差异。
+论文精度使用每设备batch 1报告；单卡默认`batch=1`与其一致。多卡可使用`batch=world_size`保持每设备
+batch 1，`metrics.json`和`summary.txt`会同时记录global/local batch及节点布局。
 
 Ascend 910B2在首次分配模型显存时可能输出一次 `NPUCachingAllocator` 的32-padding提示。这是当前
 CANN/SoC组合的底层内存格式诊断，不代表推理或验证失败；验证器不会通过全局日志过滤隐藏其他NPU问题。
@@ -117,20 +119,20 @@ prefill event完成前对应slot不会进入活跃集合。这些快路径都限
 显存，因此默认关闭，仅保留给不同CANN/TorchNPU版本做显式A/B。所有融合只在eval/no-grad使用，训练前会
 释放非参数推理缓存并恢复原始可微forward。
 
-大batch完整验证默认启用rank内continuous batching与跨rank动态任务调度，因此只需设置batch：
+8卡高吞吐配置中，旧版每rank `batch=128`对应现在的全局`batch=1024`：
 
 ```python
 metrics = model.val(
     data="coco.yaml",
     device="0,1,2,3,4,5,6,7",
-    batch=128,
+    batch=1024,
 )
 ```
 
-生成池默认在空闲槽位达到`batch // 16`时成组补充，避免每完成一张图就执行一次小规模MoonViT和prefill；
-可用`refill_batch`显式调整水位。动态队列只在worker启动完成时做一次HCCL同步，之后通过输出目录中的原子
-任务游标领取图片，不增加逐batch同步点。每张图片完成后立即提交rank JSONL后台写入，因此中断后仍可用
-`resume=True`重建未完成队列。`batch=1`继续使用原有固定分片和单图生成行为。
+生成池默认在空闲槽位达到`local_batch // 16`时成组补充，避免每完成一张图就执行一次小规模MoonViT和
+prefill；可用`refill_batch`显式调整水位。动态队列通过独立TCPStore跨rank、跨节点原子领取图片，不增加
+逐batch HCCL同步点。每张图片完成后立即提交rank JSONL后台写入，因此中断后仍可用`resume=True`重建
+未完成队列。单卡`batch=1`继续使用单图生成路径；多卡`batch=world_size`则每rank使用相同路径。
 
 `shape_bucketing=True`可将decode batch和KV长度补到固定桶，`npu_graph=True`则进一步尝试对纯Tensor
 Qwen MLP热段捕获ACL Graph。Graph要求同时打开shape bucket，且worker会局部使用

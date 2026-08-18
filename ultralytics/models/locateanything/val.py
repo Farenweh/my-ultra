@@ -1,6 +1,6 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
-"""LocateAnything专用的8卡MS COCO验证器与指标。"""
+"""LocateAnything专用的MS COCO单卡与分布式验证器。"""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import re
 import signal
 import subprocess
 import tempfile
+from datetime import timedelta
 from queue import Full, Queue
 from threading import Thread
 import time
@@ -26,7 +27,12 @@ import torch.distributed as dist
 from ultralytics.data.utils import check_det_dataset
 from ultralytics.engine.runtime import CallbackHost, initialize_distributed_runtime
 from ultralytics.utils import LOGGER, TQDM, SimpleClass
-from ultralytics.utils.dist import build_torchrun_command, find_free_network_port
+from ultralytics.utils.dist import (
+    build_torchrun_command,
+    find_free_network_port,
+    is_k8s_distributed_parent,
+    normalize_k8s_launch_config,
+)
 from ultralytics.utils.files import increment_path
 from ultralytics.utils.torch_utils import get_torch_device_backend
 
@@ -39,8 +45,7 @@ from .val_preprocess import (
     LocateAnythingValPreprocessor,
 )
 
-EXPECTED_WORLD_SIZE = 8
-DEFAULT_DEVICES = "0,1,2,3,4,5,6,7"
+DEFAULT_DEVICES = "0"
 _LABEL_TRAILING_PUNCTUATION = " \t\r\n.,;:!?，。；：！？"
 
 
@@ -130,13 +135,13 @@ class LocateMetrics(SimpleClass):
 
 
 def parse_devices(device_spec: str) -> list[int]:
-    """解析并验证恰好8个互不重复的NPU编号。"""
+    """解析并验证一个或多个互不重复的NPU编号。"""
     try:
         devices = [int(item.strip()) for item in device_spec.split(",") if item.strip()]
     except ValueError as error:
         raise ValueError(f"非法NPU列表：{device_spec!r}") from error
-    if len(devices) != EXPECTED_WORLD_SIZE or len(set(devices)) != EXPECTED_WORLD_SIZE:
-        raise ValueError(f"--devices必须包含{EXPECTED_WORLD_SIZE}个互不重复的NPU编号，得到{devices}")
+    if not devices or len(devices) != len(set(devices)):
+        raise ValueError(f"devices必须包含至少一个互不重复的NPU编号，得到{devices}")
     if min(devices) < 0:
         raise ValueError(f"NPU编号不能为负数，得到{devices}")
     return devices
@@ -195,6 +200,68 @@ class _DynamicImageQueue:
         return claimed
 
 
+class _TCPDynamicImageQueue:
+    """使用TCPStore在单节点或多节点worker间原子领取图片。"""
+
+    def __init__(
+        self,
+        store: dist.Store,
+        image_ids: list[int],
+        namespace: str,
+        rank: int,
+        world_size: int,
+        initial_count: int,
+    ) -> None:
+        self.store = store
+        self.image_ids = image_ids
+        self.key = f"{namespace}/next_image"
+        initial_start = rank * initial_count
+        initial_end = min(initial_start + initial_count, len(image_ids))
+        self.initial_image_ids = image_ids[initial_start:initial_end]
+        if rank == 0:
+            self.store.set(self.key, str(min(world_size * initial_count, len(image_ids))))
+        dist.barrier()
+
+    @property
+    def total(self) -> int:
+        """返回需要处理的图片总数。"""
+        return len(self.image_ids)
+
+    def claim(self, count: int) -> list[int]:
+        """原子领取至多count个连续image id。"""
+        if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+            raise ValueError(f"动态任务领取数必须是正整数，得到{count!r}")
+        claimed = self.initial_image_ids[:count]
+        del self.initial_image_ids[:count]
+        remaining = count - len(claimed)
+        if not remaining:
+            return claimed
+        end = int(self.store.add(self.key, remaining))
+        start = end - remaining
+        claimed.extend(self.image_ids[start : min(end, len(self.image_ids))])
+        return claimed
+
+
+def _remaining_dynamic_image_ids(
+    output_dir: str | Path,
+    images: list[dict[str, Any]],
+    world_size: int,
+    *,
+    resume: bool,
+) -> list[int]:
+    """根据所有rank已落盘记录返回待处理image id。"""
+    completed: set[int] = set()
+    if resume:
+        output_dir = Path(output_dir)
+        for rank in range(world_size):
+            completed.update(
+                image_id
+                for image_id, record in read_jsonl_records(output_dir / f"predictions.rank{rank}.jsonl").items()
+                if not record.get("error")
+            )
+    return [int(image["id"]) for image in images if int(image["id"]) not in completed]
+
+
 def _initialize_dynamic_queue(
     output_dir: str | Path,
     images: list[dict[str, Any]],
@@ -204,15 +271,7 @@ def _initialize_dynamic_queue(
 ) -> list[int]:
     """根据全部rank已成功落盘的记录重建动态队列。"""
     output_dir = Path(output_dir)
-    completed: set[int] = set()
-    if resume:
-        for rank in range(world_size):
-            completed.update(
-                image_id
-                for image_id, record in read_jsonl_records(output_dir / f"predictions.rank{rank}.jsonl").items()
-                if not record.get("error")
-            )
-    image_ids = [int(image["id"]) for image in images if int(image["id"]) not in completed]
+    image_ids = _remaining_dynamic_image_ids(output_dir, images, world_size, resume=resume)
     dist_dir = output_dir / ".dist"
     dist_dir.mkdir(parents=True, exist_ok=True)
     tasks_path = dist_dir / "dynamic_tasks.json"
@@ -938,7 +997,7 @@ def _validate_npu_count(devices: list[int]) -> None:
     try:
         import torch_npu  # noqa: F401
     except ImportError as error:
-        raise RuntimeError("8卡LocateAnything验证需要安装torch_npu") from error
+        raise RuntimeError("LocateAnything NPU验证需要安装torch_npu") from error
     if not torch.npu.is_available():
         raise RuntimeError("torch_npu未检测到可用Ascend NPU")
     count = torch.npu.device_count()
@@ -966,7 +1025,9 @@ def _run_inference(
     image_by_id = {int(image["id"]): image for image in coco["images"]}
     dynamic_scheduling = bool(getattr(args, "dynamic_scheduling", False))
     continuous_batching = bool(getattr(args, "continuous_batching", False))
-    dynamic_queue = _DynamicImageQueue(output_dir) if dynamic_scheduling else None
+    dynamic_queue = getattr(args, "dynamic_queue", None)
+    if dynamic_scheduling and dynamic_queue is None:
+        dynamic_queue = _DynamicImageQueue(output_dir)
     shard_path = output_dir / f"predictions.rank{rank}.jsonl"
     prior = read_jsonl_records(shard_path) if args.resume else {}
     completed = {image_id for image_id, record in prior.items() if not record.get("error")}
@@ -1307,8 +1368,9 @@ def _summary_text(metrics: dict[str, Any]) -> str:
         lines.extend(
             (
                 "协议：LocateAnything论文COCO协议（短边840、GT正类prompt、FastEval式匹配）",
-                f"实际batch={metrics['config']['batch']}；论文batch=1，"
-                f"是否一致={metrics['config']['paper_batch_matches']}",
+                f"实际global batch={metrics['config']['global_batch']}，"
+                f"每rank local batch={metrics['config']['local_batch']}；论文每设备batch=1，"
+                f"local batch是否一致={metrics['config']['paper_batch_matches']}",
                 f"图片：{metrics['counts']['images']}，预测框：{metrics['counts']['boxes']}",
                 f"F1@0.50={f1_50['macro']['f1']:.6f} "
                 f"(P={f1_50['macro']['precision']:.6f}, R={f1_50['macro']['recall']:.6f})",
@@ -1346,6 +1408,30 @@ def _summary_text(metrics: dict[str, Any]) -> str:
     if ap.get("error"):
         lines.append(f"COCO AP错误：{ap['error']}")
     return "\n".join(lines) + "\n"
+
+
+def _prepare_run_config_file(args: Any, output_dir: Path) -> None:
+    """写入或验证resume所需的协议、batch和节点布局元数据。"""
+    path = output_dir / ".dist" / "run_config.json"
+    expected = {
+        "protocol": args.protocol,
+        "global_batch": int(args.global_batch),
+        "local_batch": int(args.batch),
+        "world_size": int(args.global_batch // args.batch),
+        "local_world_size": int(getattr(args, "local_world_size", 1)),
+        "nnodes": int(getattr(args, "nnodes", 1)),
+    }
+    if args.resume:
+        if not path.is_file():
+            raise RuntimeError(
+                f"resume目录缺少新版分布式布局元数据：{path}。请使用新output_dir重新验证，不要混用旧分片。"
+            )
+        actual = json.loads(path.read_text(encoding="utf-8"))
+        if actual != expected:
+            raise RuntimeError(f"resume分布式布局不一致：已有{actual}，当前{expected}")
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(expected, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def finalize_results(
@@ -1390,7 +1476,9 @@ def finalize_results(
             "top_p": args.top_p,
             "seed": args.seed,
             "max_images": args.max_images,
-            "batch": getattr(args, "batch", 1),
+            "batch": getattr(args, "global_batch", getattr(args, "batch", 1)),
+            "global_batch": getattr(args, "global_batch", getattr(args, "batch", 1)),
+            "local_batch": getattr(args, "batch", 1),
             "protocol": protocol,
             "protocol_id": PAPER_PROTOCOL_ID if protocol == PAPER_PROTOCOL else LEGACY_PROTOCOL_ID,
             "short_side": PAPER_SHORT_SIDE if protocol == PAPER_PROTOCOL else None,
@@ -1422,6 +1510,8 @@ def finalize_results(
             "fused_add_rms_norm": getattr(args, "fused_add_rms_norm", True),
             "fused_mlp": getattr(args, "fused_mlp", False),
             "world_size": world_size,
+            "local_world_size": getattr(args, "local_world_size", world_size),
+            "nnodes": getattr(args, "nnodes", 1),
         },
         "counts": {
             "images": len(records),
@@ -1462,8 +1552,6 @@ def _run_distributed_worker(args: Any, model: Any = None) -> LocateMetrics | Non
     world_size = int(os.environ["WORLD_SIZE"])
     _configure_worker_progress(rank)
     devices = parse_devices(args.devices)
-    if world_size != EXPECTED_WORLD_SIZE:
-        raise RuntimeError(f"LocateAnything COCO验证要求WORLD_SIZE={EXPECTED_WORLD_SIZE}，得到{world_size}")
     if getattr(args, "cpu_affinity", True):
         _configure_worker_cpu_runtime(devices[local_rank])
     device, _, _ = initialize_distributed_runtime(
@@ -1478,6 +1566,9 @@ def _run_distributed_worker(args: Any, model: Any = None) -> LocateMetrics | Non
     )
     try:
         output_dir = _resolve_worker_output(args)
+        if rank == 0:
+            _prepare_run_config_file(args, output_dir)
+        dist.barrier()
         coco = load_coco_validation(
             args.data,
             allow_download=args.allow_download,
@@ -1490,14 +1581,38 @@ def _run_distributed_worker(args: Any, model: Any = None) -> LocateMetrics | Non
                 getattr(args, "protocol", PAPER_PROTOCOL),
             )
         if getattr(args, "dynamic_scheduling", False):
-            if rank == 0:
-                _initialize_dynamic_queue(
+            if getattr(args, "store_port", 0):
+                dynamic_store = dist.TCPStore(
+                    args.store_host,
+                    int(args.store_port),
+                    world_size,
+                    rank == 0,
+                    timedelta(seconds=1800),
+                    True,
+                )
+                image_ids = _remaining_dynamic_image_ids(
                     output_dir,
                     coco["images"],
                     world_size,
                     resume=bool(args.resume),
                 )
-            dist.barrier()
+                args.dynamic_queue = _TCPDynamicImageQueue(
+                    dynamic_store,
+                    image_ids,
+                    getattr(args, "launch_id", "locateanything-val"),
+                    rank,
+                    world_size,
+                    int(args.batch),
+                )
+            else:
+                if rank == 0:
+                    _initialize_dynamic_queue(
+                        output_dir,
+                        coco["images"],
+                        world_size,
+                        resume=bool(args.resume),
+                    )
+                dist.barrier()
         runtime, model = _run_inference(args, model, rank, world_size, device, output_dir, coco)
         # HCCL不支持FP64 all_reduce，秒级墙钟时间使用FP32已足够。
         wall_tensor = torch.tensor(runtime["wall_seconds"], dtype=torch.float32, device=device)
@@ -1537,6 +1652,36 @@ def _run_distributed_worker(args: Any, model: Any = None) -> LocateMetrics | Non
     finally:
         if dist.is_initialized():
             dist.destroy_process_group()
+
+
+def _run_single_worker(args: Any, model: Any) -> LocateMetrics:
+    """不创建process group，直接在当前NPU上执行单卡验证。"""
+    output_dir = _resolve_worker_output(args)
+    coco = load_coco_validation(
+        args.data,
+        allow_download=args.allow_download,
+        max_images=args.max_images,
+    )
+    if args.resume:
+        validate_resume_protocol(output_dir, 1, getattr(args, "protocol", PAPER_PROTOCOL))
+    if getattr(args, "dynamic_scheduling", False):
+        _initialize_dynamic_queue(output_dir, coco["images"], 1, resume=bool(args.resume))
+    runtime, model = _run_inference(args, model, 0, 1, model.device, output_dir, coco)
+    payload = finalize_results(
+        args,
+        output_dir,
+        coco,
+        1,
+        float(runtime["wall_seconds"]),
+        int(runtime["processed"]),
+        int(runtime["boxes"]),
+        int(runtime["output_tokens"]),
+        float(runtime["generation_seconds"]),
+        int(runtime["peak_memory_bytes"]),
+        int(runtime["total_memory_bytes"]),
+        getattr(model, "tokenizer", None),
+    )
+    return LocateMetrics(payload, output_dir)
 
 
 def _configure_worker_progress(rank: int) -> None:
@@ -1583,7 +1728,7 @@ def _configure_worker_cpu_runtime(device_id: int) -> set[int]:
 
 
 class _DistributedProgress:
-    """增量读取8个rank JSONL，不引入额外HCCL同步点。"""
+    """增量读取所有rank JSONL，不引入额外HCCL同步点。"""
 
     def __init__(self, output_dir: Path, world_size: int, total: int) -> None:
         self.paths = [output_dir / f"predictions.rank{rank}.jsonl" for rank in range(world_size)]
@@ -1600,7 +1745,7 @@ class _DistributedProgress:
         self.progress = TQDM(
             total=total,
             initial=self.initial_completed,
-            desc="LocateAnything 8卡验证",
+            desc=f"LocateAnything {world_size}卡验证",
             unit="image",
             unit_scale=False,
         )
@@ -1698,14 +1843,14 @@ def _distributed_worker_env(npu_graph: bool) -> dict[str, str]:
 
 
 class LocateAnythingValidator(CallbackHost):
-    """LocateAnything原生8卡MS COCO validator。"""
+    """LocateAnything原生单卡与分布式MS COCO validator。"""
 
     def __init__(
         self,
         *,
         model: Any,
         data: str | Path = "coco.yaml",
-        device: str = DEFAULT_DEVICES,
+        device: str | None = None,
         output_dir: str | Path | None = None,
         generation_mode: str = "hybrid",
         max_new_tokens: int = 8192,
@@ -1740,7 +1885,21 @@ class LocateAnythingValidator(CallbackHost):
         allow_download: bool = False,
         callbacks_: dict | None = None,
     ) -> None:
-        devices = parse_devices(str(device))
+        local_rank = int(os.getenv("LOCAL_RANK", "-1"))
+        if is_k8s_distributed_parent():
+            if device not in {None, "", "none"}:
+                raise ValueError("K8S多节点LocateAnything验证请使用device=None自动选择可见NPU")
+            _validate_npu_count([0])
+            devices = list(range(torch.npu.device_count()))
+            k8s = normalize_k8s_launch_config(len(devices))
+            requested_world_size = len(devices) * k8s.nnodes
+        else:
+            if local_rank >= 0 and device in {None, "", "none"}:
+                devices = list(range(int(os.getenv("LOCAL_WORLD_SIZE", "1"))))
+            else:
+                devices = parse_devices(str(device or DEFAULT_DEVICES))
+            k8s = None
+            requested_world_size = int(os.getenv("WORLD_SIZE", "1")) if local_rank >= 0 else len(devices)
         protocol = str(protocol).strip().lower()
         if protocol not in {PAPER_PROTOCOL, LEGACY_PROTOCOL}:
             raise ValueError(f"protocol必须是'paper'或'legacy'，得到{protocol!r}")
@@ -1756,13 +1915,20 @@ class LocateAnythingValidator(CallbackHost):
             raise ValueError("max_images不能为负数")
         if isinstance(batch, bool) or not isinstance(batch, int) or batch < 1:
             raise ValueError(f"batch必须是大于等于1的整数，得到{batch!r}")
-        use_batched_runtime = batch > 1
+        if requested_world_size > 1 and (batch < requested_world_size or batch % requested_world_size):
+            raise ValueError(
+                "LocateAnything分布式验证使用全局batch："
+                f"要求batch >= world_size且能整除world_size，得到batch={batch}, "
+                f"world_size={requested_world_size}"
+            )
+        local_batch = batch // requested_world_size
+        use_batched_runtime = local_batch > 1
         if continuous_batching is None:
             continuous_batching = use_batched_runtime
         if dynamic_scheduling is None:
-            dynamic_scheduling = use_batched_runtime
+            dynamic_scheduling = requested_world_size > 1
         if refill_batch is None:
-            refill_batch = min(8, batch) if use_batched_runtime else 0
+            refill_batch = min(8, local_batch) if use_batched_runtime else 0
         if paged_kv_cache is None:
             paged_kv_cache = use_batched_runtime
         if visual_batching is None:
@@ -1773,8 +1939,8 @@ class LocateAnythingValidator(CallbackHost):
             raise ValueError(f"continuous_batching必须是bool，得到{continuous_batching!r}")
         if not isinstance(dynamic_scheduling, bool):
             raise ValueError(f"dynamic_scheduling必须是bool，得到{dynamic_scheduling!r}")
-        if isinstance(refill_batch, bool) or not isinstance(refill_batch, int) or not 0 <= refill_batch <= batch:
-            raise ValueError(f"refill_batch必须位于[0,{batch}]，得到{refill_batch!r}")
+        if isinstance(refill_batch, bool) or not isinstance(refill_batch, int) or not 0 <= refill_batch <= local_batch:
+            raise ValueError(f"refill_batch按每rank解释，必须位于[0,{local_batch}]，得到{refill_batch!r}")
         if not isinstance(static_kv_cache, bool):
             raise ValueError(f"static_kv_cache必须是bool，得到{static_kv_cache!r}")
         if not isinstance(paged_kv_cache, bool):
@@ -1814,10 +1980,10 @@ class LocateAnythingValidator(CallbackHost):
         from .batch import normalize_scheduler
 
         scheduler = normalize_scheduler(scheduler)
-        if batch > 1 and generation_mode != "hybrid":
-            raise ValueError("batch>1时generation_mode必须为'hybrid'")
-        if continuous_batching and batch == 1:
-            raise ValueError("continuous_batching要求batch>1")
+        if local_batch > 1 and generation_mode != "hybrid":
+            raise ValueError("local_batch>1时generation_mode必须为'hybrid'")
+        if continuous_batching and local_batch == 1:
+            raise ValueError("continuous_batching要求每rank local_batch>1")
         if continuous_batching and generation_mode != "hybrid":
             raise ValueError("continuous_batching要求generation_mode='hybrid'")
         if continuous_batching and continuous_window != 1:
@@ -1827,7 +1993,25 @@ class LocateAnythingValidator(CallbackHost):
 
         self.owner = model
         self.device_ids = devices
+        self.local_world_size = len(devices)
+        self.world_size = requested_world_size
+        self.k8s_launch_config = k8s
         self.requested_output = Path(output_dir or "runs/locateanything/val")
+        manual_launch = local_rank >= 0
+        local_world_size = int(os.getenv("LOCAL_WORLD_SIZE", str(len(devices)))) if manual_launch else len(devices)
+        nnodes = requested_world_size // local_world_size
+        store_host = os.getenv("MASTER_ADDR", "127.0.0.1") if manual_launch else ""
+        store_port = 0
+        launch_id = ""
+        if manual_launch:
+            master_port = int(os.getenv("MASTER_PORT", "29500"))
+            default_store_port = master_port + 1 if master_port < 65535 else master_port - 1
+            store_port = int(os.getenv("ULTRALYTICS_VAL_STORE_PORT", "0")) or default_store_port
+            if not 1 <= store_port <= 65535 or store_port == master_port:
+                raise ValueError(
+                    f"ULTRALYTICS_VAL_STORE_PORT={store_port}非法或与torchrun MASTER_PORT={master_port}冲突"
+                )
+            launch_id = f"locate-external-{store_host}-{master_port}"
         self.args = SimpleNamespace(
             model=model.model_name,
             revision=model.revision,
@@ -1838,7 +2022,8 @@ class LocateAnythingValidator(CallbackHost):
             max_new_tokens=max_new_tokens,
             temperature=temperature,
             top_p=top_p,
-            batch=batch,
+            global_batch=batch,
+            batch=local_batch,
             scheduler=scheduler,
             protocol=protocol,
             continuous_window=continuous_window,
@@ -1867,13 +2052,18 @@ class LocateAnythingValidator(CallbackHost):
             resume=bool(resume),
             allow_download=bool(allow_download),
             parent_progress=False,
+            local_world_size=local_world_size,
+            nnodes=nnodes,
+            store_host=store_host,
+            store_port=store_port,
+            launch_id=launch_id,
         )
         self.setup_callbacks(callbacks_)
         self.save_dir: Path | None = None
         self.metrics: LocateMetrics | None = None
 
     def __call__(self) -> LocateMetrics:
-        """启动8卡验证并返回与其他Ultralytics validator一致的metrics对象。"""
+        """执行单卡直跑或启动分布式验证，返回metrics对象。"""
         self.run_callbacks("on_val_start")
         if int(os.getenv("LOCAL_RANK", "-1")) >= 0:
             self.args.output_dir = str(self.requested_output.resolve())
@@ -1881,6 +2071,12 @@ class LocateAnythingValidator(CallbackHost):
             if metrics is None:
                 return metrics
             self.metrics = metrics
+        elif self.world_size == 1:
+            output_dir = self._resolve_output()
+            self._prepare_run_config(output_dir)
+            self.args.output_dir = str(output_dir)
+            self.args.parent_progress = False
+            self.metrics = _run_single_worker(self.args, self.owner)
         else:
             self.metrics = self._launch_distributed()
         self.save_dir = self.metrics.save_dir
@@ -1899,16 +2095,52 @@ class LocateAnythingValidator(CallbackHost):
         """返回临时torchrun worker所需的JSON配置。"""
         return vars(self.args).copy()
 
+    def _prepare_run_config(self, output_dir: Path) -> None:
+        """写入或验证resume所需的分布式布局元数据。"""
+        _prepare_run_config_file(self.args, output_dir)
+
     def _launch_distributed(self) -> LocateMetrics:
-        """生成轻量worker，通过torchrun启动8个HCCL rank。"""
+        """生成轻量worker，通过torchrun启动单节点或多节点HCCL rank。"""
         _validate_npu_count(self.device_ids)
-        output_dir = self._resolve_output()
-        self.args.output_dir = str(output_dir)
-        self.args.parent_progress = True
+        k8s = self.k8s_launch_config
+        node_rank = k8s.node_rank if k8s else 0
+        nnodes = k8s.nnodes if k8s else 1
+        if k8s:
+            from ultralytics.engine.val_runtime import create_k8s_parent_store
+
+            parent_store = create_k8s_parent_store(k8s)
+        else:
+            parent_store = None
+        if node_rank == 0:
+            output_dir = self._resolve_output()
+            self._prepare_run_config(output_dir)
+            self.args.output_dir = str(output_dir)
+            self.args.parent_progress = True
+            self.args.local_world_size = self.local_world_size
+            self.args.nnodes = nnodes
+            self.args.store_host = k8s.master_addr if k8s else "127.0.0.1"
+            self.args.store_port = int(os.getenv("ULTRALYTICS_VAL_STORE_PORT", "0")) or find_free_network_port()
+            parent_store_port = (
+                int(os.getenv("ULTRALYTICS_VAL_PARENT_STORE_PORT", str(k8s.master_port + 1))) if k8s else None
+            )
+            if k8s and self.args.store_port in {k8s.master_port, parent_store_port}:
+                raise ValueError(
+                    f"ULTRALYTICS_VAL_STORE_PORT={self.args.store_port}与torchrun或父进程协调端口冲突，请指定其他端口"
+                )
+            self.args.launch_id = f"locate-val-{self.args.store_port}-{time.time_ns()}"
+        else:
+            config_path = Path(parent_store.get("config_path").decode())
+            output_dir = Path(json.loads(config_path.read_text(encoding="utf-8"))["output_dir"])
+
         dist_dir = output_dir / ".dist"
         dist_dir.mkdir(parents=True, exist_ok=True)
-        config_path = dist_dir / "config.json"
-        config_path.write_text(json.dumps(self._serializable_config(), ensure_ascii=False, indent=2), encoding="utf-8")
+        if node_rank == 0:
+            config_path = dist_dir / "config.json"
+            config_path.write_text(
+                json.dumps(self._serializable_config(), ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            if parent_store is not None:
+                parent_store.set("config_path", str(config_path))
         with tempfile.NamedTemporaryFile(
             mode="w",
             suffix=f"{id(self)}.py",
@@ -1922,12 +2154,19 @@ class LocateAnythingValidator(CallbackHost):
                 f"distributed_val_from_config({str(config_path)!r})\n"
             )
             runner = Path(file.name)
+        torchrun_port = k8s.master_port if k8s else find_free_network_port()
+        while not k8s and torchrun_port == self.args.store_port:
+            torchrun_port = find_free_network_port()
         command = build_torchrun_command(
             runner=runner,
-            nproc_per_node=EXPECTED_WORLD_SIZE,
-            master_port=find_free_network_port(),
+            nproc_per_node=self.local_world_size,
+            master_port=torchrun_port,
+            nnodes=nnodes,
+            node_rank=node_rank,
+            master_addr=k8s.master_addr if k8s else None,
         )
-        LOGGER.info("LocateAnything 8卡验证启动命令：" + " ".join(command))
+        if node_rank == 0:
+            LOGGER.info("LocateAnything分布式验证启动命令：" + " ".join(command))
 
         original_device = self.owner.device
         self.owner.model.to("cpu")
@@ -1936,7 +2175,7 @@ class LocateAnythingValidator(CallbackHost):
         for marker in dist_dir.glob("ready.rank*"):
             marker.unlink(missing_ok=True)
         total_images = self.args.max_images or 5000
-        progress = _DistributedProgress(output_dir, EXPECTED_WORLD_SIZE, total_images)
+        progress = _DistributedProgress(output_dir, self.world_size, total_images) if node_rank == 0 else None
         utilization_samples: list[float] = []
         worker_env = _distributed_worker_env(self.args.npu_graph)
         try:
@@ -1944,20 +2183,22 @@ class LocateAnythingValidator(CallbackHost):
             next_utilization_sample = 0.0
             try:
                 while process.poll() is None:
-                    progress.poll()
+                    if progress is not None:
+                        progress.poll()
                     now = time.monotonic()
-                    ready = any(dist_dir.glob("ready.rank*"))
+                    ready = node_rank == 0 and any(dist_dir.glob("ready.rank*"))
                     if ready and now >= next_utilization_sample:
                         utilization_samples.extend(_read_npu_utilization(self.device_ids))
                         next_utilization_sample = now + 5.0
                     time.sleep(1.0)
             except KeyboardInterrupt:
-                LOGGER.warning("收到中断信号，正在优雅停止8卡LocateAnything验证并保留JSONL分片…")
+                LOGGER.warning("收到中断信号，正在优雅停止LocateAnything分布式验证并保留JSONL分片…")
                 process.send_signal(signal.SIGINT)
                 process.wait()
                 raise
             finally:
-                progress.close()
+                if progress is not None:
+                    progress.close()
             if process.returncode:
                 raise subprocess.CalledProcessError(process.returncode, command)
         finally:
@@ -1966,13 +2207,18 @@ class LocateAnythingValidator(CallbackHost):
         metrics_path = output_dir / "metrics.json"
         if not metrics_path.is_file():
             raise RuntimeError(f"LocateAnything验证未生成指标文件：{metrics_path}")
-        if utilization_samples:
+        if utilization_samples and node_rank == 0:
             payload = json.loads(metrics_path.read_text(encoding="utf-8"))
             payload["speed"]["average_npu_utilization_percent"] = float(np.mean(utilization_samples))
             payload["speed"]["npu_utilization_samples"] = len(utilization_samples)
             metrics_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
             (output_dir / "summary.txt").write_text(_summary_text(payload), encoding="utf-8")
-        LOGGER.info(f"LocateAnything验证完成，结果保存在{output_dir}")
+        if node_rank == 0:
+            LOGGER.info(f"LocateAnything验证完成，结果保存在{output_dir}")
+        if parent_store is not None:
+            parent_store.set(f"parent_done/{node_rank}", "1")
+            if node_rank == 0:
+                parent_store.wait([f"parent_done/{rank}" for rank in range(nnodes)])
         return LocateMetrics.from_file(metrics_path)
 
 
