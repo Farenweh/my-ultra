@@ -71,7 +71,7 @@ source /usr/local/Ascend/cann-9.1.0/set_env.sh
 export ASCEND_RT_VISIBLE_DEVICES=0
 export TASK_QUEUE_ENABLE=2
 
-python npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
+python docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_conv_bn_relu.py \
     --scheme aot_eager \
     --device 0 \
     --task-queue 2 \

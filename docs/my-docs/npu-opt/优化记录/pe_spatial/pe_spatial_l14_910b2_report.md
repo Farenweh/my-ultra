@@ -137,12 +137,12 @@ pytest -q tests/test_pe_spatial_backbone.py tests/test_pe_spatial_rope_ascend.py
 RUN_PE_SPATIAL_L_TESTS=1 pytest -q --slow tests/test_pe_spatial_real_npu.py
 
 # 性能消融
-python npu-opt/优化记录/pe_spatial/benchmark_pe_spatial_npu.py \
+python docs/my-docs/npu-opt/优化记录/pe_spatial/benchmark_pe_spatial_npu.py \
   --output /tmp/pe_spatial_l14_results.json
 
 # 两卡DDP
 python -m torch.distributed.run --standalone --nproc_per_node 2 \
-  npu-opt/优化记录/pe_spatial/pe_spatial_ddp_smoke.py
+  docs/my-docs/npu-opt/优化记录/pe_spatial/pe_spatial_ddp_smoke.py
 ```
 
 原始结构化结果见 `pe_spatial_l14_910b2_results.json`。

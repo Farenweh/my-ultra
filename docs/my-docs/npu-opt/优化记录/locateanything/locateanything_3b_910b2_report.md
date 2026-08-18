@@ -54,10 +54,10 @@ token 增长到 6435 token，尾时延达到 59.78 秒，最终仅 843.17 tok/s�
 ## 复现
 
 ```bash
-python npu-opt/优化记录/locateanything/benchmark_locateanything_npu.py \
+python docs/my-docs/npu-opt/优化记录/locateanything/benchmark_locateanything_npu.py \
   --npu-fast-path off --output runs/locateanything/npu_ab/off_128
 
-python npu-opt/优化记录/locateanything/benchmark_locateanything_npu.py \
+python docs/my-docs/npu-opt/优化记录/locateanything/benchmark_locateanything_npu.py \
   --npu-fast-path auto --output runs/locateanything/npu_ab/auto_128
 ```
 
