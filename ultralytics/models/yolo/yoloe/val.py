@@ -16,7 +16,7 @@ from ultralytics.models.yolo.detect import DetectionValidator
 from ultralytics.models.yolo.segment import SegmentationValidator
 from ultralytics.nn.modules.head import YOLOEDetect
 from ultralytics.nn.tasks import YOLOEModel
-from ultralytics.utils import LOGGER, TQDM
+from ultralytics.utils import LOGGER, RANK, TQDM
 from ultralytics.utils.torch_utils import select_device, smart_inference_mode
 
 
@@ -95,6 +95,16 @@ class YOLOEDetectValidator(DetectionValidator):
         visual_pe[cls_visual_num != 0] = F.normalize(visual_pe[cls_visual_num != 0], dim=-1, p=2)
         visual_pe[cls_visual_num == 0] = 0
         return visual_pe.unsqueeze(0)
+
+    def _shared_prompt_embedding(self, factory) -> torch.Tensor:
+        """在独立多卡验证中只由rank 0构造prompt embedding。"""
+        from ultralytics.engine.val_runtime import broadcast_val_tensor, get_distributed_val_context
+
+        context = get_distributed_val_context()
+        if context is None:
+            return factory()
+        value = factory() if RANK == 0 else None
+        return broadcast_val_tensor(value)
 
     def get_vpe_dataloader(self, data: dict[str, Any]) -> torch.utils.data.DataLoader:
         """Create a dataloader for LVIS training visual prompt samples.
@@ -192,17 +202,18 @@ class YOLOEDetectValidator(DetectionValidator):
                     )
 
             if load_vp:
-                LOGGER.info("Validate using the visual prompt.")
+                if RANK in {-1, 0}:
+                    LOGGER.info("Validate using the visual prompt.")
                 self.args.quantize = None
-                dataloader = self.get_vpe_dataloader(data)
-                vpe = self.get_visual_pe(dataloader, model)
+                vpe = self._shared_prompt_embedding(lambda: self.get_visual_pe(self.get_vpe_dataloader(data), model))
                 model.set_classes(names, vpe)
                 stats = super().__call__(model=deepcopy(model))
             elif isinstance(model.model[-1], YOLOEDetect) and hasattr(model.model[-1], "lrpc"):  # prompt-free
                 return super().__call__(trainer, model)
             else:
-                LOGGER.info("Validate using the text prompt.")
-                tpe = model.get_text_pe(names)
+                if RANK in {-1, 0}:
+                    LOGGER.info("Validate using the text prompt.")
+                tpe = self._shared_prompt_embedding(lambda: model.get_text_pe(names))
                 model.set_classes(names, tpe)
                 stats = super().__call__(model=deepcopy(model))
         return stats

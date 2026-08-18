@@ -285,3 +285,23 @@ def test_dynamic_tensor_broadcast_allocates_receiver(monkeypatch):
     result = val_runtime.broadcast_val_tensor(None)
     assert result.shape == (2, 3)
     assert torch.equal(result, torch.full((2, 3), 7.0))
+
+
+@pytest.mark.parametrize("rank,expected_factory_calls", [(0, 1), (1, 0)])
+def test_yoloe_prompt_embedding_is_built_only_on_global_rank_zero(monkeypatch, rank, expected_factory_calls):
+    from ultralytics.models.yolo.yoloe import val as yoloe_val
+
+    validator = object.__new__(yoloe_val.YOLOEDetectValidator)
+    calls = []
+    monkeypatch.setattr(yoloe_val, "RANK", rank)
+    monkeypatch.setattr(val_runtime, "get_distributed_val_context", lambda: object())
+    monkeypatch.setattr(
+        val_runtime,
+        "broadcast_val_tensor",
+        lambda value: torch.tensor([rank], dtype=torch.float32) if value is None else value,
+    )
+
+    result = validator._shared_prompt_embedding(lambda: calls.append("factory") or torch.tensor([7.0]))
+
+    assert len(calls) == expected_factory_calls
+    assert result.shape == (1,)

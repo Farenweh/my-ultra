@@ -448,10 +448,23 @@ class YOLOE(Model):
         custom = {"rect": not load_vp}  # method defaults
         args = {**self.overrides, **custom, **kwargs, "mode": "val"}  # highest priority args on the right
 
-        validator = (validator or self._smart_load("validator"))(args=args, _callbacks=self.callbacks)
-        validator(model=self.model, load_vp=load_vp, refer_data=refer_data)
-        self.metrics = validator.metrics
-        return validator.metrics
+        def direct(effective_args: dict[str, Any]):
+            active_validator = (validator or self._smart_load("validator"))(
+                args=effective_args, _callbacks=self.callbacks
+            )
+            active_validator(model=self.model, load_vp=load_vp, refer_data=refer_data)
+            self.metrics = active_validator.metrics
+            return active_validator.metrics
+
+        from ultralytics.engine.val_runtime import run_or_launch_distributed_validation
+
+        return run_or_launch_distributed_validation(
+            self,
+            args,
+            direct,
+            special={"load_vp": load_vp, "refer_data": refer_data},
+            custom_validator=validator,
+        )
 
     def predict(
         self,
