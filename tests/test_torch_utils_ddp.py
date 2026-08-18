@@ -11,6 +11,34 @@ import pytest
 import ultralytics.utils.torch_utils as torch_utils
 
 
+def test_restore_thop_state_removes_only_new_artifacts():
+    """THOP profiling cleanup must preserve user hooks while removing partial profiling state."""
+    module = torch_utils.torch.nn.ReLU()
+    user_handle = module.register_forward_hook(lambda *_: None)
+    state = torch_utils._snapshot_thop_state((module,))
+    thop_handle = module.register_forward_hook(lambda *_: None)
+    module.register_buffer("total_ops", torch_utils.torch.zeros(1))
+    module.register_buffer("total_params", torch_utils.torch.zeros(1))
+
+    torch_utils._restore_thop_state(state)
+
+    assert user_handle.id in module._forward_hooks
+    assert thop_handle.id not in module._forward_hooks
+    assert "total_ops" not in module._buffers
+    assert "total_params" not in module._buffers
+    user_handle.remove()
+
+
+def test_select_cpu_does_not_hide_npu_from_later_work(monkeypatch):
+    """CPU-only work in a warm Ascend process must not poison later NPU initialization."""
+    visible = "0,1"
+    monkeypatch.setenv("ASCEND_RT_VISIBLE_DEVICES", visible)
+    monkeypatch.setattr(torch_utils, "IS_ASCEND", True)
+
+    assert str(torch_utils.select_device("cpu", verbose=False)) == "cpu"
+    assert os.environ["ASCEND_RT_VISIBLE_DEVICES"] == visible
+
+
 def test_select_device_npu_list_uses_visible_device_mapping(monkeypatch):
     fake_npu = types.SimpleNamespace(
         is_available=lambda: True,
