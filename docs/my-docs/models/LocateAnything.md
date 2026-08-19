@@ -184,7 +184,7 @@ print(metrics.results_dict)
 | `top_p` | `0.9` | nucleus sampling 阈值，必须在 `(0,1]`。 |
 | `batch` | `1` | 全局 batch。多卡时必须不小于总 world size 且能被其整除；`local_batch=batch/world_size`。不会在 OOM 后静默降级。 |
 | `scheduler` | `"pipeline"` | hybrid MTP/AR 调度策略：`eager`、`hold_ar`、`ar_first`、`pipeline` 或 `adaptive`。 |
-| `protocol` | `"paper"` | `paper` 使用短边 840、PIL Bilinear、逐图 GT 正类 prompt 和 FastEval 匹配；`legacy` 使用原图和全部 80 类 prompt。 |
+| `protocol` | `"paper"` | `paper` 使用逐图 GT 正类 prompt；`closed_set` 使用全部数据集类别、错误类别计 FP、零分参与宏平均；两者都使用短边 840 和 Bilinear。`legacy` 使用原图和旧指标。 |
 | `seed` | `0` | 每张图使用 `seed + image_id`，便于在动态 rank 划分下复现采样。 |
 | `max_images` | `0` | `0` 验证全部 5000 张；正整数只验证按 image ID 排序后的前 N 张，适合 smoke。 |
 | `resume` | `False` | 继续指定 `output_dir` 中的 `predictions.rank*.jsonl`。协议、global/local batch、world size 或节点布局不匹配都会拒绝。 |
@@ -311,10 +311,35 @@ metrics = model.val(
 验证目录保留 `predictions.rank*.jsonl`、`predictions.json`、`metrics.json` 和 `summary.txt`。
 LocateAnything 不输出 confidence；`predictions.json` 中的 `score=1.0` 只是为了调用 COCO evaluator，不会写回模型结果。
 
+### CD-FSOD 六数据集 zero-shot
+
+通过`model.val_cd_fsod()`可直接启动六数据集验证：
+
+```python
+metrics = model.val_cd_fsod(
+    device="0,1,2,3,4,5,6,7",
+    batch=512,
+    protocol="closed_set",
+    output_dir="runs/locateanything/cd_fsod",
+    max_images_per_dataset=0,
+    resume=False,
+)
+```
+
+验证覆盖ArTaxOr、DIOR、FISH（DeepFish）、NEU-DET、UODD和clipart1k，每个数据集仅执行一次。默认配置
+虽然使用现有`*-1shot.yaml`定位测试目录，但运行时只读取`val`与`annotations.val`，不会读取训练标注或
+执行few-shot适配。8卡全局batch 512对应每rank 64；六数据集共享一次HCCL启动和一份动态任务队列，
+每个rank只加载一次模型。
+
+类别prompt会把下划线和连字符自然化为空格，并排除完整测试集中没有GT的`DUMMY_CLS`。指标以六个
+数据集等权平均。`paper`输出论文式F1；`closed_set`以严格计数F1为主，同时保存同一预测的辅助
+paper-style F1。固定score AP只作诊断。`max_images_per_dataset`按每个数据集限制图片数，
+适合smoke；resume会校验六份标注哈希、模型revision、生成参数、global/local batch和world size。
+
 ## 输入、设备和当前边界
 
 - 训练支持官方 ShareGPT JSONL recipe 的图片、多图和纯文本样本，也可在线适配 YOLO detection YAML；明确拒绝视频字段。
-- `protocol="paper"` 会以 PIL Bilinear 保持长宽比将短边缩放到 840，再由模型 processor 完成 patch-grid 对齐。
+- `protocol="paper"`和`protocol="closed_set"`都会以 PIL Bilinear 保持长宽比将短边缩放到 840，再由模型 processor 完成 patch-grid 对齐。
 - Ascend 路径以 BF16 + SDPA 完成真实验证；CUDA 首版只承诺静态/mock 兼容。
 - 训练上下文上限为 4096；不支持在线 stream packing、视频/摄像头、量化、MagiAttention、ONNX、TensorRT 或 Ascend OM 导出。
 - 论文精度使用 batch 1。大 batch 与 NPU 融合路径保持生成语义，但 BF16、padding 和采样执行顺序可造成数值或随机漂移。

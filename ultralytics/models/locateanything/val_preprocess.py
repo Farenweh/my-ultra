@@ -12,8 +12,10 @@ from PIL import Image
 
 PAPER_PROTOCOL = "paper"
 LEGACY_PROTOCOL = "legacy"
+CLOSED_SET_PROTOCOL = "closed_set"
 PAPER_PROTOCOL_ID = "locateanything-paper-coco-v1"
 LEGACY_PROTOCOL_ID = "locateanything-legacy-coco-v1"
+CLOSED_SET_PROTOCOL_ID = "locateanything-closed-set-coco-v1"
 PAPER_SHORT_SIDE = 840
 
 
@@ -31,18 +33,34 @@ class LocateAnythingValPreprocessor:
         categories: list[dict[str, Any]],
         *,
         protocol: str = PAPER_PROTOCOL,
+        category_aliases: dict[int, str] | None = None,
+        protocol_id: str | None = None,
+        category_ids_by_dataset: dict[str, list[int]] | None = None,
     ) -> None:
         protocol = str(protocol).strip().lower()
-        if protocol not in {PAPER_PROTOCOL, LEGACY_PROTOCOL}:
-            raise ValueError(f"protocol必须是'paper'或'legacy'，得到{protocol!r}")
+        if protocol not in {PAPER_PROTOCOL, CLOSED_SET_PROTOCOL, LEGACY_PROTOCOL}:
+            raise ValueError(f"protocol必须是'paper'、'closed_set'或'legacy'，得到{protocol!r}")
         self.protocol = protocol
-        self.protocol_id = PAPER_PROTOCOL_ID if protocol == PAPER_PROTOCOL else LEGACY_PROTOCOL_ID
-        self.short_side = PAPER_SHORT_SIDE if protocol == PAPER_PROTOCOL else None
-        self.category_by_id = {
+        default_protocol_ids = {
+            PAPER_PROTOCOL: PAPER_PROTOCOL_ID,
+            CLOSED_SET_PROTOCOL: CLOSED_SET_PROTOCOL_ID,
+            LEGACY_PROTOCOL: LEGACY_PROTOCOL_ID,
+        }
+        self.protocol_id = protocol_id or default_protocol_ids[protocol]
+        self.short_side = PAPER_SHORT_SIDE if protocol in {PAPER_PROTOCOL, CLOSED_SET_PROTOCOL} else None
+        category_by_id = {
             int(category["id"]): str(category["name"])
             for category in sorted(categories, key=lambda item: int(item["id"]))
         }
+        aliases = category_aliases or {}
+        self.category_by_id = {
+            category_id: str(aliases.get(category_id, name)) for category_id, name in category_by_id.items()
+        }
         self.all_categories = list(self.category_by_id.values())
+        self.categories_by_dataset = {
+            str(dataset_id): [self.category_by_id[category_id] for category_id in category_ids]
+            for dataset_id, category_ids in (category_ids_by_dataset or {}).items()
+        }
         positive_category_ids: dict[int, set[int]] = defaultdict(set)
         for annotation in annotations:
             category_id = int(annotation["category_id"])
@@ -57,6 +75,9 @@ class LocateAnythingValPreprocessor:
         """返回当前协议应放入prompt的类别。"""
         if self.protocol == LEGACY_PROTOCOL:
             return self.all_categories.copy()
+        if self.protocol == CLOSED_SET_PROTOCOL:
+            dataset_id = image.get("dataset_id")
+            return self.categories_by_dataset.get(str(dataset_id), self.all_categories).copy()
         image_id = int(image["id"])
         return self.positive_categories.get(image_id, []).copy()
 
@@ -101,7 +122,7 @@ class LocateAnythingValPreprocessor:
         """按官方流程先在缩放图边界裁剪，再映射回原图。"""
         values = [float(value) for value in xyxy]
         metadata = image.get("validation_preprocess") or {}
-        if metadata.get("protocol_id") != PAPER_PROTOCOL_ID:
+        if metadata.get("protocol") not in {PAPER_PROTOCOL, CLOSED_SET_PROTOCOL}:
             return values
         resized_width, resized_height = (int(value) for value in metadata["resized_size"])
         scale_factor = float(metadata["scale_factor"])
@@ -114,6 +135,8 @@ class LocateAnythingValPreprocessor:
 
 
 __all__ = (
+    "CLOSED_SET_PROTOCOL",
+    "CLOSED_SET_PROTOCOL_ID",
     "LEGACY_PROTOCOL",
     "LEGACY_PROTOCOL_ID",
     "PAPER_PROTOCOL",

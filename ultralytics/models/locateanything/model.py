@@ -253,6 +253,32 @@ class LocateAnything(CallbackHost):
         self.metrics = validator()
         return self.metrics
 
+    def val_cd_fsod(
+        self,
+        data: Any = None,
+        *,
+        device: str | None = None,
+        batch: int = 512,
+        output_dir: str | Path = "runs/locateanything/cd_fsod",
+        max_images_per_dataset: int = 0,
+        **kwargs: Any,
+    ):
+        """在六个CD-FSOD目标域上执行论文协议的纯zero-shot验证。"""
+        from .cd_fsod import LocateAnythingCDFsodValidator
+
+        validator = LocateAnythingCDFsodValidator(
+            model=self,
+            data=data,
+            device=device,
+            batch=batch,
+            output_dir=output_dir,
+            max_images_per_dataset=max_images_per_dataset,
+            callbacks_=self.callbacks,
+            **kwargs,
+        )
+        self.metrics = validator()
+        return self.metrics
+
     @torch.no_grad()
     def _predict_one(
         self,

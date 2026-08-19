@@ -26,7 +26,7 @@ import torch.distributed as dist
 
 from ultralytics.data.utils import check_det_dataset
 from ultralytics.engine.runtime import CallbackHost, initialize_distributed_runtime
-from ultralytics.utils import LOGGER, TQDM, SimpleClass
+from ultralytics.utils import DATASETS_DIR, LOGGER, TQDM, YAML, SimpleClass
 from ultralytics.utils.dist import (
     build_torchrun_command,
     find_free_network_port,
@@ -37,6 +37,8 @@ from ultralytics.utils.files import increment_path
 from ultralytics.utils.torch_utils import get_torch_device_backend
 
 from .val_preprocess import (
+    CLOSED_SET_PROTOCOL,
+    CLOSED_SET_PROTOCOL_ID,
     LEGACY_PROTOCOL,
     LEGACY_PROTOCOL_ID,
     PAPER_PROTOCOL,
@@ -57,9 +59,15 @@ class LocateMetrics(SimpleClass):
         self.config = payload["config"]
         self.counts = payload["counts"]
         self.official = payload["official_locate_metrics"]
+        self.auxiliary_paper = payload.get("auxiliary_paper_metrics")
         self.coco_ap = payload["nonstandard_constant_score_coco_ap"]
         self.speed = payload["speed"]
         self.per_class = {threshold: values["per_class"] for threshold, values in self.official["f1"].items()}
+        self.auxiliary_per_class = (
+            {threshold: values["per_class"] for threshold, values in self.auxiliary_paper["f1"].items()}
+            if self.auxiliary_paper
+            else None
+        )
 
     @classmethod
     def from_file(cls, path: str | Path) -> "LocateMetrics":
@@ -70,6 +78,21 @@ class LocateMetrics(SimpleClass):
     @property
     def keys(self) -> list[str]:
         """返回results_dict的稳定指标名称。"""
+        if self.config.get("protocol") == CLOSED_SET_PROTOCOL:
+            return [
+                "metrics/closed-set-precision50(B)",
+                "metrics/closed-set-recall50(B)",
+                "metrics/closed-set-F1-50(B)",
+                "metrics/closed-set-F1-95(B)",
+                "metrics/closed-set-F1-mean(B)",
+                "metrics/paper-style-F1-50(B)",
+                "metrics/paper-style-F1-95(B)",
+                "metrics/paper-style-F1-mean(B)",
+                "metrics/mean-GT-IoU(B)",
+                "metrics/nonstandard-mAP50(B)",
+                "metrics/nonstandard-mAP50-95(B)",
+                "fitness",
+            ]
         keys = [
             "metrics/precision50(B)",
             "metrics/recall50(B)",
@@ -94,6 +117,23 @@ class LocateMetrics(SimpleClass):
         """返回与DetMetrics用法一致的扁平指标字典。"""
         f1 = self.official["f1"]
         ap = self.coco_ap
+        if self.config.get("protocol") == CLOSED_SET_PROTOCOL:
+            auxiliary = self.auxiliary_paper["f1"]
+            values = [
+                float(f1["0.50"]["macro"]["precision"]),
+                float(f1["0.50"]["macro"]["recall"]),
+                float(f1["0.50"]["macro"]["f1"]),
+                float(f1["0.95"]["macro"]["f1"]),
+                float(f1["mean"]["macro"]["f1"]),
+                float(auxiliary["0.50"]["macro"]["f1"]),
+                float(auxiliary["0.95"]["macro"]["f1"]),
+                float(auxiliary["mean"]["macro"]["f1"]),
+                float(self.official["mean_gt_iou"]),
+                float(ap.get("AP50", 0.0)),
+                float(ap.get("AP50_95", 0.0)),
+                self.fitness,
+            ]
+            return dict(zip(self.keys, values))
         if "mean" in f1:
             values = [
                 float(f1["0.50"]["macro"]["precision"]),
@@ -325,19 +365,43 @@ def _resolve_path(root: Path, value: str | Path) -> Path:
     return path if path.is_absolute() else (root / path).resolve()
 
 
-def load_coco_validation(
+def load_detection_validation(
     data: str | Path,
     *,
     allow_download: bool = False,
     max_images: int = 0,
+    drop_empty_categories: bool = False,
+    validation_only: bool = False,
 ) -> dict[str, Any]:
-    """读取COCO val2017图片、标注和类别，并禁止隐式下载。"""
-    dataset = check_det_dataset(str(data), autodownload=allow_download)
+    """读取COCO JSON格式的检测验证集，并禁止隐式下载。"""
+    if validation_only:
+        config_path = Path(data)
+        if not config_path.is_file():
+            raise FileNotFoundError(f"验证数据配置不存在：{config_path}")
+        config = YAML.load(config_path)
+        root = Path(config.get("path") or config_path.parent)
+        if not root.is_absolute():
+            local_root = (config_path.parent / root).resolve()
+            root = local_root if local_root.exists() else (DATASETS_DIR / root).resolve()
+        val = config.get("val", config.get("validation"))
+        annotation = (config.get("annotations") or {}).get("val")
+        if not val or not annotation:
+            raise ValueError(f"验证数据配置必须提供val和annotations.val：{config_path}")
+        val_values = val if isinstance(val, (list, tuple)) else [val]
+        dataset = {
+            "path": root,
+            "val": [str(_resolve_path(root, value)) for value in val_values],
+            "annotations": {"val": str(_resolve_path(root, annotation))},
+        }
+        if len(dataset["val"]) == 1:
+            dataset["val"] = dataset["val"][0]
+    else:
+        dataset = check_det_dataset(str(data), autodownload=allow_download)
     root = Path(dataset["path"])
     annotation_value = (dataset.get("annotations") or {}).get("val")
     annotation_path = Path(annotation_value) if annotation_value else root / "annotations" / "instances_val2017.json"
     if not annotation_path.is_file():
-        raise FileNotFoundError(f"未找到COCO val2017标注：{annotation_path}。默认不会自动下载数据。")
+        raise FileNotFoundError(f"未找到验证标注：{annotation_path}。默认不会自动下载数据。")
     payload = json.loads(annotation_path.read_text(encoding="utf-8"))
     required = {"images", "annotations", "categories"}
     if not isinstance(payload, dict) or not required.issubset(payload):
@@ -347,9 +411,16 @@ def load_coco_validation(
         ({"id": int(item["id"]), "name": str(item["name"])} for item in payload["categories"]),
         key=lambda item: item["id"],
     )
+    used_category_ids = {int(item["category_id"]) for item in payload["annotations"]}
+    if drop_empty_categories:
+        categories = [item for item in categories if item["id"] in used_category_ids]
     normalized_names = [normalize_label(item["name"]) for item in categories]
-    if len(categories) != 80 or len(set(normalized_names)) != len(categories):
-        raise ValueError(f"预期MS COCO 80类，标注中得到{len(categories)}类")
+    if not categories or len(set(normalized_names)) != len(categories):
+        raise ValueError(f"验证标注的类别为空或规范化名称重复：{annotation_path}")
+    declared_category_ids = {int(item["id"]) for item in payload["categories"]}
+    unknown_category_ids = used_category_ids - declared_category_ids
+    if unknown_category_ids:
+        raise ValueError(f"验证标注引用了未声明的category id：{sorted(unknown_category_ids)}")
 
     val_source = dataset["val"]
     if isinstance(val_source, (list, tuple)):
@@ -357,43 +428,108 @@ def load_coco_validation(
     else:
         sources = [Path(val_source)]
     image_by_name: dict[str, Path] = {}
+    image_by_relative_name: dict[str, Path] = {}
+    directory_sources: list[Path] = []
     for source in sources:
         if source.is_file() and source.suffix.lower() == ".txt":
             for line in source.read_text(encoding="utf-8").splitlines():
                 if line.strip():
                     image_path = _resolve_path(root, line.strip())
                     image_by_name[image_path.name] = image_path
+                    image_by_relative_name[str(Path(line.strip()).as_posix())] = image_path
         elif source.is_dir():
-            image_by_name.update({path.name: path for path in source.iterdir() if path.is_file()})
+            directory_sources.append(source)
+            if validation_only:
+                continue
+            for path in source.rglob("*"):
+                if path.is_file():
+                    image_by_name[path.name] = path
+                    image_by_relative_name[path.relative_to(source).as_posix()] = path
 
     images = []
-    for item in sorted(payload["images"], key=lambda value: int(value["id"])):
+
+    def image_sort_key(value: dict[str, Any]) -> tuple[int, Any]:
+        image_id = value["id"]
+        try:
+            return 0, int(image_id)
+        except (TypeError, ValueError):
+            return 1, str(image_id)
+
+    for item in sorted(payload["images"], key=image_sort_key):
         file_name = str(item["file_name"])
-        image_path = image_by_name.get(Path(file_name).name, root / "images" / "val2017" / file_name)
+        image_path = next(
+            (source / file_name for source in directory_sources if (source / file_name).is_file()),
+            None,
+        )
+        image_path = image_path or image_by_relative_name.get(file_name) or image_by_name.get(Path(file_name).name)
+        if image_path is None:
+            image_path = root / "images" / "val2017" / file_name
         if not image_path.is_file():
-            raise FileNotFoundError(f"COCO图片不存在：{image_path}")
+            raise FileNotFoundError(f"验证图片不存在：{image_path}")
         images.append(
             {
-                "id": int(item["id"]),
+                "id": item["id"],
                 "file_name": file_name,
                 "path": str(image_path),
                 "height": int(item["height"]),
                 "width": int(item["width"]),
             }
         )
-    if len(images) != 5000:
-        raise ValueError(f"预期COCO val2017包含5000张图片，得到{len(images)}张")
+    full_image_count = len(images)
     if max_images:
         images = images[:max_images]
-    selected_image_ids = {int(image["id"]) for image in images}
-    evaluation_image_ids = [int(item["id"]) for item in payload["images"] if int(item["id"]) in selected_image_ids]
+    selected_image_ids = {image["id"] for image in images}
+    evaluation_image_ids = [item["id"] for item in payload["images"] if item["id"] in selected_image_ids]
     return {
         "annotation_path": str(annotation_path),
         "images": images,
         "evaluation_image_ids": evaluation_image_ids,
         "annotations": payload["annotations"],
         "categories": categories,
+        "full_image_count": full_image_count,
+        "dataset_root": str(root),
+        "data": str(data),
     }
+
+
+def load_coco_validation(
+    data: str | Path,
+    *,
+    allow_download: bool = False,
+    max_images: int = 0,
+) -> dict[str, Any]:
+    """读取MS COCO val2017，并保留既有80类、5000图约束。"""
+    result = load_detection_validation(data, allow_download=allow_download, max_images=max_images)
+    if len(result["categories"]) != 80:
+        raise ValueError(f"预期MS COCO 80类，标注中得到{len(result['categories'])}类")
+    if result["full_image_count"] != 5000:
+        raise ValueError(f"预期COCO val2017包含5000张图片，得到{result['full_image_count']}张")
+    return result
+
+
+def _load_validation_data(args: Any) -> dict[str, Any]:
+    """按验证类型加载单一COCO或CD-FSOD suite。"""
+    if getattr(args, "benchmark", "coco") == "cd_fsod":
+        from .cd_fsod import load_cd_fsod_validation
+
+        return load_cd_fsod_validation(
+            args.data,
+            allow_download=args.allow_download,
+            max_images_per_dataset=args.max_images,
+        )
+    return load_coco_validation(args.data, allow_download=args.allow_download, max_images=args.max_images)
+
+
+def _validation_protocol_id(args: Any, data: dict[str, Any]) -> str:
+    """返回当前数据集与验证协议组合的稳定resume标识。"""
+    protocol = getattr(args, "protocol", PAPER_PROTOCOL)
+    if getattr(args, "benchmark", "coco") == "cd_fsod":
+        from .cd_fsod import CD_FSOD_CLOSED_SET_PROTOCOL_ID, CD_FSOD_PROTOCOL_ID
+
+        return CD_FSOD_CLOSED_SET_PROTOCOL_ID if protocol == CLOSED_SET_PROTOCOL else CD_FSOD_PROTOCOL_ID
+    if protocol == CLOSED_SET_PROTOCOL:
+        return CLOSED_SET_PROTOCOL_ID
+    return data.get("protocol_id") or (PAPER_PROTOCOL_ID if protocol == PAPER_PROTOCOL else LEGACY_PROTOCOL_ID)
 
 
 def result_to_record(
@@ -426,6 +562,8 @@ def result_to_record(
     stats = result.stats if isinstance(getattr(result, "stats", None), dict) else {}
     return {
         "image_id": int(image["id"]),
+        **({"source_image_id": image["source_image_id"]} if "source_image_id" in image else {}),
+        **({"dataset_id": str(image["dataset_id"])} if "dataset_id" in image else {}),
         "file_name": str(image["file_name"]),
         "raw_output": str(result.raw_output),
         "parse_warnings": list(result.parse_warnings),
@@ -462,11 +600,16 @@ def read_jsonl_records(path: str | Path) -> dict[int, dict[str, Any]]:
     return records
 
 
-def validate_resume_protocol(output_dir: str | Path, world_size: int, protocol: str) -> None:
+def validate_resume_protocol(
+    output_dir: str | Path,
+    world_size: int,
+    protocol: str,
+    expected_protocol_id: str | None = None,
+) -> None:
     """防止resume把论文预处理结果与旧协议分片混合。"""
     if protocol == LEGACY_PROTOCOL:
         return
-    expected = PAPER_PROTOCOL_ID
+    expected = expected_protocol_id or PAPER_PROTOCOL_ID
     for rank in range(world_size):
         path = Path(output_dir) / f"predictions.rank{rank}.jsonl"
         for image_id, record in read_jsonl_records(path).items():
@@ -673,8 +816,15 @@ def compute_locate_metrics(
     categories: list[dict[str, Any]],
     image_ids: set[int],
     image_order: list[int] | None = None,
+    *,
+    positive_only: bool = True,
+    precision_mode: str = "fasteval",
+    ignore_zero_macro: bool = True,
+    protocol_name: str = "coco_fasteval_paper",
 ) -> dict[str, Any]:
-    """按LocateAnything论文的COCO/FastEval口径计算P/R/F1。"""
+    """按可配置的类别过滤、precision和宏平均策略计算P/R/F1。"""
+    if precision_mode not in {"fasteval", "count"}:
+        raise ValueError(f"precision_mode必须是'fasteval'或'count'，得到{precision_mode!r}")
     category_name = {int(item["id"]): str(item["name"]) for item in categories}
     positive_categories: dict[int, set[int]] = defaultdict(set)
     targets: dict[tuple[int, int], list[list[float]]] = defaultdict(list)
@@ -695,7 +845,7 @@ def compute_locate_metrics(
         image_id = int(record["image_id"])
         for prediction in record.get("predictions", []):
             category_id = int(prediction["category_id"])
-            if image_id in positive_categories and category_id not in positive_categories[image_id]:
+            if positive_only and image_id in positive_categories and category_id not in positive_categories[image_id]:
                 dropped_predictions += 1
                 continue
             predictions[(image_id, category_id)].append([float(value) for value in prediction["xyxy"]])
@@ -728,15 +878,17 @@ def compute_locate_metrics(
         for category_id, counts in per_category.items():
             values = _ratios(**counts)
             values["count_precision"] = values["precision"]
-            values["precision"] = _fasteval_precision(
-                per_category_outcomes[category_id],
-                int(counts["tp"] + counts["fn"]),
-            )
+            if precision_mode == "fasteval":
+                values["precision"] = _fasteval_precision(
+                    per_category_outcomes[category_id],
+                    int(counts["tp"] + counts["fn"]),
+                )
             values["f1"] = _f1_from_precision_recall(float(values["precision"]), float(values["recall"]))
             per_class[category_name[category_id]] = values
         totals = {key: sum(int(metrics[key]) for metrics in per_class.values()) for key in ("tp", "fp", "fn")}
-        macro_precision = _safe_positive_mean([float(metrics["precision"]) for metrics in per_class.values()])
-        macro_recall = _safe_positive_mean([float(metrics["recall"]) for metrics in per_class.values()])
+        mean_function = _safe_positive_mean if ignore_zero_macro else lambda values: float(np.mean(values))
+        macro_precision = mean_function([float(metrics["precision"]) for metrics in per_class.values()])
+        macro_recall = mean_function([float(metrics["recall"]) for metrics in per_class.values()])
         macro = {
             "precision": macro_precision,
             "recall": macro_recall,
@@ -757,8 +909,9 @@ def compute_locate_metrics(
             "recall": recall,
             "f1": _f1_from_precision_recall(precision, recall),
         }
-    mean_precision = _safe_positive_mean([metrics["precision"] for metrics in per_class_mean.values()])
-    mean_recall = _safe_positive_mean([metrics["recall"] for metrics in per_class_mean.values()])
+    mean_function = _safe_positive_mean if ignore_zero_macro else lambda values: float(np.mean(values))
+    mean_precision = mean_function([metrics["precision"] for metrics in per_class_mean.values()])
+    mean_recall = mean_function([metrics["recall"] for metrics in per_class_mean.values()])
     thresholds["mean"] = {
         "macro": {
             "precision": mean_precision,
@@ -777,13 +930,40 @@ def compute_locate_metrics(
         "f1": thresholds,
         "mean_gt_iou": matched_iou_sum / total_gt if total_gt else 0.0,
         "evaluated_non_crowd_gt": total_gt,
-        "protocol": "coco_fasteval_paper",
+        "protocol": protocol_name,
         "iou_thresholds": threshold_values,
-        "aggregation": "per_category_precision_recall_safe_mean_then_harmonic_f1",
-        "positive_only": True,
+        "aggregation": (
+            "per_category_precision_recall_safe_mean_then_harmonic_f1"
+            if ignore_zero_macro
+            else "per_category_count_precision_recall_all_class_mean_then_harmonic_f1"
+        ),
+        "precision_mode": precision_mode,
+        "ignore_zero_macro": ignore_zero_macro,
+        "positive_only": positive_only,
         "max_detections_per_image_category": 100,
         "positive_only_dropped_predictions": dropped_predictions,
     }
+
+
+def compute_closed_set_metrics(
+    records: list[dict[str, Any]],
+    annotations: list[dict[str, Any]],
+    categories: list[dict[str, Any]],
+    image_ids: set[int],
+    image_order: list[int] | None = None,
+) -> dict[str, Any]:
+    """计算全类别预测、错误类别计FP且零分参与平均的严格closed-set F1。"""
+    return compute_locate_metrics(
+        records,
+        annotations,
+        categories,
+        image_ids,
+        image_order,
+        positive_only=False,
+        precision_mode="count",
+        ignore_zero_macro=False,
+        protocol_name="closed_set_count_f1",
+    )
 
 
 def compute_legacy_locate_metrics(
@@ -851,7 +1031,7 @@ def compute_legacy_locate_metrics(
 def run_nonstandard_coco_ap(
     annotation_path: str | Path,
     prediction_path: str | Path,
-    image_ids: list[int],
+    image_ids: list[Any],
 ) -> dict[str, Any]:
     """以固定score=1.0运行COCO AP，并显式标记其非标准性质。"""
     warning = "LocateAnything不输出confidence；本节为所有框固定score=1.0，COCO AP不具备标准排序意义。"
@@ -903,6 +1083,8 @@ def _error_record(image: dict[str, Any], error: Exception) -> dict[str, Any]:
     """将单图推理错误保存为可汇总记录。"""
     return {
         "image_id": int(image["id"]),
+        **({"source_image_id": image["source_image_id"]} if "source_image_id" in image else {}),
+        **({"dataset_id": str(image["dataset_id"])} if "dataset_id" in image else {}),
         "file_name": str(image["file_name"]),
         "raw_output": "",
         "parse_warnings": [],
@@ -1017,10 +1199,14 @@ def _run_inference(
     """当前rank使用本地NPU处理固定分片或共享动态队列。"""
     categories = coco["categories"]
     category_by_name = {normalize_label(item["name"]): item for item in categories}
+    category_by_name_by_dataset = coco.get("category_by_name_by_dataset") or {}
     preprocessor = LocateAnythingValPreprocessor(
         coco["annotations"],
         categories,
         protocol=getattr(args, "protocol", PAPER_PROTOCOL),
+        category_aliases=coco.get("category_aliases"),
+        protocol_id=_validation_protocol_id(args, coco),
+        category_ids_by_dataset=coco.get("category_ids_by_dataset"),
     )
     image_by_id = {int(image["id"]): image for image in coco["images"]}
     dynamic_scheduling = bool(getattr(args, "dynamic_scheduling", False))
@@ -1081,6 +1267,10 @@ def _run_inference(
         disable=rank != 0 or dynamic_scheduling or bool(getattr(args, "parent_progress", False)),
     )
 
+    def categories_for_image(image: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        dataset_id = image.get("dataset_id")
+        return category_by_name_by_dataset.get(dataset_id, category_by_name)
+
     def claim_images(count: int) -> list[dict[str, Any]]:
         if dynamic_queue is None:
             raise RuntimeError("固定分片路径不能领取动态任务")
@@ -1114,7 +1304,7 @@ def _run_inference(
                         top_p=args.top_p,
                         repetition_penalty=1.1,
                     )[0]
-                    record = result_to_record(result, context, category_by_name, preprocessor)
+                    record = result_to_record(result, context, categories_for_image(context), preprocessor)
                     record["batch_id"] = image_id
                     record["batch_size"] = 1
                     record["batch_output_tokens"] = record["output_tokens"]
@@ -1144,7 +1334,7 @@ def _run_inference(
             def store_result(image: dict[str, Any], result: Any) -> None:
                 nonlocal processed, processed_boxes, output_tokens
                 try:
-                    record = result_to_record(result, image, category_by_name, preprocessor)
+                    record = result_to_record(result, image, categories_for_image(image), preprocessor)
                 except Exception as error:
                     LOGGER.error(f"rank={rank} image_id={image['id']}结果解析失败：{error}")
                     record = _error_record(image, error)
@@ -1165,15 +1355,17 @@ def _run_inference(
 
             if continuous_batching:
                 local_offset = 0
+                last_provided_contexts: list[dict[str, Any]] = []
 
                 def provide_sources(count: int) -> list[tuple[Any, int, Any, str]]:
-                    nonlocal local_offset
+                    nonlocal local_offset, last_provided_contexts
                     if dynamic_queue is not None:
                         images = claim_images(count)
                     else:
                         images = remaining[local_offset : local_offset + count]
                         local_offset += len(images)
                     prepared = [preprocessor.prepare(image) for image in images]
+                    last_provided_contexts = [item[2] for item in prepared]
                     return [
                         (source, int(args.seed + int(context["id"])), context, question)
                         for source, question, context in prepared
@@ -1208,7 +1400,15 @@ def _run_inference(
                         candidate_top_p=getattr(args, "candidate_top_p", True),
                     )
                 except Exception as error:
-                    raise _batch_inference_error(error, args.batch, args.batch, device) from error
+                    raise _batch_inference_error(
+                        error,
+                        args.batch,
+                        args.batch,
+                        device,
+                        global_batch=getattr(args, "global_batch", args.batch),
+                        rank=rank,
+                        contexts=last_provided_contexts,
+                    ) from error
                 generation_seconds = float(stream_stats["generation_seconds"])
                 if int(stream_stats["processed"]) != processed:
                     raise RuntimeError(
@@ -1261,7 +1461,15 @@ def _run_inference(
                             candidate_top_p=getattr(args, "candidate_top_p", True),
                         )
                     except Exception as error:
-                        raise _batch_inference_error(error, args.batch, min(args.batch, len(images)), device) from error
+                        raise _batch_inference_error(
+                            error,
+                            args.batch,
+                            min(args.batch, len(images)),
+                            device,
+                            global_batch=getattr(args, "global_batch", args.batch),
+                            rank=rank,
+                            contexts=contexts,
+                        ) from error
                     for image, result in zip(contexts, results):
                         store_result(image, result)
                     batch_seconds = float(results[0].stats["batch_generation_seconds"])
@@ -1290,7 +1498,14 @@ def _run_inference(
 
 
 def _batch_inference_error(
-    error: Exception, requested_batch: int, effective_batch: int, device: torch.device
+    error: Exception,
+    requested_batch: int,
+    effective_batch: int,
+    device: torch.device,
+    *,
+    global_batch: int | None = None,
+    rank: int | None = None,
+    contexts: list[dict[str, Any]] | None = None,
 ) -> RuntimeError:
     """构造不隐式降级的批量失败信息，OOM时附带当前显存状态。"""
     message = str(error)
@@ -1306,8 +1521,18 @@ def _batch_inference_error(
             f"free={free / gib:.2f}GiB, total={total / gib:.2f}GiB"
         )
     kind = "NPU OOM" if is_oom else "批量推理失败"
+    context_details = ""
+    if contexts:
+        datasets = sorted({str(context.get("dataset_id", "COCO")) for context in contexts})
+        sizes = [
+            (context.get("validation_preprocess") or {}).get("resized_size")
+            or [context.get("width"), context.get("height")]
+            for context in contexts
+        ]
+        context_details = f"，dataset={datasets}，最近输入尺寸={sizes[:8]}"
     return RuntimeError(
-        f"{kind}，请求batch={requested_batch}，当前尾批effective_batch={effective_batch}{memory}。"
+        f"{kind}，global_batch={global_batch or requested_batch}，local_batch={requested_batch}，"
+        f"effective_batch={effective_batch}，rank={rank}，device={device}{context_details}{memory}。"
         "本次验证不会自动降低batch。"
         f"原始错误：{type(error).__name__}: {error}"
     )
@@ -1361,9 +1586,28 @@ def _summary_text(metrics: dict[str, Any]) -> str:
     f1_50 = metrics["official_locate_metrics"]["f1"]["0.50"]
     f1_95 = metrics["official_locate_metrics"]["f1"]["0.95"]
     ap = metrics["nonstandard_constant_score_coco_ap"]
-    paper = "mean" in metrics["official_locate_metrics"]["f1"]
+    protocol = metrics["config"]["protocol"]
+    paper = protocol == PAPER_PROTOCOL
     lines = ["LocateAnything MS COCO 2017 val验证结果"]
-    if paper:
+    if protocol == CLOSED_SET_PROTOCOL:
+        f1_mean = metrics["official_locate_metrics"]["f1"]["mean"]["macro"]
+        auxiliary = metrics["auxiliary_paper_metrics"]["f1"]
+        lines.extend(
+            (
+                "协议：严格closed-set（短边840、全80类prompt、错误类别计FP、零分参与宏平均）",
+                f"实际global batch={metrics['config']['global_batch']}，"
+                f"每rank local batch={metrics['config']['local_batch']}",
+                f"图片：{metrics['counts']['images']}，预测框：{metrics['counts']['boxes']}",
+                f"Closed-set F1@0.50={f1_50['macro']['f1']:.6f} "
+                f"(P={f1_50['macro']['precision']:.6f}, R={f1_50['macro']['recall']:.6f})",
+                f"Closed-set F1@0.95={f1_95['macro']['f1']:.6f}",
+                f"Closed-set Mean F1={f1_mean['f1']:.6f}",
+                f"辅助paper-style F1@0.50={auxiliary['0.50']['macro']['f1']:.6f}, "
+                f"F1@0.95={auxiliary['0.95']['macro']['f1']:.6f}, "
+                f"Mean F1={auxiliary['mean']['macro']['f1']:.6f}",
+            )
+        )
+    elif paper:
         f1_mean = metrics["official_locate_metrics"]["f1"]["mean"]["macro"]
         lines.extend(
             (
@@ -1421,6 +1665,25 @@ def _prepare_run_config_file(args: Any, output_dir: Path) -> None:
         "local_world_size": int(getattr(args, "local_world_size", 1)),
         "nnodes": int(getattr(args, "nnodes", 1)),
     }
+    if getattr(args, "benchmark", "coco") == "cd_fsod":
+        expected.update(
+            {
+                "benchmark": "cd_fsod_zero_shot",
+                "model": args.model,
+                "revision": args.revision,
+                "dataset_manifest_sha256": args.dataset_manifest_sha256,
+                "class_name_policy": "naturalize_underscore_hyphen",
+                "prompt_categories": (
+                    "all_dataset_categories" if args.protocol == CLOSED_SET_PROTOCOL else "image_gt_positive"
+                ),
+                "generation_mode": args.generation_mode,
+                "max_new_tokens": int(args.max_new_tokens),
+                "temperature": float(args.temperature),
+                "top_p": float(args.top_p),
+                "seed": int(args.seed),
+                "max_images_per_dataset": int(args.max_images),
+            }
+        )
     if args.resume:
         if not path.is_file():
             raise RuntimeError(
@@ -1432,6 +1695,10 @@ def _prepare_run_config_file(args: Any, output_dir: Path) -> None:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(expected, ensure_ascii=False, indent=2), encoding="utf-8")
+    if getattr(args, "benchmark", "coco") == "cd_fsod":
+        (output_dir / "run_config.json").write_text(
+            json.dumps(expected, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
 
 def finalize_results(
@@ -1461,9 +1728,33 @@ def finalize_results(
     prediction_path = output_dir / "predictions.json"
     prediction_path.write_text(json.dumps(predictions, ensure_ascii=False), encoding="utf-8")
     protocol = getattr(args, "protocol", PAPER_PROTOCOL)
-    metric_function = compute_locate_metrics if protocol == PAPER_PROTOCOL else compute_legacy_locate_metrics
-    metric_kwargs = {"image_order": coco.get("evaluation_image_ids")} if protocol == PAPER_PROTOCOL else {}
-    official = metric_function(records, coco["annotations"], coco["categories"], expected_ids, **metric_kwargs)
+    auxiliary_paper = None
+    if protocol == CLOSED_SET_PROTOCOL:
+        official = compute_closed_set_metrics(
+            records,
+            coco["annotations"],
+            coco["categories"],
+            expected_ids,
+            image_order=coco.get("evaluation_image_ids"),
+        )
+        auxiliary_paper = compute_locate_metrics(
+            records,
+            coco["annotations"],
+            coco["categories"],
+            expected_ids,
+            image_order=coco.get("evaluation_image_ids"),
+        )
+        auxiliary_paper["protocol"] = "paper_style_on_closed_set_predictions"
+    elif protocol == PAPER_PROTOCOL:
+        official = compute_locate_metrics(
+            records,
+            coco["annotations"],
+            coco["categories"],
+            expected_ids,
+            image_order=coco.get("evaluation_image_ids"),
+        )
+    else:
+        official = compute_legacy_locate_metrics(records, coco["annotations"], coco["categories"], expected_ids)
     coco_ap = run_nonstandard_coco_ap(coco["annotation_path"], prediction_path, sorted(expected_ids))
     metrics = {
         "config": {
@@ -1480,10 +1771,16 @@ def finalize_results(
             "global_batch": getattr(args, "global_batch", getattr(args, "batch", 1)),
             "local_batch": getattr(args, "batch", 1),
             "protocol": protocol,
-            "protocol_id": PAPER_PROTOCOL_ID if protocol == PAPER_PROTOCOL else LEGACY_PROTOCOL_ID,
-            "short_side": PAPER_SHORT_SIDE if protocol == PAPER_PROTOCOL else None,
-            "resize_interpolation": "bilinear" if protocol == PAPER_PROTOCOL else None,
-            "prompt_categories": "image_gt_positive" if protocol == PAPER_PROTOCOL else "all_80",
+            "protocol_id": _validation_protocol_id(args, coco),
+            "short_side": PAPER_SHORT_SIDE if protocol in {PAPER_PROTOCOL, CLOSED_SET_PROTOCOL} else None,
+            "resize_interpolation": ("bilinear" if protocol in {PAPER_PROTOCOL, CLOSED_SET_PROTOCOL} else None),
+            "prompt_categories": (
+                "image_gt_positive"
+                if protocol == PAPER_PROTOCOL
+                else "all_dataset_categories"
+                if protocol == CLOSED_SET_PROTOCOL
+                else "all_80"
+            ),
             "paper_reference_batch": 1,
             "paper_batch_matches": getattr(args, "batch", 1) == 1,
             "scheduler": getattr(args, "scheduler", "pipeline"),
@@ -1525,6 +1822,7 @@ def finalize_results(
             ),
         },
         "official_locate_metrics": official,
+        **({"auxiliary_paper_metrics": auxiliary_paper} if auxiliary_paper is not None else {}),
         "nonstandard_constant_score_coco_ap": coco_ap,
         "speed": _aggregate_speed(
             records,
@@ -1569,16 +1867,20 @@ def _run_distributed_worker(args: Any, model: Any = None) -> LocateMetrics | Non
         if rank == 0:
             _prepare_run_config_file(args, output_dir)
         dist.barrier()
-        coco = load_coco_validation(
-            args.data,
-            allow_download=args.allow_download,
-            max_images=args.max_images,
-        )
+        coco = _load_validation_data(args)
+        if getattr(args, "benchmark", "coco") == "cd_fsod" and (
+            coco.get("manifest_sha256") != getattr(args, "dataset_manifest_sha256", None)
+        ):
+            raise RuntimeError(
+                "CD-FSOD测试标注在启动worker后发生变化："
+                f"父进程={getattr(args, 'dataset_manifest_sha256', None)}，worker={coco.get('manifest_sha256')}"
+            )
         if args.resume:
             validate_resume_protocol(
                 output_dir,
                 world_size,
                 getattr(args, "protocol", PAPER_PROTOCOL),
+                _validation_protocol_id(args, coco),
             )
         if getattr(args, "dynamic_scheduling", False):
             if getattr(args, "store_port", 0):
@@ -1632,7 +1934,14 @@ def _run_distributed_worker(args: Any, model: Any = None) -> LocateMetrics | Non
         dist.barrier()
         metrics = None
         if rank == 0:
-            payload = finalize_results(
+            finalize = finalize_results
+            metrics_type = LocateMetrics
+            if getattr(args, "benchmark", "coco") == "cd_fsod":
+                from .cd_fsod import CDFsodMetrics, finalize_cd_fsod_results
+
+                finalize = finalize_cd_fsod_results
+                metrics_type = CDFsodMetrics
+            payload = finalize(
                 args,
                 output_dir,
                 coco,
@@ -1646,7 +1955,7 @@ def _run_distributed_worker(args: Any, model: Any = None) -> LocateMetrics | Non
                 int(total_memory_tensor.cpu()),
                 getattr(model, "tokenizer", None),
             )
-            metrics = LocateMetrics(payload, output_dir)
+            metrics = metrics_type(payload, output_dir)
         dist.barrier()
         return metrics
     finally:
@@ -1657,17 +1966,29 @@ def _run_distributed_worker(args: Any, model: Any = None) -> LocateMetrics | Non
 def _run_single_worker(args: Any, model: Any) -> LocateMetrics:
     """不创建process group，直接在当前NPU上执行单卡验证。"""
     output_dir = _resolve_worker_output(args)
-    coco = load_coco_validation(
-        args.data,
-        allow_download=args.allow_download,
-        max_images=args.max_images,
-    )
+    coco = _load_validation_data(args)
+    if getattr(args, "benchmark", "coco") == "cd_fsod" and (
+        coco.get("manifest_sha256") != getattr(args, "dataset_manifest_sha256", None)
+    ):
+        raise RuntimeError("CD-FSOD测试标注与validator初始化时的manifest不一致")
     if args.resume:
-        validate_resume_protocol(output_dir, 1, getattr(args, "protocol", PAPER_PROTOCOL))
+        validate_resume_protocol(
+            output_dir,
+            1,
+            getattr(args, "protocol", PAPER_PROTOCOL),
+            _validation_protocol_id(args, coco),
+        )
     if getattr(args, "dynamic_scheduling", False):
         _initialize_dynamic_queue(output_dir, coco["images"], 1, resume=bool(args.resume))
     runtime, model = _run_inference(args, model, 0, 1, model.device, output_dir, coco)
-    payload = finalize_results(
+    finalize = finalize_results
+    metrics_type = LocateMetrics
+    if getattr(args, "benchmark", "coco") == "cd_fsod":
+        from .cd_fsod import CDFsodMetrics, finalize_cd_fsod_results
+
+        finalize = finalize_cd_fsod_results
+        metrics_type = CDFsodMetrics
+    payload = finalize(
         args,
         output_dir,
         coco,
@@ -1681,7 +2002,7 @@ def _run_single_worker(args: Any, model: Any) -> LocateMetrics:
         int(runtime["total_memory_bytes"]),
         getattr(model, "tokenizer", None),
     )
-    return LocateMetrics(payload, output_dir)
+    return metrics_type(payload, output_dir)
 
 
 def _configure_worker_progress(rank: int) -> None:
@@ -1901,8 +2222,8 @@ class LocateAnythingValidator(CallbackHost):
             k8s = None
             requested_world_size = int(os.getenv("WORLD_SIZE", "1")) if local_rank >= 0 else len(devices)
         protocol = str(protocol).strip().lower()
-        if protocol not in {PAPER_PROTOCOL, LEGACY_PROTOCOL}:
-            raise ValueError(f"protocol必须是'paper'或'legacy'，得到{protocol!r}")
+        if protocol not in {PAPER_PROTOCOL, CLOSED_SET_PROTOCOL, LEGACY_PROTOCOL}:
+            raise ValueError(f"protocol必须是'paper'、'closed_set'或'legacy'，得到{protocol!r}")
         if generation_mode not in {"fast", "slow", "hybrid"}:
             raise ValueError("generation_mode必须是'fast'、'slow'或'hybrid'")
         if max_new_tokens < 1:
@@ -2015,7 +2336,7 @@ class LocateAnythingValidator(CallbackHost):
         self.args = SimpleNamespace(
             model=model.model_name,
             revision=model.revision,
-            data=str(data),
+            data=[str(value) for value in data] if isinstance(data, (list, tuple)) else str(data),
             devices=",".join(str(value) for value in devices),
             output_dir="",
             generation_mode=generation_mode,
@@ -2174,7 +2495,7 @@ class LocateAnythingValidator(CallbackHost):
             torch.npu.empty_cache()
         for marker in dist_dir.glob("ready.rank*"):
             marker.unlink(missing_ok=True)
-        total_images = self.args.max_images or 5000
+        total_images = int(getattr(self.args, "total_images", 0)) or self.args.max_images or 5000
         progress = _DistributedProgress(output_dir, self.world_size, total_images) if node_rank == 0 else None
         utilization_samples: list[float] = []
         worker_env = _distributed_worker_env(self.args.npu_graph)
@@ -2209,16 +2530,34 @@ class LocateAnythingValidator(CallbackHost):
             raise RuntimeError(f"LocateAnything验证未生成指标文件：{metrics_path}")
         if utilization_samples and node_rank == 0:
             payload = json.loads(metrics_path.read_text(encoding="utf-8"))
-            payload["speed"]["average_npu_utilization_percent"] = float(np.mean(utilization_samples))
+            average_utilization = float(np.mean(utilization_samples))
+            payload["speed"]["average_npu_utilization_percent"] = average_utilization
             payload["speed"]["npu_utilization_samples"] = len(utilization_samples)
+            if getattr(self.args, "benchmark", "coco") == "cd_fsod":
+                for name, dataset_payload in payload.get("datasets", {}).items():
+                    dataset_payload["speed"]["average_npu_utilization_percent"] = average_utilization
+                    dataset_payload["speed"]["npu_utilization_samples"] = len(utilization_samples)
+                    (output_dir / name / "metrics.json").write_text(
+                        json.dumps(dataset_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+                    )
             metrics_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-            (output_dir / "summary.txt").write_text(_summary_text(payload), encoding="utf-8")
+            if getattr(self.args, "benchmark", "coco") == "cd_fsod":
+                from .cd_fsod import suite_summary_text
+
+                summary = suite_summary_text(payload)
+            else:
+                summary = _summary_text(payload)
+            (output_dir / "summary.txt").write_text(summary, encoding="utf-8")
         if node_rank == 0:
             LOGGER.info(f"LocateAnything验证完成，结果保存在{output_dir}")
         if parent_store is not None:
             parent_store.set(f"parent_done/{node_rank}", "1")
             if node_rank == 0:
                 parent_store.wait([f"parent_done/{rank}" for rank in range(nnodes)])
+        if getattr(self.args, "benchmark", "coco") == "cd_fsod":
+            from .cd_fsod import CDFsodMetrics
+
+            return CDFsodMetrics.from_file(metrics_path)
         return LocateMetrics.from_file(metrics_path)
 
 

@@ -39,6 +39,7 @@ from ultralytics.models.locateanything.batch import (
 )
 from ultralytics.models.locateanything.model import LocateAnything, _ContinuousBatchPrefetcher
 from ultralytics.models.locateanything.val_preprocess import (
+    CLOSED_SET_PROTOCOL_ID,
     LEGACY_PROTOCOL_ID,
     PAPER_PROTOCOL_ID,
     PAPER_SHORT_SIDE,
@@ -131,6 +132,24 @@ def test_legacy_val_preprocessor_keeps_original_path_and_all_categories(tmp_path
     assert source == image["path"]
     assert question.endswith("person</c>car.")
     assert context["validation_preprocess"]["protocol_id"] == LEGACY_PROTOCOL_ID
+
+
+def test_closed_set_preprocessor_uses_all_categories_and_paper_resize(tmp_path):
+    path = tmp_path / "image.png"
+    Image.new("RGB", (640, 480)).save(path)
+    image = {"id": 1, "path": str(path), "file_name": path.name, "width": 640, "height": 480}
+    processor = LocateAnythingValPreprocessor(
+        [{"image_id": 1, "category_id": 1}],
+        [{"id": 1, "name": "person"}, {"id": 2, "name": "car"}],
+        protocol="closed_set",
+    )
+
+    resized, question, context = processor.prepare(image)
+
+    assert resized.size == (1120, 840)
+    assert question.endswith("person</c>car.")
+    assert context["validation_preprocess"]["protocol_id"] == CLOSED_SET_PROTOCOL_ID
+    assert processor.box_to_original([0, 0, 1120, 840], context)[2] == pytest.approx(1119 / 1.75)
 
 
 def test_eight_rank_stride_sharding_has_exact_coverage():
@@ -1087,6 +1106,36 @@ def test_paper_metrics_use_positive_only_ten_thresholds_and_harmonic_macro():
     assert metrics["f1"]["mean"]["macro"]["f1"] == pytest.approx(6 / 7)
 
 
+def test_closed_set_metrics_count_wrong_classes_and_include_zero_classes():
+    annotations = [
+        {"image_id": 1, "category_id": 1, "bbox": [0, 0, 10, 10]},
+        {"image_id": 2, "category_id": 2, "bbox": [0, 0, 10, 10]},
+    ]
+    categories = [{"id": 1, "name": "person"}, {"id": 2, "name": "car"}]
+    records = [
+        _record(
+            1,
+            [
+                _prediction(1, [0, 0, 10, 10], category_id=1),
+                _prediction(1, [20, 20, 30, 30], category_id=2),
+            ],
+        ),
+        _record(2, []),
+    ]
+
+    strict = locate_val.compute_closed_set_metrics(records, annotations, categories, {1, 2})
+    paper = locate_val.compute_locate_metrics(records, annotations, categories, {1, 2})
+
+    assert strict["f1"]["0.50"]["macro"] == {"precision": 0.5, "recall": 0.5, "f1": 0.5}
+    assert strict["f1"]["0.50"]["micro"]["fp"] == 1
+    assert strict["f1"]["0.50"]["per_class"]["car"]["f1"] == 0.0
+    assert strict["f1"]["mean"]["macro"]["f1"] == 0.5
+    assert strict["positive_only"] is False
+    assert strict["ignore_zero_macro"] is False
+    assert paper["f1"]["0.50"]["macro"]["f1"] == 1.0
+    assert paper["positive_only_dropped_predictions"] == 1
+
+
 def test_resume_rejects_legacy_shards_in_paper_protocol(tmp_path):
     record = _record(1, [])
     (tmp_path / "predictions.rank0.jsonl").write_text(json.dumps(record) + "\n", encoding="utf-8")
@@ -1531,3 +1580,48 @@ def test_finalize_writes_all_public_artifacts(tmp_path, monkeypatch):
     assert metrics_object.results_dict["metrics/F1-mean(B)"] == 1.0
     assert metrics_object.fitness == 1.0
     assert metrics_object.summary()[0]["Class"] == "person"
+
+
+def test_finalize_closed_set_writes_strict_and_auxiliary_metrics(tmp_path, monkeypatch):
+    record = _record(1, [_prediction(1, [0.0, 0.0, 10.0, 10.0])])
+    (tmp_path / "predictions.rank0.jsonl").write_text(json.dumps(record) + "\n", encoding="utf-8")
+    monkeypatch.setattr(
+        locate_val,
+        "run_nonstandard_coco_ap",
+        lambda *args, **kwargs: {
+            "status": "ok_nonstandard_constant_score",
+            "AP50_95": 0.1,
+            "AP50": 0.2,
+            "AP75": 0.05,
+        },
+    )
+    args = Namespace(
+        model="nvidia/LocateAnything-3B",
+        data="coco.yaml",
+        devices=locate_val.DEFAULT_DEVICES,
+        generation_mode="hybrid",
+        max_new_tokens=8192,
+        temperature=0.7,
+        top_p=0.9,
+        seed=0,
+        max_images=1,
+        protocol="closed_set",
+    )
+    coco = {
+        "annotation_path": str(tmp_path / "instances.json"),
+        "images": [{"id": 1}],
+        "evaluation_image_ids": [1],
+        "annotations": [{"image_id": 1, "category_id": 1, "bbox": [0, 0, 10, 10]}],
+        "categories": [{"id": 1, "name": "person"}],
+    }
+
+    payload = locate_val.finalize_results(args, tmp_path, coco, 1, 1.0, 1, 1)
+    metrics = locate_val.LocateMetrics(payload, tmp_path)
+
+    assert payload["config"]["protocol_id"] == CLOSED_SET_PROTOCOL_ID
+    assert payload["official_locate_metrics"]["protocol"] == "closed_set_count_f1"
+    assert payload["auxiliary_paper_metrics"]["protocol"] == "paper_style_on_closed_set_predictions"
+    assert metrics.results_dict["metrics/closed-set-F1-mean(B)"] == 1.0
+    assert metrics.results_dict["metrics/paper-style-F1-mean(B)"] == 1.0
+    assert metrics.fitness == 1.0
+    assert "严格closed-set" in (tmp_path / "summary.txt").read_text()

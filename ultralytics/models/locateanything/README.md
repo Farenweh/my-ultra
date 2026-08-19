@@ -67,6 +67,11 @@ YOLO/RT-DETR一样是validator持有的指标对象，提供 `results_dict`、`s
 原图。传入`protocol="legacy"`可恢复原图、全80类prompt和旧式指标。两种协议的resume分片
 不能混用。
 
+传入`protocol="closed_set"`仍使用短边840和相同坐标回映射，但每张图提示数据集全部有效类别。
+非GT类别预测保留并计为FP，逐类计数precision/recall的零分也参与宏平均。严格closed-set F1作为
+`official_locate_metrics`和fitness；同一次预测还会写入`auxiliary_paper_metrics`，使用完整paper
+过滤与safe-mean口径复算，便于量化协议差异。固定score AP仍只是非标准诊断。
+
 `batch`默认仍为1，并统一解释为全局batch。多卡时要求它不小于总world size且能被world size整除，
 每rank实际容量为`local_batch = batch / world_size`。`local_batch=1`保持单图生成路径；大于1时必须使用
 `generation_mode="hybrid"`，并自动启用continuous batching、paged KV cache和visual batching，
@@ -90,6 +95,28 @@ batch 1，`metrics.json`和`summary.txt`会同时记录global/local batch及节�
 
 Ascend 910B2在首次分配模型显存时可能输出一次 `NPUCachingAllocator` 的32-padding提示。这是当前
 CANN/SoC组合的底层内存格式诊断，不代表推理或验证失败；验证器不会通过全局日志过滤隐藏其他NPU问题。
+
+### CD-FSOD zero-shot
+
+`val_cd_fsod()`会在一次torchrun生命周期内验证ArTaxOr、DIOR、FISH/DeepFish、NEU-DET、UODD和
+clipart1k，每个rank只加载一次模型。它只读取六个配置的`val`和`annotations.val`字段，不读取或使用
+1/5/10-shot训练标注：
+
+```python
+metrics = model.val_cd_fsod(
+    device="0,1,2,3,4,5,6,7",
+    batch=512,  # 全局batch，每rank local batch=64
+    protocol="closed_set",
+    output_dir="runs/locateanything/cd_fsod",
+)
+print(metrics.results_dict)
+```
+
+该接口默认仍沿用论文COCO协议；可显式选择上述严格closed-set。类别名中的`_`和`-`会在prompt中转成空格，模型输出的原名与
+自然化别名都能映射回原category id；无任何测试GT的`DUMMY_CLS`会被排除，合法category id 0则保留。
+逐图prompt使用该图GT正类别，因此结果会明确标记为oracle positive-category，而不是开放类别发现。
+主目录生成六数据集等权汇总、CSV和共享rank JSONL，各数据集子目录保存独立指标与原始id预测。
+由于ArTaxOr使用字符串image id，非标准AP另用可追溯的整数映射文件调用COCO evaluator。
 
 `npu_fast_path="auto"` 默认在固定revision、910B、BF16/FP16和eval/no-grad条件下启用Qwen GQA
 Prompt/Incre Flash Attention、RotaryMul、RMSNorm、MoonViT Fusion Attention及批量top-p qSample。形状或算子
