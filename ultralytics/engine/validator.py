@@ -57,6 +57,11 @@ from ultralytics.utils.torch_utils import (
 )
 
 
+def _should_disable_progress(distributed_val_context) -> bool:
+    """Return whether this process should suppress its local validation progress bar."""
+    return distributed_val_context is not None or RANK > 0
+
+
 class BaseValidator:
     """A base class for creating validators.
 
@@ -269,7 +274,7 @@ class BaseValidator:
             self.dataloader,
             desc=self.get_desc(),
             total=len(self.dataloader),
-            disable=distributed_val_context is not None,
+            disable=_should_disable_progress(distributed_val_context),
         )
         if distributed_val_context is not None:
             distributed_val_context.begin_validation()

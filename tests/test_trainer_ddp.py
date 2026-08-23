@@ -233,6 +233,26 @@ def test_validator_nonzero_rank_reduces_before_returning(monkeypatch):
     assert all(dst == 0 and op == validator_module.dist.ReduceOp.SUM for _, dst, op in calls)
 
 
+@pytest.mark.parametrize(
+    ("rank", "distributed_val", "expected"),
+    (
+        (-1, False, False),
+        (0, False, False),
+        (1, False, True),
+        (7, False, True),
+        (-1, True, True),
+        (0, True, True),
+        (1, True, True),
+    ),
+)
+def test_validator_progress_is_visible_only_in_the_display_process(monkeypatch, rank, distributed_val, expected):
+    """仅单进程或训练rank 0显示进度；独立分布式验证worker全部静默。"""
+    monkeypatch.setattr(validator_module, "RANK", rank)
+    context = object() if distributed_val else None
+
+    assert validator_module._should_disable_progress(context) is expected
+
+
 def test_resolve_ddp_find_unused_parameters_defaults_to_false_for_rtdetr():
     assert BaseTrainer._resolve_ddp_find_unused_parameters(RTDETRDetectionModel()) is False
 
