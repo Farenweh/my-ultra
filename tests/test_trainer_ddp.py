@@ -136,9 +136,13 @@ def test_validator_ddp_unprefixed_device_uses_resolved_backend(monkeypatch):
         max_det=300,
         agnostic_nms=False,
         data="coco8.yaml",
+        task="detect",
+        split="val",
+        fraction=1.0,
         device="0,1",
         dnn=False,
         quantize=None,
+        channels_last=None,
     )
     selected_device = torch.device("npu", 0)
     captured = {}
@@ -150,7 +154,8 @@ def test_validator_ddp_unprefixed_device_uses_resolved_backend(monkeypatch):
     monkeypatch.setattr(validator_module, "RANK", 0)
     monkeypatch.setattr(validator_module, "LOCAL_RANK", 0)
     monkeypatch.setattr(validator_module.callbacks, "add_integration_callbacks", lambda validator: None)
-    monkeypatch.setattr(validator_module, "convert_ndjson_to_yolo_if_needed", lambda data: data)
+    monkeypatch.setattr(validator_module, "convert_ndjson_to_yolo_if_needed", lambda data, fraction: data)
+    monkeypatch.setattr(validator_module, "check_det_dataset", lambda data, split: {split: "images"})
     monkeypatch.setattr(validator_module, "torch_distributed_zero_first", lambda rank: nullcontext())
     monkeypatch.setattr(validator_module, "select_device", lambda device, verbose: selected_device)
     monkeypatch.setattr(

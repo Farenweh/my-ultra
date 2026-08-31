@@ -5,6 +5,12 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import pickle
+import shutil
+import subprocess
+import sys
+import time
+from collections.abc import Sequence
 from collections import defaultdict
 from itertools import repeat
 from multiprocessing.pool import ThreadPool
@@ -14,6 +20,7 @@ from typing import Any
 import cv2
 import numpy as np
 import torch
+from filelock import FileLock
 from PIL import Image
 from torch.utils.data import ConcatDataset
 
@@ -35,6 +42,15 @@ from .augment import (
 )
 from .base import BaseDataset
 from .converter import merge_multi_segment
+from .metadata import (
+    MMapLabelSequence,
+    dataset_source_signature,
+    deterministic_label_cache_path,
+    load_metadata_store,
+    migrate_legacy_metadata_store,
+    shared_metadata_dir,
+    write_metadata_store,
+)
 from .utils import (
     HELP_URL,
     IMG_FORMATS,
@@ -56,6 +72,7 @@ from .utils import (
 # Ultralytics dataset *.cache version, >= 1.0.0 for Ultralytics YOLO models
 DATASET_CACHE_VERSION = "1.0.4"
 COCO_DATASET_CACHE_VERSION = f"{DATASET_CACHE_VERSION}.coco-json-2"
+LEGACY_MIGRATION_PROCESS_THRESHOLD = 64 << 20
 
 
 class YOLODataset(BaseDataset):
@@ -103,7 +120,157 @@ class YOLODataset(BaseDataset):
         self.use_keypoints = task == "pose"
         self.use_obb = task == "obb"
         self.data = data
+        self._compact_metadata_enabled = task not in {"depth", "semantic"}
+        self._metadata_store: MMapLabelSequence | None = None
+        img_path = kwargs.get("img_path", args[0] if args else None)
+        annotation_file = getattr(self, "json_file", None)
+        self._source_signature = dataset_source_signature(
+            img_path,
+            annotation_file=annotation_file,
+            task=task,
+            channels=(data or {}).get("channels", 3),
+        )
+        self._legacy_cache_path = (
+            None
+            if not self._compact_metadata_enabled
+            else Path(annotation_file).with_suffix(".cache")
+            if annotation_file
+            else deterministic_label_cache_path(img_path)
+        )
+        self._try_load_metadata_store(
+            policy=str(kwargs.get("metadata_cache", "auto")),
+            full_verify=str(kwargs.get("data_verify", "fast")).lower() == "full",
+            fraction=float(kwargs.get("fraction", 1.0)),
+        )
         super().__init__(*args, channels=self.data.get("channels", 3), **kwargs)
+
+    def _try_load_metadata_store(self, policy: str, full_verify: bool, fraction: float) -> None:
+        """加载紧凑缓存，并在可用时仅迁移一次传统NumPy缓存。"""
+        if full_verify or self._legacy_cache_path is None:
+            return
+        store_dir = shared_metadata_dir(self._legacy_cache_path, self._source_signature)
+
+        def migrate_legacy() -> None:
+            """调用方持有迁移锁时，将传统缓存转换为紧凑缓存。"""
+            if (store_dir / "manifest.json").is_file() or not self._legacy_cache_path.is_file():
+                return
+            try:
+                LOGGER.info(f"{getattr(self, 'prefix', '')}正在迁移传统数据集缓存：{self._legacy_cache_path}")
+                if self._legacy_cache_path.stat().st_size < LEGACY_MIGRATION_PROCESS_THRESHOLD:
+                    migrate_legacy_metadata_store(
+                        self._legacy_cache_path,
+                        store_dir,
+                        self._source_signature,
+                        DATASET_CACHE_VERSION,
+                    )
+                    return
+                code = (
+                    "import json,sys; "
+                    "from ultralytics.data.metadata import migrate_legacy_metadata_store; "
+                    "ok=migrate_legacy_metadata_store(sys.argv[1],sys.argv[2],json.loads(sys.argv[3]),sys.argv[4]); "
+                    "raise SystemExit(0 if ok else 2)"
+                )
+                subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        code,
+                        str(self._legacy_cache_path),
+                        str(store_dir),
+                        json.dumps(self._source_signature, ensure_ascii=False),
+                        DATASET_CACHE_VERSION,
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except (
+                OSError,
+                ValueError,
+                AttributeError,
+                EOFError,
+                ModuleNotFoundError,
+                pickle.UnpicklingError,
+                subprocess.SubprocessError,
+            ) as error:
+                LOGGER.warning(f"无法迁移传统数据集缓存 {self._legacy_cache_path}：{error}")
+
+        migration_lock = FileLock(str(store_dir) + ".migrate.lock")
+        if not (store_dir / "manifest.json").is_file():
+            try:
+                store_dir.parent.mkdir(parents=True, exist_ok=True)
+                # 锁放在读取传统缓存之前，避免多个rank同时展开巨大的Python对象列表。
+                with migration_lock:
+                    migrate_legacy()
+            except OSError as error:
+                LOGGER.warning(f"无法创建紧凑元数据缓存目录，将回退传统加载：{error}")
+        if (store_dir / "manifest.json").is_file():
+            try:
+                store = load_metadata_store(store_dir, policy)
+            except (OSError, ValueError, KeyError, EOFError, pickle.UnpicklingError) as error:
+                LOGGER.warning(f"紧凑元数据缓存损坏，将重新构建：{store_dir}，原因：{error}")
+                with migration_lock:
+                    if (store_dir / "manifest.json").is_file():
+                        backup = store_dir.with_name(f"{store_dir.name}.corrupt-{time.time_ns()}")
+                        store_dir.replace(backup)
+                        LOGGER.warning(f"损坏缓存已保留到：{backup}")
+                    migrate_legacy()
+                if not (store_dir / "manifest.json").is_file():
+                    return
+                store = load_metadata_store(store_dir, policy)
+            self._metadata_store = store.subset(round(len(store) * fraction)) if fraction < 1 else store
+
+    def _compact_labels(self, labels: list[dict], cache_path: Path) -> MMapLabelSequence | list[dict]:
+        """持久化紧凑标签，并在可用时返回mmap序列。"""
+        if not self._compact_metadata_enabled:
+            return labels
+        store_dir = shared_metadata_dir(self._legacy_cache_path or cache_path, self._source_signature)
+        try:
+            def write_store() -> None:
+                write_metadata_store(
+                    store_dir,
+                    labels,
+                    num_samples=len(labels),
+                    source_signature=self._source_signature,
+                )
+
+            if self.data_verify == "full" and (store_dir / "manifest.json").is_file():
+                # 完整校验可能发现O(1)目录指纹无法感知的原地内容替换，因此强制刷新紧凑缓存。
+                with FileLock(str(store_dir) + ".refresh.lock"):
+                    backup = None
+                    if (store_dir / "manifest.json").is_file():
+                        backup = store_dir.with_name(f"{store_dir.name}.before-full-{time.time_ns()}")
+                        store_dir.replace(backup)
+                    try:
+                        write_store()
+                    except Exception:
+                        if backup is not None and not store_dir.exists():
+                            backup.replace(store_dir)
+                        raise
+                    else:
+                        if backup is not None:
+                            shutil.rmtree(backup)
+            else:
+                write_store()
+            store = load_metadata_store(store_dir, self.metadata_cache)
+            self._metadata_store = store.subset(round(len(store) * self.fraction)) if self.fraction < 1 else store
+            self.im_files = self._metadata_store.im_files
+            return self._metadata_store
+        except OSError as error:
+            LOGGER.warning(f"{self.prefix}无法创建紧凑元数据缓存，将使用内存标签：{error}")
+            return labels
+
+    def get_img_files(self, img_path: str | list[str]) -> list[str]:
+        """优先使用紧凑元数据中的路径，避免扫描图片目录。"""
+        if self._metadata_store is not None:
+            return self._metadata_store.im_files
+        # 元数据缓存始终保存完整集合，fraction只在缓存加载后创建轻量视图。
+        fraction = getattr(self, "fraction", 1.0)
+        self.fraction = 1.0
+        try:
+            return super().get_img_files(img_path)
+        finally:
+            self.fraction = fraction
 
     def cache_labels(self, path: Path = Path("./labels.cache")) -> dict:
         """Cache dataset labels, check images and read shapes.
@@ -276,7 +443,7 @@ class YOLODataset(BaseDataset):
             cache, exists = self.cache_labels(cache_path), False  # run cache ops
         return cache, exists
 
-    def get_labels(self) -> list[dict]:
+    def get_labels(self) -> Sequence[dict]:
         """Return list of label dictionaries for YOLO training.
 
         This method loads labels from disk or cache, verifies their integrity, and prepares them for training.
@@ -284,9 +451,15 @@ class YOLODataset(BaseDataset):
         Returns:
             (list[dict]): List of label dictionaries, each containing information about an image and its annotations.
         """
+        if self._metadata_store is not None:
+            return self._metadata_store
         label_files = self.get_label_files()
         cache_path = Path(label_files[0]).parent.with_suffix(".cache")
-        cache, exists = self._load_or_scan_cache(cache_path, self.get_cache_hash())
+        cache, exists = (
+            (self.cache_labels(cache_path), False)
+            if self.data_verify == "full"
+            else self._load_or_scan_cache(cache_path, self.get_cache_hash())
+        )
 
         # Display cache
         nf, nm, ne, nc, n = cache.pop("results")  # found, missing, empty, corrupt, total
@@ -304,7 +477,7 @@ class YOLODataset(BaseDataset):
         [cache.pop(k) for k in ("hash", "version", "msgs")]  # remove items
         self.im_files = [lb["im_file"] for lb in labels]  # update im_files
         self.verify_labels(labels, cache_path)
-        return labels
+        return self._compact_labels(labels, cache_path)
 
     def build_transforms(self, hyp: dict | None = None) -> Compose:
         """Build and append transforms to the list.
@@ -558,8 +731,8 @@ class COCODetectionDataset(YOLODataset):
         super().__init__(*args, data=data, task=task, **kwargs)
 
     def get_img_files(self, img_path: str) -> list:
-        """Return an empty list as image files are resolved from the COCO JSON."""
-        return []
+        """缓存命中时使用紧凑路径，否则稍后从COCO JSON解析路径。"""
+        return self._metadata_store.im_files if self._metadata_store is not None else []
 
     def _build_image_lookup(self) -> tuple[list[Path], dict[str, Path]]:
         """Build image roots and explicit file lookup entries from the split image path."""
@@ -585,14 +758,16 @@ class COCODetectionDataset(YOLODataset):
         """Return a cache hash for the annotation JSON and resolved image files."""
         return get_hash([json_file] + [str(label["im_file"]) for label in labels])
 
-    def _resolve_image_file(self, file_name: str, roots: list[Path], files: dict[str, Path]) -> Path | None:
-        """Resolve a COCO image file name against image roots or explicit image lists."""
+    def _resolve_image_file(
+        self, file_name: str, roots: list[Path], files: dict[str, Path], *, check_exists: bool
+    ) -> Path | None:
+        """解析COCO图片路径，仅在完整校验时访问图片文件。"""
         for key in (file_name, Path(file_name).name):
-            if key in files and files[key].exists():
+            if key in files and (not check_exists or files[key].exists()):
                 return files[key]
         for root in roots:
             candidate = root / file_name
-            if candidate.exists():
+            if not check_exists or candidate.exists():
                 return candidate
         return None
 
@@ -651,9 +826,10 @@ class COCODetectionDataset(YOLODataset):
         roots, files = self._build_image_lookup()
         missing_rows, mismatched_rows = [], []
         desc = f"{self.prefix}读取 COCO JSON 标注 {self.json_file}"
+        full_verify = self.data_verify == "full"
         for img in TQDM(data["images"], desc=desc):
             h, w, file_name, image_id = int(img["height"]), int(img["width"]), img["file_name"], img["id"]
-            im_file = self._resolve_image_file(file_name, roots, files)
+            im_file = self._resolve_image_file(file_name, roots, files, check_exists=full_verify)
             if im_file is None:
                 missing_rows.append(
                     {
@@ -667,41 +843,42 @@ class COCODetectionDataset(YOLODataset):
                 )
                 continue
 
-            try:
-                _, shape = check_image(str(im_file))
-            except Exception:
-                mismatched_rows.append(
-                    {
-                        "数据集划分": self.split,
-                        "标注文件": self.json_file,
-                        "图片ID": image_id,
-                        "文件名": file_name,
-                        "实际路径": str(im_file),
-                        "期望宽度": w,
-                        "期望高度": h,
-                        "实际宽度": "",
-                        "实际高度": "",
-                        "问题": "图片无法读取",
-                    }
-                )
-                continue
-            actual_h, actual_w = shape
-            if (actual_h, actual_w) != (h, w):
-                mismatched_rows.append(
-                    {
-                        "数据集划分": self.split,
-                        "标注文件": self.json_file,
-                        "图片ID": image_id,
-                        "文件名": file_name,
-                        "实际路径": str(im_file),
-                        "期望宽度": w,
-                        "期望高度": h,
-                        "实际宽度": actual_w,
-                        "实际高度": actual_h,
-                        "问题": "图片尺寸与COCO JSON记录不一致",
-                    }
-                )
-                continue
+            if full_verify:
+                try:
+                    _, shape = check_image(str(im_file))
+                except Exception:
+                    mismatched_rows.append(
+                        {
+                            "数据集划分": self.split,
+                            "标注文件": self.json_file,
+                            "图片ID": image_id,
+                            "文件名": file_name,
+                            "实际路径": str(im_file),
+                            "期望宽度": w,
+                            "期望高度": h,
+                            "实际宽度": "",
+                            "实际高度": "",
+                            "问题": "图片无法读取",
+                        }
+                    )
+                    continue
+                actual_h, actual_w = shape
+                if (actual_h, actual_w) != (h, w):
+                    mismatched_rows.append(
+                        {
+                            "数据集划分": self.split,
+                            "标注文件": self.json_file,
+                            "图片ID": image_id,
+                            "文件名": file_name,
+                            "实际路径": str(im_file),
+                            "期望宽度": w,
+                            "期望高度": h,
+                            "实际宽度": actual_w,
+                            "实际高度": actual_h,
+                            "问题": "图片尺寸与COCO JSON记录不一致",
+                        }
+                    )
+                    continue
 
             bboxes = []
             for ann in img_to_anns.get(image_id, []):
@@ -768,14 +945,17 @@ class COCODetectionDataset(YOLODataset):
             save_dataset_cache_file(self.prefix, path, x, COCO_DATASET_CACHE_VERSION)
         return x
 
-    def get_labels(self) -> list[dict]:
+    def get_labels(self) -> Sequence[dict]:
         """Load labels from a COCO JSON cache or generate the cache."""
+        if self._metadata_store is not None:
+            return self._metadata_store
         cache_path = Path(self.json_file).with_suffix(".cache")
         try:
+            if self.data_verify == "full":
+                raise AssertionError
             cache, exists = load_dataset_cache_file(cache_path), True
-            assert cache["version"] == COCO_DATASET_CACHE_VERSION
-            assert cache["hash"] == self._cache_hash(self.json_file, cache["labels"])
-        except (FileNotFoundError, AssertionError, AttributeError, ModuleNotFoundError):
+            assert str(cache["version"]).startswith(f"{DATASET_CACHE_VERSION}.coco-json")
+        except (FileNotFoundError, AssertionError, AttributeError, ModuleNotFoundError, ValueError, EOFError):
             cache, exists = self.cache_labels(cache_path), False
 
         labels = cache["labels"]
@@ -783,8 +963,6 @@ class COCODetectionDataset(YOLODataset):
             issues = "\n  ".join(sorted(set(cache.get("msgs", [])))) or "未找到有效的 COCO JSON 图片"
             raise RuntimeError(f"在 {cache_path} 中未找到有效图片。\n  {issues}\n{HELP_URL}")
         [cache.pop(k, None) for k in ("hash", "version", "msgs")]
-        if self.fraction < 1:
-            labels = labels[: round(len(labels) * self.fraction)]
         self.im_files = [lb["im_file"] for lb in labels]
         if exists and LOCAL_RANK in {-1, 0}:
             TQDM(
@@ -795,7 +973,7 @@ class COCODetectionDataset(YOLODataset):
             )
         if LOCAL_RANK in {-1, 0}:
             LOGGER.info(f"{self.prefix}从缓存文件 {cache_path} 读取 {self.json_file}")
-        return labels
+        return self._compact_labels(labels, cache_path)
 
     def update_labels_info(self, label: dict) -> dict:
         """Drop eval-only image ids during augmentation, then format labels like YOLODataset."""
@@ -914,6 +1092,7 @@ class GroundingDataset(YOLODataset):
         assert task in {"detect", "segment"}, "GroundingDataset currently only supports `detect` and `segment` tasks"
         self.json_file = json_file
         self.max_samples = max_samples
+        kwargs["fraction"] = 1.0
         super().__init__(*args, task=task, data={"channels": 3}, **kwargs)
 
     def get_img_files(self, img_path: str) -> list[str]:
@@ -1050,12 +1229,14 @@ class GroundingDataset(YOLODataset):
         save_dataset_cache_file(self.prefix, path, x, DATASET_CACHE_VERSION)
         return x
 
-    def get_labels(self) -> list[dict]:
+    def get_labels(self) -> Sequence[dict]:
         """Load labels from cache or generate them from JSON file.
 
         Returns:
             (list[dict]): List of label dictionaries, each containing information about an image and its annotations.
         """
+        if self._metadata_store is not None:
+            return self._metadata_store
         cache_path = Path(self.json_file).with_suffix(".cache")
         cache, _ = self._load_or_scan_cache(cache_path, self.get_cache_hash())
         [cache.pop(k) for k in ("hash", "version")]  # remove items
@@ -1071,7 +1252,7 @@ class GroundingDataset(YOLODataset):
         self.im_files = [str(label["im_file"]) for label in labels]
         if LOCAL_RANK in {-1, 0}:
             LOGGER.info(f"Load {self.json_file} from cache file {cache_path}")
-        return labels
+        return self._compact_labels(labels, cache_path)
 
     def build_transforms(self, hyp: dict | None = None) -> Compose:
         """Configure augmentations for training with optional text loading.
@@ -1087,11 +1268,27 @@ class GroundingDataset(YOLODataset):
     @property
     def category_names(self):
         """Return unique category names from the dataset."""
+        if (
+            isinstance(self.labels, MMapLabelSequence)
+            and self.labels.summary_valid
+            and self.labels.include_class is None
+            and not self.labels.single_cls
+            and "text_counts" in self.labels.summary
+        ):
+            return set(self.labels.summary["text_counts"])
         return {t.strip() for label in self.labels for text in label["texts"] for t in text}
 
     @property
     def category_freq(self):
         """Return frequency of each category in the dataset."""
+        if (
+            isinstance(self.labels, MMapLabelSequence)
+            and self.labels.summary_valid
+            and self.labels.include_class is None
+            and not self.labels.single_cls
+            and "text_counts" in self.labels.summary
+        ):
+            return defaultdict(int, self.labels.summary["text_counts"])
         category_freq = defaultdict(int)
         for label in self.labels:
             for text in label["texts"]:

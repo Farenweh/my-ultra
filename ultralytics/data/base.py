@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-import glob
+import json
 import math
 import os
 import random
+import tempfile
+import time
+from collections.abc import Sequence
 from copy import deepcopy
 from multiprocessing.pool import ThreadPool
 from pathlib import Path
@@ -13,11 +16,13 @@ from typing import Any
 
 import cv2
 import numpy as np
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, get_worker_info
 
 from ultralytics.data.utils import FORMATS_HELP_MSG, HELP_URL, IMG_FORMATS, check_file_speeds, get_split_fraction
-from ultralytics.utils import DEFAULT_CFG, LOCAL_RANK, LOGGER, NUM_THREADS, TQDM
+from ultralytics.utils import DEFAULT_CFG, LOCAL_RANK, LOGGER, NUM_THREADS, RANK, TQDM
 from ultralytics.utils.patches import imread
+
+from .metadata import MMapLabelSequence, NpyPathSequence, load_or_create_image_inventory
 
 
 class BaseDataset(Dataset):
@@ -103,6 +108,9 @@ class BaseDataset(Dataset):
         classes: list[int] | None = None,
         fraction: float = 1.0,
         channels: int = 3,
+        metadata_cache: str = "auto",
+        data_verify: str = "fast",
+        data_retries: int = 3,
     ):
         """Initialize BaseDataset with given configuration and options.
 
@@ -122,6 +130,9 @@ class BaseDataset(Dataset):
             fraction (float | int): Dataset ratio or image count to use.
             channels (int): Number of channels in the images (1 for grayscale, 3 for color). Color images loaded with
                 OpenCV are in BGR channel order.
+            metadata_cache (str): 元数据缓存策略，可选'auto'、'shared'或显式本地目录。
+            data_verify (str): 数据集校验策略，可选'fast'或'full'。
+            data_retries (int): 图片读取失败后尝试的替代样本数。
         """
         super().__init__()
         self.img_path = img_path
@@ -131,9 +142,17 @@ class BaseDataset(Dataset):
         self.prefix = prefix
         self.fraction = get_split_fraction(fraction, "train")
         self.channels = channels
+        self.metadata_cache = str(metadata_cache)
+        self.data_verify = str(data_verify).lower()
+        if self.data_verify not in {"fast", "full"}:
+            raise ValueError("data_verify必须是'fast'或'full'")
+        self.data_retries = max(int(data_retries), 0)
+        self._data_error_report: Path | None = None
         self.cv2_flag = cv2.IMREAD_GRAYSCALE if channels == 1 else cv2.IMREAD_COLOR
         self.im_files = self.get_img_files(self.img_path)
-        self.labels = self.get_labels()
+        self.labels: Sequence[dict[str, Any]] = self.get_labels()
+        if isinstance(self.labels, MMapLabelSequence):
+            self.im_files = self.labels.im_files
         self.update_labels(include_class=classes)  # single_cls and include_class
         self.ni = len(self.labels)  # number of images
         self.rect = rect
@@ -150,7 +169,7 @@ class BaseDataset(Dataset):
 
         # Cache images (options are cache = True, False, None, "ram", "disk")
         self.ims, self.im_hw0, self.im_hw = [None] * self.ni, [None] * self.ni, [None] * self.ni
-        self.npy_files = [Path(f).with_suffix(".npy") for f in self.im_files]
+        self.npy_files = NpyPathSequence(self.im_files)
         self.cache = cache.lower() if isinstance(cache, str) else "ram" if cache is True else None
         if self.cache == "ram" and self.check_cache_ram():
             if hyp.deterministic:
@@ -182,8 +201,8 @@ class BaseDataset(Dataset):
             for p in img_path if isinstance(img_path, list) else [img_path]:
                 p = Path(p)  # os-agnostic
                 if p.is_dir():  # dir
-                    f += glob.glob(str(Path(glob.escape(p)) / "**" / "*.*"), recursive=True)
-                    # F = list(p.rglob('*.*'))  # pathlib
+                    inventory, _ = load_or_create_image_inventory(p, full_verify=self.data_verify == "full")
+                    f += inventory
                 elif p.is_file():  # file
                     with open(p, encoding="utf-8") as t:
                         t = t.read().strip().splitlines()
@@ -208,6 +227,12 @@ class BaseDataset(Dataset):
         Args:
             include_class (list[int], optional): List of classes to include. If None, all classes are included.
         """
+        if isinstance(self.labels, MMapLabelSequence):
+            self.labels = self.labels.with_filter(include_class, self.single_cls)
+            self.im_files = self.labels.im_files
+            return
+        if include_class is None and not self.single_cls:
+            return
         include_class_array = np.array(include_class).reshape(1, -1)
         for i in range(len(self.labels)):
             if include_class is not None:
@@ -246,7 +271,7 @@ class BaseDataset(Dataset):
         """
         im, f, fn = self.ims[i], self.im_files[i], self.npy_files[i]
         if im is None:  # not cached in RAM
-            if fn.exists():  # load npy
+            if self.cache == "disk" and fn.exists():  # 仅在启用磁盘图片缓存时读取NPY
                 try:
                     im = np.load(fn)
                     npy_channels = im.shape[-1] if im.ndim >= 3 else 1
@@ -388,11 +413,19 @@ class BaseDataset(Dataset):
         bi = np.floor(np.arange(self.ni) / self.batch_size).astype(int)  # batch index
         nb = bi[-1] + 1  # number of batches
 
-        s = np.array([x.pop("shape") for x in self.labels])  # hw
+        s = (
+            np.asarray(self.labels.shapes_array)
+            if isinstance(self.labels, MMapLabelSequence)
+            else np.array([x["shape"] for x in self.labels])
+        )  # hw
         ar = s[:, 0] / s[:, 1]  # aspect ratio
         irect = ar.argsort()
-        self.im_files = [self.im_files[i] for i in irect]
-        self.labels = [self.labels[i] for i in irect]
+        if isinstance(self.labels, MMapLabelSequence):
+            self.labels = self.labels.reordered(irect)
+            self.im_files = self.labels.im_files
+        else:
+            self.im_files = [self.im_files[i] for i in irect]
+            self.labels = [self.labels[i] for i in irect]
         ar = ar[irect]
 
         # Set training image shapes
@@ -410,7 +443,60 @@ class BaseDataset(Dataset):
 
     def __getitem__(self, index: int) -> dict[str, Any]:
         """Return transformed label information for given index."""
-        return self.transforms(self.get_image_and_label(index))
+        current = index
+        for attempt in range(self.data_retries + 1):
+            try:
+                return self.transforms(self.get_image_and_label(current))
+            except (FileNotFoundError, OSError) as error:
+                report = self._record_data_error(current, error, attempt)
+                if attempt >= self.data_retries or len(self) <= 1:
+                    raise RuntimeError(
+                        f"读取数据样本失败，已重试{attempt}次；错误报告：{report}"
+                    ) from error
+                current = self._replacement_index(current)
+        raise RuntimeError("数据样本重试流程异常结束")
+
+    def _replacement_index(self, failed_index: int) -> int:
+        """从当前rank对应的近似分布式步长中选择替代样本。"""
+        world_size = max(int(os.getenv("WORLD_SIZE", "1")), 1)
+        rank = max(int(os.getenv("RANK", str(max(RANK, 0)))), 0) % world_size
+        if self.rect and hasattr(self, "batch"):
+            same_shape = np.flatnonzero(self.batch == self.batch[failed_index]).tolist()
+            rank_candidates = [index for index in same_shape if index % world_size == rank]
+            candidates = rank_candidates if len(rank_candidates) > 1 else same_shape
+        else:
+            candidates = range(rank, len(self), world_size)
+        if len(candidates) <= 1:
+            return failed_index if self.rect else (failed_index + 1) % len(self)
+        replacement = candidates[random.randrange(len(candidates))]
+        return replacement if replacement != failed_index else candidates[(candidates.index(replacement) + 1) % len(candidates)]
+
+    def _record_data_error(self, index: int, error: Exception, attempt: int) -> Path:
+        """为读取失败样本追加一条worker本地JSONL记录。"""
+        worker = get_worker_info()
+        worker_id = worker.id if worker is not None else 0
+        if self._data_error_report is None:
+            report_root = Path(tempfile.gettempdir()) / "ultralytics-data-errors"
+            report_root.mkdir(parents=True, exist_ok=True)
+            self._data_error_report = report_root / f"rank{max(RANK, 0)}-worker{worker_id}-pid{os.getpid()}.jsonl"
+        record = {
+            "time": time.time(),
+            "rank": max(RANK, 0),
+            "worker": worker_id,
+            "index": int(index),
+            "im_file": str(self.im_files[index]) if 0 <= index < len(self.im_files) else "",
+            "attempt": int(attempt),
+            "error": repr(error),
+        }
+        with open(self._data_error_report, "a", encoding="utf-8") as file:
+            file.write(json.dumps(record, ensure_ascii=False) + "\n")
+        action = (
+            f"正在重试（{attempt + 1}/{self.data_retries}）"
+            if attempt < self.data_retries
+            else "重试次数已耗尽"
+        )
+        LOGGER.warning(f"{self.prefix}读取样本失败，{action}：{record['im_file']}，{error}")
+        return self._data_error_report
 
     def get_image_and_label(self, index: int) -> dict[str, Any]:
         """Get and return label information from the dataset.
@@ -436,6 +522,43 @@ class BaseDataset(Dataset):
         """Return the length of the labels list for the dataset."""
         return len(self.labels)
 
+    def get_class_counts(self, num_classes: int) -> np.ndarray | None:
+        """紧凑元数据可用时返回缓存的类别计数。"""
+        if not isinstance(self.labels, MMapLabelSequence) or not self.labels.summary_valid:
+            return None
+        counts = np.asarray(self.labels.summary.get("class_counts", ()), dtype=np.float32)
+        counts = np.pad(counts, (0, max(0, num_classes - len(counts))))[:num_classes]
+        if self.labels.include_class is not None:
+            selected = np.zeros(num_classes, dtype=bool)
+            selected[np.asarray(self.labels.include_class, dtype=int).ravel()] = True
+            counts[~selected] = 0
+        if self.labels.single_cls:
+            counts = np.pad(np.array([counts.sum()], dtype=np.float32), (0, max(0, num_classes - 1)))[:num_classes]
+        return counts
+
+    def get_plot_labels(self) -> tuple[np.ndarray, np.ndarray] | None:
+        """返回紧凑元数据中有上限的绘图抽样。"""
+        if not isinstance(self.labels, MMapLabelSequence):
+            return None
+        root = self.labels.cache_dir
+        boxes, cls = np.load(root / "plot_bboxes.npy"), np.load(root / "plot_cls.npy")
+        if self.labels.include_class is not None:
+            selected = (cls == self.labels.include_class).any(1)
+            boxes, cls = boxes[selected], cls[selected]
+        if self.labels.single_cls:
+            cls[:] = 0
+        return boxes, cls
+
+    def get_max_num_obj(self) -> int | None:
+        """返回缓存的单张图片最大目标数。"""
+        if (
+            not isinstance(self.labels, MMapLabelSequence)
+            or not self.labels.summary_valid
+            or self.labels.include_class is not None
+        ):
+            return None
+        return int(self.labels.summary.get("max_num_obj", 0))
+
     def update_labels_info(self, label: dict[str, Any]) -> dict[str, Any]:
         """Customize your label format here."""
         return label
@@ -453,7 +576,7 @@ class BaseDataset(Dataset):
         """
         raise NotImplementedError
 
-    def get_labels(self) -> list[dict[str, Any]]:
+    def get_labels(self) -> Sequence[dict[str, Any]]:
         """Users can customize their own format here.
 
         Examples:

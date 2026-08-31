@@ -261,6 +261,7 @@ CFG_INT_KEYS = frozenset(
         "iters_per_epoch",
         "patience",
         "workers",
+        "data_retries",
         "seed",
         "close_mosaic",
         "mask_ratio",
@@ -272,6 +273,7 @@ CFG_INT_KEYS = frozenset(
     }
 )
 CFG_INT_MIN = {  # minimum valid values for integer arguments used as divisors, sizes or seeds
+    "data_retries": 0,
     "iters_per_epoch": 1,
     "nbs": 1,
     "max_det": 1,
@@ -316,7 +318,9 @@ CFG_BOOL_KEYS = frozenset(
         "cls_remap",
     }
 )
-CFG_STR_KEYS = frozenset({"optimizer", "split", "copy_paste_mode", "auto_augment"})
+CFG_STR_KEYS = frozenset(
+    {"optimizer", "split", "copy_paste_mode", "auto_augment", "metadata_cache", "data_verify"}
+)
 
 
 def cfg2dict(cfg: str | Path | dict | SimpleNamespace) -> dict:
@@ -520,6 +524,10 @@ def check_cfg(cfg: dict, hard: bool = True) -> None:
                 if hard:
                     raise TypeError(f"'{k}={v}' is of invalid type {type(v).__name__}. '{k}' must be a str.")
                 cfg[k] = str(v)
+            elif k == "data_verify":
+                cfg[k] = v = v.lower()
+                if v not in {"fast", "full"}:
+                    raise ValueError("'data_verify'必须是'fast'或'full'。")
             elif k == "compile" and not isinstance(v, (bool, str)):  # False=off, True="default", or a mode string
                 if hard:
                     raise TypeError(
@@ -825,6 +833,34 @@ def handle_yolo_settings(args: list[str]) -> None:
         LOGGER.warning(f"settings error: '{e}'. Please see {url} for help.")
 
 
+def handle_yolo_data(args: list[str]) -> None:
+    """处理``yolo data verify``等数据集维护命令。"""
+    if not args or args[0] in {"help", "-h", "--help"}:
+        LOGGER.info("用法：yolo data verify data=dataset.yaml mode=fast|full split=train,val")
+        return
+    command, *raw_args = args
+    if command != "verify":
+        raise ValueError(f"不支持的数据命令'{command}'，可用命令：verify")
+    allowed = {"data", "mode", "split", "metadata_cache"}
+    overrides = {}
+    for arg in merge_equals_args(raw_args):
+        key, value = parse_key_value_pair(arg.lstrip("-"))
+        if key not in allowed:
+            raise ValueError(f"data verify不支持参数'{key}'，可用参数：{sorted(allowed)}")
+        overrides[key] = value
+    if not overrides.get("data"):
+        raise ValueError("yolo data verify需要提供data=dataset.yaml")
+    from ultralytics.data.verify import verify_dataset
+
+    result = verify_dataset(
+        overrides["data"],
+        mode=overrides.get("mode", "full"),
+        splits=overrides.get("split"),
+        metadata_cache=overrides.get("metadata_cache", "auto"),
+    )
+    LOGGER.info(f"数据集校验完成：{result}")
+
+
 def handle_yolo_solutions(args: list[str]) -> None:
     """Process YOLO solutions arguments and run the specified computer vision solutions pipeline.
 
@@ -1055,6 +1091,7 @@ def entrypoint(debug: str = "") -> None:
         "logout": lambda: handle_yolo_login(args),
         "copy-cfg": copy_default_cfg,
         "solutions": lambda: handle_yolo_solutions(args[1:]),
+        "data": lambda: handle_yolo_data(args[1:]),
         "help": lambda: LOGGER.info(CLI_HELP_MSG),
     }
     full_args_dict = {**DEFAULT_CFG_DICT, **{k: None for k in TASKS}, **{k: None for k in MODES}, **special}

@@ -12,6 +12,7 @@ from .dataset import (
     YOLODataset,
     YOLOMultiModalDataset,
 )
+from .verify import verify_dataset
 
 __all__ = (
     "BaseDataset",
@@ -27,4 +28,5 @@ __all__ = (
     "build_grounding",
     "build_yolo_dataset",
     "load_inference_source",
+    "verify_dataset",
 )

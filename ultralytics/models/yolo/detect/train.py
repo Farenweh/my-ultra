@@ -156,6 +156,9 @@ class DetectionTrainer(BaseTrainer):
 
     def get_class_counts(self):
         """Return per-class instance counts from the training dataset labels."""
+        cached = self.train_loader.dataset.get_class_counts(self.data["nc"])
+        if cached is not None:
+            return cached
         classes = np.concatenate([lb["cls"].flatten() for lb in self.train_loader.dataset.labels], 0)
         return np.bincount(classes.astype(int), minlength=self.data["nc"]).astype(np.float32)
 
@@ -247,8 +250,12 @@ class DetectionTrainer(BaseTrainer):
 
     def plot_training_labels(self):
         """Create a labeled training plot of the YOLO model."""
-        boxes = np.concatenate([lb["bboxes"] for lb in self.train_loader.dataset.labels], 0)
-        cls = np.concatenate([lb["cls"] for lb in self.train_loader.dataset.labels], 0)
+        cached = self.train_loader.dataset.get_plot_labels()
+        if cached is None:
+            boxes = np.concatenate([lb["bboxes"] for lb in self.train_loader.dataset.labels], 0)
+            cls = np.concatenate([lb["cls"] for lb in self.train_loader.dataset.labels], 0)
+        else:
+            boxes, cls = cached
         plot_labels(boxes, cls.squeeze(), names=self.data["names"], save_dir=self.save_dir, on_plot=self.on_plot)
 
     def auto_batch(self):
@@ -259,7 +266,8 @@ class DetectionTrainer(BaseTrainer):
         """
         with override_configs(self.args, overrides={"cache": False}) as self.args:
             train_dataset = self.build_dataset(self.data["train"], mode="train", batch=16)
-        max_num_obj = max(len(label["cls"]) for label in train_dataset.labels) * 4  # 4 for mosaic augmentation
+        cached_max = train_dataset.get_max_num_obj()
+        max_num_obj = (cached_max if cached_max is not None else max(len(label["cls"]) for label in train_dataset.labels)) * 4
         n = len(train_dataset)
         del train_dataset  # free memory
         return super().auto_batch(max_num_obj, dataset_size=n)

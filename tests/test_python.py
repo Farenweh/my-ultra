@@ -1482,7 +1482,9 @@ def _write_coco_json_yaml(tmp_path: Path, image_dir: Path, annotation_file: Path
     return data_yaml
 
 
-def _build_coco_json_train_dataset(tmp_path: Path, image_dir: Path, annotation_file: Path):
+def _build_coco_json_train_dataset(
+    tmp_path: Path, image_dir: Path, annotation_file: Path, *, data_verify: str = "fast"
+):
     """Build the tiny COCO JSON training dataset."""
     from ultralytics.data import build_yolo_dataset
 
@@ -1490,6 +1492,7 @@ def _build_coco_json_train_dataset(tmp_path: Path, image_dir: Path, annotation_f
     cfg = get_cfg(DEFAULT_CFG)
     cfg.task = "detect"
     cfg.imgsz = 64
+    cfg.data_verify = data_verify
     return build_yolo_dataset(cfg, data["train"], batch=1, data=data, mode="train")
 
 
@@ -1670,7 +1673,7 @@ def test_coco_json_missing_image_writes_chinese_csv(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     with pytest.raises(RuntimeError, match="缺失图片"):
-        _build_coco_json_train_dataset(tmp_path, image_dir, annotation_file)
+        _build_coco_json_train_dataset(tmp_path, image_dir, annotation_file, data_verify="full")
 
     csv_files = list(tmp_path.glob("coco_json_train_instances_*_missing_images.csv"))
     assert len(csv_files) == 1
@@ -1692,7 +1695,7 @@ def test_coco_json_unreadable_image_writes_chinese_csv(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     with pytest.raises(RuntimeError, match="不可读或尺寸不一致"):
-        _build_coco_json_train_dataset(tmp_path, image_dir, annotation_file)
+        _build_coco_json_train_dataset(tmp_path, image_dir, annotation_file, data_verify="full")
 
     csv_files = list(tmp_path.glob("coco_json_train_instances_*_mismatched_images.csv"))
     assert len(csv_files) == 1
@@ -1727,7 +1730,7 @@ def test_coco_json_size_mismatch_writes_chinese_csv(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
     with pytest.raises(RuntimeError, match="不可读或尺寸不一致"):
-        _build_coco_json_train_dataset(tmp_path, image_dir, annotation_file)
+        _build_coco_json_train_dataset(tmp_path, image_dir, annotation_file, data_verify="full")
 
     csv_files = list(tmp_path.glob("coco_json_train_instances_*_mismatched_images.csv"))
     assert len(csv_files) == 1

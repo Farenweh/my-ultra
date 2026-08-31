@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import random
@@ -15,6 +16,7 @@ from typing import Any
 
 import cv2
 import numpy as np
+from filelock import FileLock
 from PIL import Image, ImageOps
 
 from ultralytics.nn.autobackend import check_class_names
@@ -571,39 +573,75 @@ def _resolve_dataset_path(path: Path, value: str | Path) -> Path:
 
 
 def _load_coco_json_categories(json_file: Path) -> list[tuple[int, str]]:
-    """Return COCO categories sorted by original category id, validating the basic instances schema."""
-    try:
-        with open(json_file, encoding="utf-8") as f:
-            data = json.load(f)
-    except Exception as e:
-        raise SyntaxError(f"读取 COCO JSON 标注文件失败：'{json_file}'，原因：{e}") from e
+    """校验COCO instances基本结构，并按原始类别ID返回类别。"""
+    stat = json_file.stat()
+    signature = [str(json_file.resolve()), int(stat.st_size), int(stat.st_mtime_ns), int(stat.st_ctime_ns)]
+    cache_path = json_file.with_suffix(json_file.suffix + ".categories.cache")
 
-    required = {"images", "annotations", "categories"}
-    if not isinstance(data, dict) or not required.issubset(data):
-        missing = sorted(required - set(data.keys())) if isinstance(data, dict) else sorted(required)
-        raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 缺少必需字段：{missing}")
-    if not all(isinstance(data[k], list) for k in required):
-        raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 的 images、annotations、categories 必须为列表")
-    if not data["categories"]:
-        raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 必须至少包含一个类别")
+    def load_cached() -> list[tuple[int, str]] | None:
+        """读取签名匹配的类别缓存。"""
+        try:
+            cache = json.loads(cache_path.read_text(encoding="utf-8"))
+            if cache.get("version") == 1 and cache.get("signature") == signature:
+                return [(int(category_id), str(name)) for category_id, name in cache["categories"]]
+        except (FileNotFoundError, OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+            pass
+        return None
 
-    categories = []
-    seen_ids = set()
-    used_category_ids = {int(ann["category_id"]) for ann in data["annotations"] if "category_id" in ann}
-    for category in data["categories"]:
-        if not isinstance(category, dict) or "id" not in category or "name" not in category:
-            raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 存在缺少 id 或 name 的类别")
-        category_id = int(category["id"])
-        if category_id in seen_ids:
-            raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 存在重复的类别 id：{category_id}")
-        seen_ids.add(category_id)
-        category_name = str(category["name"])
-        if category_name == "DUMMY_CLS" and category_id not in used_category_ids:
-            continue
-        categories.append((category_id, category_name))
-    if not categories:
-        raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 过滤未使用的 DUMMY_CLS 后没有有效类别")
-    return sorted(categories)
+    if (cached := load_cached()) is not None:
+        return cached
+
+    # 锁覆盖完整JSON解析与缓存发布，避免多个训练进程依次重复解析超大标注文件。
+    writeable = is_dir_writeable(cache_path.parent)
+    lock = FileLock(str(cache_path) + ".lock") if writeable else contextlib.nullcontext()
+    with lock:
+        if (cached := load_cached()) is not None:
+            return cached
+        try:
+            with open(json_file, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as e:
+            raise SyntaxError(f"读取 COCO JSON 标注文件失败：'{json_file}'，原因：{e}") from e
+
+        required = {"images", "annotations", "categories"}
+        if not isinstance(data, dict) or not required.issubset(data):
+            missing = sorted(required - set(data.keys())) if isinstance(data, dict) else sorted(required)
+            raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 缺少必需字段：{missing}")
+        if not all(isinstance(data[k], list) for k in required):
+            raise SyntaxError(f"COCO JSON标注文件'{json_file}'的images、annotations、categories必须为列表")
+        if not data["categories"]:
+            raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 必须至少包含一个类别")
+
+        categories = []
+        seen_ids = set()
+        used_category_ids = {int(ann["category_id"]) for ann in data["annotations"] if "category_id" in ann}
+        for category in data["categories"]:
+            if not isinstance(category, dict) or "id" not in category or "name" not in category:
+                raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 存在缺少 id 或 name 的类别")
+            category_id = int(category["id"])
+            if category_id in seen_ids:
+                raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 存在重复的类别 id：{category_id}")
+            seen_ids.add(category_id)
+            category_name = str(category["name"])
+            if category_name == "DUMMY_CLS" and category_id not in used_category_ids:
+                continue
+            categories.append((category_id, category_name))
+        if not categories:
+            raise SyntaxError(f"COCO JSON 标注文件 '{json_file}' 过滤未使用的 DUMMY_CLS 后没有有效类别")
+        categories = sorted(categories)
+        if writeable:
+            temp_path = cache_path.with_name(f"{cache_path.name}.{os.getpid()}.tmp")
+            try:
+                temp_path.write_text(
+                    json.dumps({"version": 1, "signature": signature, "categories": categories}, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+                os.replace(temp_path, cache_path)
+            except OSError as error:
+                LOGGER.warning(f"无法保存COCO类别缓存 {cache_path}：{error}")
+            finally:
+                temp_path.unlink(missing_ok=True)
+        return categories
 
 
 def _resolve_coco_annotations(data: dict[str, Any], path: Path, dataset: str) -> None:
@@ -924,9 +962,10 @@ def load_dataset_cache_file(path: Path) -> dict:
     import gc
 
     gc.disable()  # reduce pickle load time https://github.com/ultralytics/ultralytics/pull/1585
-    cache = np.load(str(path), allow_pickle=True).item()  # load dict
-    gc.enable()
-    return cache
+    try:
+        return np.load(str(path), allow_pickle=True).item()  # load dict
+    finally:
+        gc.enable()
 
 
 def save_dataset_cache_file(prefix: str, path: Path, x: dict, version: str):
@@ -940,7 +979,7 @@ def save_dataset_cache_file(prefix: str, path: Path, x: dict, version: str):
             os.replace(temp_path, path)  # atomic swap avoids shared-filesystem races between distributed workers
             LOGGER.info(f"{prefix}New cache created: {path}")
         except Exception as e:
-            Path(path).unlink(missing_ok=True)  # remove partially written file
+            temp_path.unlink(missing_ok=True)  # 仅清理临时文件，保留原有缓存
             LOGGER.warning(f"{prefix}WARNING ⚠️ Failed to save cache to {path}: {e}")
     else:
         LOGGER.warning(f"{prefix}Cache directory {path.parent} is not writable, cache not saved.")
