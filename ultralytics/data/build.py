@@ -349,6 +349,9 @@ def build_yolo_dataset(
         data=data,
         fraction=fraction,
         tile=cfg.tile,
+        metadata_cache=cfg.metadata_cache,
+        data_verify=cfg.data_verify,
+        data_retries=cfg.data_retries,
     )
     if dataset is COCODetectionDataset:
         kwargs["json_file"] = data["annotations"][split]
@@ -398,6 +401,10 @@ def build_grounding(
         prefix=colorstr(f"{mode}: "),
         task=cfg.task,
         classes=cfg.classes,
+        fraction=get_split_fraction(cfg.fraction, mode),
+        metadata_cache=cfg.metadata_cache,
+        data_verify=cfg.data_verify,
+        data_retries=cfg.data_retries,
     )
 
 

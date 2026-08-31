@@ -149,6 +149,9 @@ class DetectionTrainer(BaseTrainer):
 
     def get_class_counts(self):
         """Return per-class instance counts from the training dataset labels."""
+        cached = self.train_loader.dataset.get_class_counts(self.data["nc"])
+        if cached is not None:
+            return cached
         labels = self.train_loader.dataset.labels
         labels = {lb.get("source_index", i): lb for i, lb in enumerate(labels)}  # count each tiled source once
         classes = np.concatenate([lb["cls"].flatten() for lb in labels.values()], 0)
@@ -216,6 +219,10 @@ class DetectionTrainer(BaseTrainer):
 
     def plot_training_labels(self):
         """Plot the class and bounding box label distributions of the training dataset."""
-        boxes = np.concatenate([lb["bboxes"] for lb in self.train_loader.dataset.labels], 0)
-        cls = np.concatenate([lb["cls"] for lb in self.train_loader.dataset.labels], 0)
+        cached = self.train_loader.dataset.get_plot_labels()
+        if cached is None:
+            boxes = np.concatenate([lb["bboxes"] for lb in self.train_loader.dataset.labels], 0)
+            cls = np.concatenate([lb["cls"] for lb in self.train_loader.dataset.labels], 0)
+        else:
+            boxes, cls = cached
         plot_labels(boxes, cls.squeeze(), names=self.data["names"], save_dir=self.save_dir, on_plot=self.on_plot)
