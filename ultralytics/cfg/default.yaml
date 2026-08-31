@@ -19,6 +19,9 @@ imgsz: 640 # (int | list) train/val use int (square); predict/export may use [h,
 save: True # (bool) save train checkpoints and predict results
 save_period: -1 # (int) save checkpoint every N epochs; disabled if < 1
 cache: False # (bool | str) cache images in RAM (True/'ram') or on 'disk' to speed dataloading; False disables
+metadata_cache: auto # (str) 元数据缓存策略：auto将远程缓存暂存到节点本地，shared直接使用共享缓存，也可指定本地目录
+data_verify: fast # (str) 数据校验策略：fast使用O(1)源指纹，full逐图片、逐标签校验
+data_retries: 3 # (int) 图片读取失败后最多尝试的替代样本数
 device: # (int | str | list) device: 0/[0,1] auto CUDA/Ascend, 'npu:0' Ascend, 'xpu:0' Intel, 'cpu'/'mps', -1/[-1,-1] auto GPUs
 workers: 8 # (int) dataloader workers (per RANK if DDP)
 project: # (str, optional) project name for results root
