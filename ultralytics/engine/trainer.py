@@ -1369,7 +1369,7 @@ class BaseTrainer(CallbackHost):
         """Perform a single step of the training optimizer with gradient clipping and EMA update."""
         self.scaler.unscale_(self.optimizer)  # unscale gradients
         fused_grad_clip, use_fused_grad_clip = None, False
-        if IS_ASCEND:
+        if IS_ASCEND and self.device.type == "npu":
             fused_grad_clip = getattr(self.optimizer, "clip_grad_norm_fused_", None)
             use_fused_grad_clip = (
                 USE_ASCEND_FUSED_GRAD_CLIP
@@ -1962,7 +1962,7 @@ class BaseTrainer(CallbackHost):
                 g_.extend([{"params": p1, **x, "lr": lr * 3}, {"params": p2, **x}])
             g = g_
         optimizer_cls = partial(MuSGD, muon=muon, sgd=sgd) if use_muon else getattr(optim, name)
-        if IS_ASCEND and USE_ASCEND_FUSED_OPTIMIZER is not False and not use_muon:
+        if IS_ASCEND and self.device.type == "npu" and USE_ASCEND_FUSED_OPTIMIZER is not False and not use_muon:
             import torch_npu
 
             fused_name = f"NpuFused{name}"

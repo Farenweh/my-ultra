@@ -139,6 +139,7 @@ def test_task_aligned_assigner_npu_oom_fails_fast(monkeypatch):
 def test_build_optimizer_ascend_fused_adamw_missing_fails(monkeypatch):
     """启用 Ascend fused optimizer 时，缺少 NpuFusedAdamW 必须直接失败。"""
     trainer = object.__new__(BaseTrainer)
+    trainer.device = torch.device("npu")
     trainer.args = SimpleNamespace(lr0=0.001, momentum=0.9, warmup_bias_lr=0.0)
     trainer.data = {"nc": 80}
     model = torch.nn.Sequential(torch.nn.Conv2d(3, 4, 1), torch.nn.BatchNorm2d(4))
@@ -158,6 +159,7 @@ def test_build_optimizer_ascend_fused_adamw_missing_fails(monkeypatch):
 def test_build_optimizer_ascend_fused_adamw_modes(monkeypatch, setting, has_fused_class, expected_fused):
     """融合优化器三态配置应支持自动选择、能力回退、显式禁用和严格启用。"""
     trainer = object.__new__(BaseTrainer)
+    trainer.device = torch.device("npu")
     trainer.args = SimpleNamespace(lr0=0.001, momentum=0.9, warmup_bias_lr=0.0)
     trainer.data = {"nc": 80}
     model = torch.nn.Sequential(torch.nn.Conv2d(3, 4, 1), torch.nn.BatchNorm2d(4))
@@ -278,6 +280,7 @@ def test_ascend_options_are_hidden_outside_ascend():
 def test_optimizer_step_ascend_fused_grad_clip_missing_fails(monkeypatch):
     """启用 fused grad clip 时，优化器缺少 clip_grad_norm_fused_ 必须直接失败。"""
     trainer = object.__new__(BaseTrainer)
+    trainer.device = torch.device("npu")
     trainer.model = torch.nn.Linear(2, 2)
     trainer.optimizer = SimpleNamespace()
     trainer.ema = None
