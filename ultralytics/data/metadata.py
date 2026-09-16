@@ -12,6 +12,7 @@ import pickle
 import shutil
 import tempfile
 import time
+import uuid
 from collections.abc import Iterable, Iterator, Sequence
 from pathlib import Path
 from typing import Any
@@ -389,9 +390,16 @@ def write_metadata_store(
     *,
     num_samples: int,
     source_signature: dict[str, Any],
+    _refresh_locked: bool = False,
 ) -> Path:
     """以原子方式写入紧凑元数据缓存。"""
     cache_dir = Path(cache_dir)
+    if not _refresh_locked:
+        cache_dir.parent.mkdir(parents=True, exist_ok=True)
+        with FileLock(str(cache_dir) + ".refresh.lock"):
+            return write_metadata_store(
+                cache_dir, labels, num_samples=num_samples, source_signature=source_signature, _refresh_locked=True
+            )
     if (cache_dir / "manifest.json").is_file():
         return cache_dir
     cache_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -459,6 +467,7 @@ def write_metadata_store(
             np.save(temp_dir / "plot_cls.npy", np.concatenate(plot_classes) if plot_classes else np.zeros((0, 1)))
             manifest = {
                 "version": METADATA_CACHE_VERSION,
+                "generation": uuid.uuid4().hex,
                 "num_samples": num_samples,
                 "source_signature": source_signature,
                 "content_id": source_signature["content_id"],
@@ -563,25 +572,37 @@ def stage_metadata_cache(source_dir: str | Path, policy: str = "auto") -> Path:
         )
     else:
         root = Path(policy).expanduser()
-    target = root / source_dir.name
-    if (target / "manifest.json").is_file():
-        return target
     try:
-        root.mkdir(parents=True, exist_ok=True)
-        required = _directory_size(source_dir)
-        if shutil.disk_usage(root).free < int(required * 1.1):
-            LOGGER.warning(f"本地元数据缓存空间不足，继续使用共享缓存：{source_dir}")
-            return source_dir
-        with FileLock(str(target) + ".lock"):
-            if not (target / "manifest.json").is_file():
-                temp_dir = Path(tempfile.mkdtemp(prefix=f".{target.name}.", dir=root))
-                try:
-                    shutil.copytree(source_dir, temp_dir, dirs_exist_ok=True)
-                    os.replace(temp_dir, target)
-                finally:
-                    if temp_dir.exists():
-                        shutil.rmtree(temp_dir, ignore_errors=True)
-        return target
+        # 重建与复制共享同一把锁，防止复制到混合代次的文件。
+        with FileLock(str(source_dir) + ".refresh.lock"):
+            manifest = json.loads((source_dir / "manifest.json").read_text(encoding="utf-8"))
+            generation = manifest.get("generation")
+            if generation is None:
+                # 旧缓存只检查固定数量的元数据文件，不扫描图片、标签或读取大数据文件。
+                names = (
+                    "manifest.json", "paths.bin", "records.bin", "path_offsets.npy", "record_offsets.npy",
+                    "shapes.npy", "plot_bboxes.npy", "plot_cls.npy",
+                )
+                generation = _json_digest([_stat_signature(source_dir / name) for name in names])
+            identity = _json_digest({"source": str(source_dir.resolve()), "generation": generation})
+            target = root / f"{source_dir.name}-{identity}"
+            if (target / "manifest.json").is_file():
+                return target
+            root.mkdir(parents=True, exist_ok=True)
+            required = _directory_size(source_dir)
+            if shutil.disk_usage(root).free < int(required * 1.1):
+                LOGGER.warning(f"本地元数据缓存空间不足，继续使用共享缓存：{source_dir}")
+                return source_dir
+            with FileLock(str(target) + ".lock"):
+                if not (target / "manifest.json").is_file():
+                    temp_dir = Path(tempfile.mkdtemp(prefix=f".{target.name}.", dir=root))
+                    try:
+                        shutil.copytree(source_dir, temp_dir, dirs_exist_ok=True)
+                        os.replace(temp_dir, target)
+                    finally:
+                        if temp_dir.exists():
+                            shutil.rmtree(temp_dir, ignore_errors=True)
+            return target
     except OSError as error:
         LOGGER.warning(f"暂存节点本地元数据缓存失败，继续使用共享缓存：{error}")
         return source_dir

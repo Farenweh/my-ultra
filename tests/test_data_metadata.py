@@ -354,7 +354,7 @@ def test_node_local_stage_and_bad_sample_retry_report(tmp_path, monkeypatch):
     (source / "records.bin").write_bytes(b"records")
     local_root = tmp_path / "local"
     staged = metadata.stage_metadata_cache(source, str(local_root))
-    assert staged == local_root / "content"
+    assert staged.parent == local_root and staged.name.startswith("content-")
     assert (staged / "records.bin").read_bytes() == b"records"
 
     dataset = object.__new__(data_base.BaseDataset)
@@ -386,8 +386,9 @@ def test_node_local_stage_is_concurrent_safe_and_falls_back_when_full(tmp_path, 
     local_root = tmp_path / "local"
     with ThreadPoolExecutor(max_workers=4) as pool:
         staged = list(pool.map(lambda _: metadata.stage_metadata_cache(source, str(local_root)), range(4)))
-    assert staged == [local_root / "content"] * 4
-    assert (local_root / "content" / "records.bin").read_bytes() == b"records"
+    assert len(set(staged)) == 1
+    assert staged[0].parent == local_root
+    assert (staged[0] / "records.bin").read_bytes() == b"records"
 
     full_root = tmp_path / "full"
     monkeypatch.setattr(metadata.shutil, "disk_usage", lambda _path: SimpleNamespace(free=0))

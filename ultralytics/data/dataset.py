@@ -238,15 +238,18 @@ class YOLODataset(BaseDataset):
             return labels
         store_dir = shared_metadata_dir(self._legacy_cache_path or cache_path, self._source_signature)
         try:
+            store_dir.parent.mkdir(parents=True, exist_ok=True)
+
             def write_store() -> None:
                 write_metadata_store(
                     store_dir,
                     labels,
                     num_samples=len(labels),
                     source_signature=self._source_signature,
+                    _refresh_locked=self.data_verify == "full",
                 )
 
-            if self.data_verify == "full" and (store_dir / "manifest.json").is_file():
+            if self.data_verify == "full":
                 # 完整校验可能发现O(1)目录指纹无法感知的原地内容替换，因此强制刷新紧凑缓存。
                 with FileLock(str(store_dir) + ".refresh.lock"):
                     backup = None
