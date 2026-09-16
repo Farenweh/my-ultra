@@ -158,6 +158,7 @@ class DetectionValidator(BaseValidator):
 
             context = get_distributed_val_context()
             if context is not None:
+                # 动态 sampler 持续追加真实原图索引，必须保留列表引用。
                 self.eval_ids = context.claimed_indices
             else:
                 self.eval_ids = list(self.dataloader.sampler)
