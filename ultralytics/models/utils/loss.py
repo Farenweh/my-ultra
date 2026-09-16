@@ -496,8 +496,9 @@ class DETRLoss(nn.Module):
             loss_giou_layer = 1.0 - bbox_iou(pred_match, gt_match, xywh=True, GIoU=True).squeeze(-1)
             loss_giou_layer = self.loss_gain["giou"] * (loss_giou_layer.sum(1) / match_count)
         else:
-            loss_bbox_layer = pred_bboxes.new_zeros((num_layers,))
-            loss_giou_layer = pred_bboxes.new_zeros((num_layers,))
+            # 空切片求和保留回归分支的零梯度，同时避免非有限预测参与数值计算。
+            loss_bbox_layer = pred_bboxes[..., :0].sum((1, 2, 3))
+            loss_giou_layer = pred_bboxes[..., :0].sum((1, 2, 3))
 
         total_loss = {
             f"loss_class{postfix}": loss_cls_layer[-1].squeeze(),
