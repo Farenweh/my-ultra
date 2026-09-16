@@ -838,9 +838,7 @@ class BaseTrainer(CallbackHost):
                                 loss, self.loss_items = unwrap_model(self.model).loss(batch, preds)
                             else:
                                 loss, self.loss_items = self.model(batch)
-                            self.loss = loss.sum()
-                            if RANK != -1:
-                                self.loss *= self.world_size
+                            self.loss = loss.sum() * self._get_ddp_loss_scale()
                             if not self.loss_names:  # derive loss names from the criterion's loss dict on first batch
                                 self.loss_names = tuple(self.loss_items)
                                 if RANK in {-1, 0}:
@@ -1210,6 +1208,10 @@ class BaseTrainer(CallbackHost):
             return pl.read_csv(self.csv.read_bytes(), infer_schema_length=None).to_dict(as_series=False)
         except Exception:
             return {}
+
+    def _get_ddp_loss_scale(self) -> int:
+        """补偿 DDP 梯度平均，保持默认任务的 batch 求和损失约定。"""
+        return self.world_size if RANK != -1 else 1
 
     def _model_train(self):
         """Set model in training mode."""
