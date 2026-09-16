@@ -1057,12 +1057,25 @@ class RTDETRDetectionModel(DetectionModel):
 
         return RTDETRDetectionLoss(nc=self.nc, use_vfl=True)
 
-    def loss(self, batch, preds=None):
+    @staticmethod
+    def _prepare_targets(batch):
+        """在编译前向之外整理 GT 和 Python 分组信息，供前向及 loss 复用。"""
+        img = batch["img"]
+        batch_idx = batch["batch_idx"].to(device=img.device, dtype=torch.long).view(-1)
+        return {
+            "cls": batch["cls"].to(img.device, dtype=torch.long).view(-1),
+            "bboxes": batch["bboxes"].to(device=img.device),
+            "batch_idx": batch_idx,
+            "gt_groups": torch.bincount(batch_idx, minlength=img.shape[0]).cpu().tolist(),
+        }
+
+    def loss(self, batch, preds=None, targets=None):
         """Compute the loss for the given batch of data.
 
         Args:
             batch (dict): Dictionary containing image and label data.
             preds (tuple, optional): Precomputed model predictions.
+            targets (dict, optional): 编译前已整理的 GT；省略时按原有调用方式生成。
 
         Returns:
             loss (torch.Tensor): Total loss value.
@@ -1072,16 +1085,8 @@ class RTDETRDetectionModel(DetectionModel):
             self.criterion = self.init_criterion()
 
         img = batch["img"]
-        # NOTE: preprocess gt_bbox and gt_labels to list.
-        bs = img.shape[0]
-        batch_idx = batch["batch_idx"]
-        gt_groups = torch.bincount(batch_idx.to(device=img.device, dtype=torch.long), minlength=bs).cpu().tolist()
-        targets = {
-            "cls": batch["cls"].to(img.device, dtype=torch.long).view(-1),
-            "bboxes": batch["bboxes"].to(device=img.device),
-            "batch_idx": batch_idx.to(img.device, dtype=torch.long).view(-1),
-            "gt_groups": gt_groups,
-        }
+        if targets is None:
+            targets = self._prepare_targets(batch)
 
         if preds is None:
             preds = self.predict(img, batch=targets)

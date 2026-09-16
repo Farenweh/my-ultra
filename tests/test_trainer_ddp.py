@@ -11,6 +11,7 @@ import ultralytics.engine.trainer as trainer_module
 import ultralytics.engine.validator as validator_module
 from ultralytics.engine.trainer import BaseTrainer
 from ultralytics.engine.validator import BaseValidator
+from ultralytics.models.rtdetr.train import RTDETRTrainer
 
 
 class RTDETRDetectionModel(nn.Module):
@@ -42,8 +43,8 @@ def _buffer_bytes_by_dtype(model):
     return bytes_by_dtype
 
 
-def _capture_ddp_kwargs(monkeypatch, model, compile):
-    trainer = object.__new__(BaseTrainer)
+def _capture_ddp_kwargs(monkeypatch, model, compile, trainer_class=BaseTrainer):
+    trainer = object.__new__(trainer_class)
     trainer.args = SimpleNamespace(
         amp=False,
         quantize=None,
@@ -288,6 +289,13 @@ def test_setup_train_passes_ddp_graph_kwargs(monkeypatch, model, compile, expect
 
     assert kwargs["static_graph"] is expected_static_graph
     assert kwargs["find_unused_parameters"] is expected_find_unused
+
+
+def test_setup_train_rtdetr_compile_uses_dynamic_ddp_graph(monkeypatch):
+    """实际 DDP 构造入口应采用 RT-DETR trainer 的动态训练图配置。"""
+    kwargs = _capture_ddp_kwargs(monkeypatch, RTDETRDetectionModel(), True, RTDETRTrainer)
+    assert kwargs["static_graph"] is False
+    assert kwargs["find_unused_parameters"] is False
 
 
 def test_resolve_ddp_gradient_as_bucket_view_defaults_to_true(monkeypatch):

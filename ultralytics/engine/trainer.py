@@ -653,7 +653,7 @@ class BaseTrainer(CallbackHost):
             # static_graph=True permits params used >1 time per forward (e.g. flow_model in
             # o2m+o2o pose loss branches) under torch.compile.
             compiled = bool(self.args.compile)
-            ddp_kwargs = {"static_graph": compiled} if TORCH_1_11 else {}
+            ddp_kwargs = {"static_graph": self._get_ddp_static_graph()} if TORCH_1_11 else {}
             ddp_kwargs["forward_sync_buffers" if TORCH_2_13 else "broadcast_buffers"] = False
             padding = self._align_ddp_broadcast_buffers(self.model, self.world_size)
             if padding and RANK in {-1, 0}:
@@ -832,12 +832,7 @@ class BaseTrainer(CallbackHost):
                     with sync_context():
                         with autocast(self.amp_enabled, device=self.device.type, dtype=self.amp_dtype):
                             batch = self.preprocess_batch(batch)
-                            if self.args.compile:
-                                # Decouple inference and loss calculations for improved compile performance
-                                preds = self.model(batch["img"])
-                                loss, self.loss_items = unwrap_model(self.model).loss(batch, preds)
-                            else:
-                                loss, self.loss_items = self.model(batch)
+                            loss, self.loss_items = self._model_forward(batch)
                             self.loss = loss.sum() * self._get_ddp_loss_scale()
                             if not self.loss_names:  # derive loss names from the criterion's loss dict on first batch
                                 self.loss_names = tuple(self.loss_items)
@@ -1208,6 +1203,17 @@ class BaseTrainer(CallbackHost):
             return pl.read_csv(self.csv.read_bytes(), infer_schema_length=None).to_dict(as_series=False)
         except Exception:
             return {}
+
+    def _model_forward(self, batch):
+        """执行训练前向，编译时将损失计算保留在图外。"""
+        if self.args.compile:
+            preds = self.model(batch["img"])
+            return unwrap_model(self.model).loss(batch, preds)
+        return self.model(batch)
+
+    def _get_ddp_static_graph(self) -> bool:
+        """默认编译训练使用静态 DDP 图，允许动态训练任务单独覆盖。"""
+        return bool(self.args.compile)
 
     def _get_ddp_loss_scale(self) -> int:
         """补偿 DDP 梯度平均，保持默认任务的 batch 求和损失约定。"""

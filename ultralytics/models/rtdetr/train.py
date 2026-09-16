@@ -10,6 +10,7 @@ from ultralytics.data.utils import get_split_fraction
 from ultralytics.models.yolo.detect import DetectionTrainer
 from ultralytics.nn.tasks import RTDETRDetectionModel
 from ultralytics.utils import RANK
+from ultralytics.utils.torch_utils import unwrap_model
 
 from .val import RTDETRValidator, build_rtdetr_dataset
 
@@ -76,6 +77,19 @@ class RTDETRTrainer(DetectionTrainer):
             (RTDETRDataset): Dataset object for the specific mode.
         """
         return build_rtdetr_dataset(self.args, img_path, batch, self.data, mode)
+
+    def _model_forward(self, batch):
+        """编译前准备 GT，并通过原有模型包装执行含去噪 query 的前向。"""
+        if not self.args.compile:
+            return super()._model_forward(batch)
+        model = unwrap_model(self.model)
+        targets = model._prepare_targets(batch)
+        preds = self.model(batch["img"], batch=targets)
+        return model.loss(batch, preds, targets=targets)
+
+    def _get_ddp_static_graph(self) -> bool:
+        """GT 数量和去噪分支随 batch 变化，不启用静态 DDP 图。"""
+        return False
 
     def _get_ddp_loss_scale(self) -> int:
         """RT-DETR 已按匹配目标数归一化，保持各 rank 损失的梯度平均。"""
