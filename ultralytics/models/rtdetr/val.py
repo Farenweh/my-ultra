@@ -160,7 +160,11 @@ class RTDETRValidator(DetectionValidator):
         bboxes, scores, labels = preds.split((4, 1, 1), dim=-1)
         bboxes = ops.xywh2xyxy(bboxes) * self.args.imgsz
         scores, labels = scores.squeeze(-1), labels.squeeze(-1)
-        masks = [(score > self.args.conf).nonzero().squeeze(1)[: self.args.max_det] for score in scores]
+        keep = scores > self.args.conf
+        if self.args.classes is not None:
+            classes = torch.as_tensor(self.args.classes, device=labels.device)
+            keep &= (labels.unsqueeze(-1) == classes).any(-1)
+        masks = [mask.nonzero().squeeze(1)[: self.args.max_det] for mask in keep]
 
         return [
             {"bboxes": bbox[m], "conf": score[m], "cls": label[m]}
