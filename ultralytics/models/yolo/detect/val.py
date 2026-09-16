@@ -148,7 +148,13 @@ class DetectionValidator(BaseValidator):
         self.is_custom_json = self.args.save_json and self.args.task == "detect" and not (self.is_coco or self.is_lvis)
         self.gdict = getattr(self, "gdict", None) if self.is_custom_json else None
         self.build_gdict = self.is_custom_json and self.gdict is None
-        self.eval_ids = list(self.dataloader.sampler) if self.is_custom_json else None
+        self.eval_ids = None
+        if self.is_custom_json:
+            from ultralytics.engine.val_runtime import get_distributed_val_context
+
+            context = get_distributed_val_context()
+            # 动态 batch sampler 会持续追加真实全局索引，必须保留列表引用。
+            self.eval_ids = context.claimed_indices if context is not None else list(self.dataloader.sampler)
         self.pred_counts = []
         if self.build_gdict:
             self.gdict = {"images": [], "annotations": [], "categories": [{"id": x} for x in self.class_map]}
