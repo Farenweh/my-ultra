@@ -158,7 +158,7 @@ class BaseDataset(Dataset):
                 OpenCV are in BGR channel order.
             metadata_cache (str): 元数据缓存策略，可选'auto'、'shared'或显式本地目录。
             data_verify (str): 数据集校验策略，可选'fast'或'full'。
-            data_retries (int): 图片读取失败后尝试的替代样本数。
+            data_retries (int): 首次失败后的重试次数；训练可替代样本，验证只重试原图。
         """
         super().__init__()
         self.img_path = img_path
@@ -473,11 +473,13 @@ class BaseDataset(Dataset):
                 return self.transforms(self.get_image_and_label(current))
             except (FileNotFoundError, OSError) as error:
                 report = self._record_data_error(current, error, attempt)
-                if attempt >= self.data_retries or len(self) <= 1:
+                if attempt >= self.data_retries:
                     raise RuntimeError(
-                        f"读取数据样本失败，已重试{attempt}次；错误报告：{report}"
+                        f"读取数据样本失败，原始索引={index}，图片={self.im_files[index]}，"
+                        f"共尝试{attempt + 1}次，已重试{attempt}次；错误报告：{report}"
                     ) from error
-                current = self._replacement_index(current)
+                if self.augment and len(self) > 1:
+                    current = self._replacement_index(current)
         raise RuntimeError("数据样本重试流程异常结束")
 
     def _replacement_index(self, failed_index: int) -> int:

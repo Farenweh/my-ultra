@@ -359,6 +359,7 @@ def test_node_local_stage_and_bad_sample_retry_report(tmp_path, monkeypatch):
 
     dataset = object.__new__(data_base.BaseDataset)
     dataset.data_retries = 1
+    dataset.augment = True
     dataset.labels = [{}, {}]
     dataset.im_files = ["missing.jpg", "valid.jpg"]
     dataset.prefix = "test: "
