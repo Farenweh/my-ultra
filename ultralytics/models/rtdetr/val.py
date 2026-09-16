@@ -78,6 +78,9 @@ def build_rtdetr_dataset(args, img_path: str, batch: int | None, data: dict[str,
         "classes": args.classes,
         "data": data,
         "fraction": 1.0 if data.get("complete") else get_split_fraction(args.fraction, split),
+        "metadata_cache": args.metadata_cache,
+        "data_verify": args.data_verify,
+        "data_retries": args.data_retries,
     }
     if dataset_class is RTDETRCOCODataset:
         kwargs["json_file"] = data["annotations"][split]
