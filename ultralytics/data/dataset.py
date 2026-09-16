@@ -56,6 +56,7 @@ from .utils import (
     IMG_FORMATS,
     check_image,
     check_file_speeds,
+    get_fraction_count,
     get_hash,
     get_split_fraction,
     img2label_paths,
@@ -152,11 +153,11 @@ class YOLODataset(BaseDataset):
         self._try_load_metadata_store(
             policy=str(kwargs.get("metadata_cache", "auto")),
             full_verify=str(kwargs.get("data_verify", "fast")).lower() == "full",
-            fraction=float(kwargs.get("fraction", 1.0)),
+            fraction=get_split_fraction(kwargs.get("fraction", 1.0), "train"),
         )
         super().__init__(*args, channels=self.data.get("channels", 3), **kwargs)
 
-    def _try_load_metadata_store(self, policy: str, full_verify: bool, fraction: float) -> None:
+    def _try_load_metadata_store(self, policy: str, full_verify: bool, fraction: float | int) -> None:
         """加载紧凑缓存，并在可用时仅迁移一次传统NumPy缓存。"""
         if full_verify or self._legacy_cache_path is None:
             return
@@ -230,12 +231,23 @@ class YOLODataset(BaseDataset):
                 if not (store_dir / "manifest.json").is_file():
                     return
                 store = load_metadata_store(store_dir, policy)
-            self._metadata_store = store.subset(round(len(store) * fraction)) if fraction < 1 else store
+            self._metadata_store = self._subset_labels(store, fraction)
+
+    def _subset_labels(self, labels, fraction):
+        """缓存和内存回退使用同一取样规则，并同步图片路径视图。"""
+        count = get_fraction_count(len(labels), fraction)
+        if isinstance(labels, MMapLabelSequence):
+            labels = labels.subset(count) if count < len(labels) else labels
+            self.im_files = labels.im_files
+        else:
+            labels = labels[:count]
+            self.im_files = [label["im_file"] for label in labels]
+        return labels
 
     def _compact_labels(self, labels: list[dict], cache_path: Path) -> MMapLabelSequence | list[dict]:
         """持久化紧凑标签，并在可用时返回mmap序列。"""
         if not self._compact_metadata_enabled:
-            return labels
+            return self._subset_labels(labels, self.fraction)
         store_dir = shared_metadata_dir(self._legacy_cache_path or cache_path, self._source_signature)
         try:
             store_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -268,12 +280,12 @@ class YOLODataset(BaseDataset):
             else:
                 write_store()
             store = load_metadata_store(store_dir, self.metadata_cache)
-            self._metadata_store = store.subset(round(len(store) * self.fraction)) if self.fraction < 1 else store
+            self._metadata_store = self._subset_labels(store, self.fraction)
             self.im_files = self._metadata_store.im_files
             return self._metadata_store
         except OSError as error:
             LOGGER.warning(f"{self.prefix}无法创建紧凑元数据缓存，将使用内存标签：{error}")
-            return labels
+            return self._subset_labels(labels, self.fraction)
 
     def get_img_files(self, img_path: str | list[str]) -> list[str]:
         """优先使用紧凑元数据中的路径，避免扫描图片目录。"""

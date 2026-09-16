@@ -657,6 +657,14 @@ def get_split_fraction(fraction: float | list[float | int], split: str) -> float
     return fraction
 
 
+def get_fraction_count(total: int, fraction: float | int) -> int:
+    """统一计算比例或整数样本数；正比例至少一张，显式零保持为空。"""
+    if fraction == 1:
+        return total
+    count = fraction if isinstance(fraction, int) else max(1, round(total * fraction)) if fraction > 0 else 0
+    return min(total, max(0, int(count)))
+
+
 def convert_ndjson_to_yolo_if_needed(
     data: str | Path, fraction: float | list[float | int] = 1.0, *, split: str | None = None
 ) -> str | Path:
