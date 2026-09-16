@@ -77,6 +77,10 @@ class RTDETRTrainer(DetectionTrainer):
         """
         return build_rtdetr_dataset(self.args, img_path, batch, self.data, mode)
 
+    def _get_ddp_loss_scale(self) -> int:
+        """RT-DETR 已按匹配目标数归一化，保持各 rank 损失的梯度平均。"""
+        return 1
+
     def get_validator(self):
         """Return an RTDETRValidator suitable for RT-DETR model validation."""
         return RTDETRValidator(
