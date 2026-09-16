@@ -450,10 +450,11 @@ def _prepare_external_worker_config(owner: Model, args: dict[str, Any]) -> None:
     rank = int(os.environ["RANK"])
     world_size = int(os.environ["WORLD_SIZE"])
     local_world_size = int(os.getenv("LOCAL_WORLD_SIZE", "1"))
-    if args.get("device") in {None, "", "none"}:
+    device_request = parse_device(args.get("device"))
+    if not device_request:
         device_type, device_ids = _visible_devices()
     else:
-        device_type, device_ids = _device_request(args["device"])
+        device_type, device_ids = _device_request(device_request)
     if len(device_ids) != local_world_size:
         raise ValueError(
             f"手动torchrun验证需要device列表长度等于LOCAL_WORLD_SIZE，"
@@ -740,7 +741,7 @@ def run_or_launch_distributed_validation(
         return _run_worker(owner, args, direct)
 
     if is_k8s_distributed_parent():
-        if args.get("device") not in {None, "", "none"}:
+        if args.get("device") is not None and str(args["device"]).strip().lower() not in {"", "none"}:
             raise ValueError("K8S多节点验证不应手动设置device，请使用device=None自动选择本地可见设备")
         device_type, device_ids = _visible_devices()
         should_launch = True
