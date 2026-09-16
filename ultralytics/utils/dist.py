@@ -170,6 +170,7 @@ if __name__ == "__main__":
     trainer = state["trainer"](cfg=cfg, overrides=state["args"], _callbacks=state["callbacks"])
     trainer.model = state["model"]
     trainer.train()
+    trainer._save_training_result({str(path.with_suffix('.result.pt'))!r})
 """
         )
     return Path(file.name)
@@ -282,3 +283,5 @@ def ddp_cleanup(
         if path.exists() and f"{id(trainer)}.py" in path.name:
             path.unlink()
             path.with_suffix(".pt").unlink(missing_ok=True)
+            path.with_suffix(".result.pt").unlink(missing_ok=True)
+            path.with_suffix(".result.pt.tmp").unlink(missing_ok=True)

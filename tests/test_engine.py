@@ -1605,12 +1605,15 @@ def test_setup_model_respects_pretrained_arg_for_pt_models(monkeypatch, pretrain
 
 def test_train_without_saving_skips_checkpoint_reload(tmp_path, monkeypatch):
     """save=False 的训练无需存在 checkpoint，直接返回训练器指标。"""
+    from copy import deepcopy
+
     model = YOLO("yolo11n.yaml")
     metrics = {"验证指标": 0.5}
 
     class NoSaveTrainer:
         def __init__(self, overrides=None, _callbacks=None):
             self.args = SimpleNamespace(save=False)
+            self.model = deepcopy(model.model)
             self.validator = SimpleNamespace(metrics=metrics)
             self.best = tmp_path / "best.pt"
             self.last = tmp_path / "last.pt"

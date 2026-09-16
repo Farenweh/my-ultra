@@ -179,6 +179,7 @@ def test_final_validation_inherits_effective_training_amp(monkeypatch, tmp_path,
 
     trainer = object.__new__(BaseTrainer)
     trainer.best = best
+    trainer._saved_checkpoints = {best}
     trainer.last = tmp_path / "missing-last.pt"
     trainer.validator = FakeValidator()
     trainer.args = SimpleNamespace(plots=False)

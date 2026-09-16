@@ -910,21 +910,31 @@ class Model(torch.nn.Module):
         self.trainer.train()
         # Update model and cfg after training
         if RANK in {-1, 0}:
-            self.metrics = getattr(self.trainer.validator, "metrics", None)
-            if getattr(getattr(self.trainer, "args", None), "save", True):
-                ckpt = self.trainer.best if self.trainer.best.exists() else self.trainer.last
-                if not ckpt.exists():
-                    raise FileNotFoundError(
-                        f"Training completed but no checkpoint was saved. Expected {self.trainer.best} or {self.trainer.last}."
-                    )
+            from ultralytics.engine.trainer import BaseTrainer
+
+            getter = getattr(self.trainer, "_get_training_result", None)
+            result = getter() if getter is not None else BaseTrainer._get_training_result(self.trainer)
+            self.metrics = result["metrics"]
+            ckpt = result["checkpoint"]
+            if ckpt is not None:
                 self.model, self.ckpt = load_checkpoint(ckpt)
-                self.predictor = None  # the checkpoint replaced the module again; covers resume and YAML runs too
-                self.overrides = self._reset_ckpt_args(self.model.args)
-                self.overrides["model"] = str(ckpt)  # the reset drops it, train() and tune() read it back
-                if (
-                    self.metrics is None and self.ckpt
-                ):  # recover from checkpoint under DDP (validator runs in subprocess)
+                self.ckpt_path = str(ckpt)
+                if self.metrics is None:
                     self.metrics = self.ckpt.get("train_metrics")
+            else:
+                self.model = result["model"]
+                self.ckpt_path = None
+                self.ckpt = {
+                    "model": self.model,
+                    "ema": None,
+                    "epoch": -1,
+                    "optimizer": None,
+                    "train_args": result["train_args"],
+                }
+            self.predictor = None
+            source = str(ckpt) if ckpt is not None else result["train_args"].get("model", self.overrides["model"])
+            self.overrides = self._reset_ckpt_args(self.model.args)
+            self.overrides["model"] = source
         return self.metrics
 
     def tune(

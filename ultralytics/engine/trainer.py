@@ -209,6 +209,8 @@ class BaseTrainer(CallbackHost):
             self.args.save_dir = str(self.save_dir)
             YAML.save(self.save_dir / "args.yaml", vars(self.args))  # save run args
         self.last, self.best = self.wdir / "last.pt", self.wdir / "best.pt"  # checkpoint paths
+        self._saved_checkpoints = set()
+        self._training_result = None
         self.save_period = self.args.save_period
 
         self.batch_size = self.args.batch
@@ -339,6 +341,8 @@ class BaseTrainer(CallbackHost):
                         cmd, file = generate_ddp_command(self)
                     LOGGER.info(f"{colorstr('DDP:')} debug command {' '.join(cmd)}")
                     subprocess.run(cmd, check=True)
+                    if RANK in {-1, 0}:
+                        self._training_result = self._load_training_result(Path(file).with_suffix(".result.pt"))
                 finally:
                     if file is not None:
                         ddp_cleanup(self, str(file))
@@ -1297,11 +1301,83 @@ class BaseTrainer(CallbackHost):
         # Save checkpoints
         self.wdir.mkdir(parents=True, exist_ok=True)  # ensure weights directory exists
         self.last.write_bytes(serialized_ckpt)  # save last.pt
+        if not hasattr(self, "_saved_checkpoints"):
+            self._saved_checkpoints = set()
+        self._saved_checkpoints.add(self.last)
         if self.best_fitness == self.fitness:
             self.best.write_bytes(serialized_ckpt)  # save best.pt
+            self._saved_checkpoints.add(self.best)
         if (self.save_period > 0) and (self.epoch % self.save_period == 0):
             (self.wdir / f"epoch{self.epoch}.pt").write_bytes(serialized_ckpt)  # save epoch, i.e. 'epoch3.pt'
         return True
+
+    def _get_training_checkpoint(self):
+        """只选择本轮成功写入的检查点，避免复用目录中的旧文件。"""
+        written = getattr(self, "_saved_checkpoints", set())
+        for name in ("best", "last"):
+            path = getattr(self, name, None)
+            if path is not None and Path(path) in written and Path(path).is_file():
+                return Path(path)
+        return None
+
+    def _get_training_result(self):
+        """取得本轮检查点或独立的内存模型，同时支持自定义训练器。"""
+        received = getattr(self, "_training_result", None)
+        if received is not None:
+            return received
+        checkpoint = BaseTrainer._get_training_checkpoint(self)
+        metrics = getattr(getattr(self, "validator", None), "metrics", None)
+        if metrics is None:
+            metrics = getattr(self, "metrics", None)
+        args = vars(self.args).copy()
+        result = {"checkpoint": str(checkpoint) if checkpoint else None, "metrics": metrics, "train_args": args}
+        if checkpoint is None:
+            source = getattr(getattr(self, "ema", None), "ema", None)
+            if source is None:
+                source = getattr(self, "model", None)
+            if not isinstance(source, nn.Module):
+                raise RuntimeError("训练结果不可用：本轮没有检查点，也没有可交接的训练模型。")
+            source = unwrap_model(source)
+            source = getattr(source, "student_model", source)
+            model = deepcopy(source).float().eval()
+            model.args = args
+            if hasattr(model, "criterion"):
+                model.criterion = None
+            if hasattr(model, "pt_path"):
+                del model.pt_path
+            result["model"] = model
+        return result
+
+    def _save_training_result(self, path):
+        """主 rank 原子发布本次启动的结果；无正式权重时序列化内存模型。"""
+        if RANK not in {-1, 0}:
+            return
+        from ultralytics.utils.patches import torch_save
+
+        result = self._get_training_result()
+        if "model" in result:
+            result["model"] = result["model"].cpu()
+            result["modelopt"] = qat_state(result["model"])
+            strip_qat(result["model"])
+        path = Path(path)
+        temporary = path.with_suffix(path.suffix + ".tmp")
+        try:
+            torch_save(result, temporary)
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+    @staticmethod
+    def _load_training_result(path):
+        """读取本次启动结果，并恢复临时内存快照携带的 QAT 状态。"""
+        from ultralytics.utils.patches import torch_load
+
+        if not Path(path).is_file():
+            raise RuntimeError(f"分布式训练结果未生成：{path}")
+        result = torch_load(path, map_location="cpu")
+        if result.get("modelopt") is not None:
+            restore_qat(result["model"], result["modelopt"])
+        return result
 
     def get_dataset(self):
         """Get train and validation datasets from data dictionary.
@@ -1724,13 +1800,18 @@ class BaseTrainer(CallbackHost):
 
     def final_eval(self):
         """Perform final evaluation and validation for the YOLO model."""
-        model = self.best if self.best.exists() else None
+        model = self._get_training_checkpoint()
+        if RANK != -1 and getattr(self, "world_size", 1) > 1:
+            selected = [str(model) if model is not None else None]
+            dist.broadcast_object_list(selected, src=0)
+            model = Path(selected[0]) if selected[0] is not None else None
         with torch_distributed_zero_first(LOCAL_RANK):  # strip only on GPU 0; other GPUs should wait
             if RANK in {-1, 0}:
-                ckpt = strip_optimizer(self.last) if self.last.exists() else {}
-                if model:
+                last_written = self.last in getattr(self, "_saved_checkpoints", set()) and self.last.exists()
+                ckpt = strip_optimizer(self.last) if last_written else {}
+                if model and model != self.last:
                     # update best.pt train_metrics from last.pt
-                    strip_optimizer(self.best, updates={"train_results": ckpt.get("train_results")})
+                    strip_optimizer(model, updates={"train_results": ckpt.get("train_results")})
         if model:
             LOGGER.info(f"\nValidating {model}...")
             self.validator.args.plots = self.args.plots
