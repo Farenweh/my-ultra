@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import torch
@@ -128,8 +127,11 @@ class RTDETRValidator(DetectionValidator):
         return build_rtdetr_dataset(self.args, img_path, batch, self.data, mode)
 
     def scale_preds(self, predn: dict[str, torch.Tensor], pbatch: dict[str, Any]) -> dict[str, torch.Tensor]:
-        """Return predictions unchanged as RT-DETR handles scaling in postprocessing and `pred_to_json`."""
-        return predn
+        """将方形拉伸输入上的预测还原为原图坐标，供 TXT 和 JSON 共用。"""
+        boxes = predn["bboxes"].clone()
+        boxes[..., [0, 2]] *= pbatch["ori_shape"][1] / pbatch["imgsz"][1]
+        boxes[..., [1, 3]] *= pbatch["ori_shape"][0] / pbatch["imgsz"][0]
+        return {**predn, "bboxes": boxes}
 
     def postprocess(
         self, preds: torch.Tensor | list[torch.Tensor] | tuple[torch.Tensor]
@@ -161,29 +163,3 @@ class RTDETRValidator(DetectionValidator):
             {"bboxes": bbox[m], "conf": score[m], "cls": label[m]}
             for bbox, score, label, m in zip(bboxes, scores, labels, masks)
         ]
-
-    def pred_to_json(self, predn: dict[str, torch.Tensor], pbatch: dict[str, Any]) -> None:
-        """Serialize RT-DETR predictions to COCO JSON format.
-
-        Args:
-            predn (dict[str, torch.Tensor]): Predictions dictionary containing 'bboxes', 'conf', and 'cls' keys with
-                bounding box coordinates, confidence scores, and class predictions.
-            pbatch (dict[str, Any]): Batch dictionary containing 'imgsz', 'ori_shape', 'ratio_pad', and 'im_file'.
-        """
-        path = Path(pbatch["im_file"])
-        image_id = self._image_id(pbatch.get("image_id"), path)
-        box = predn["bboxes"].clone()
-        box[..., [0, 2]] *= pbatch["ori_shape"][1] / self.args.imgsz  # native-space pred
-        box[..., [1, 3]] *= pbatch["ori_shape"][0] / self.args.imgsz  # native-space pred
-        box = ops.xyxy2xywh(box)  # xywh
-        box[:, :2] -= box[:, 2:] / 2  # xy center to top-left corner
-        for b, s, c in zip(box.tolist(), predn["conf"].tolist(), predn["cls"].tolist()):
-            self.jdict.append(
-                {
-                    "image_id": image_id,
-                    "file_name": path.name,
-                    "category_id": self.class_map[int(c)],
-                    "bbox": [round(x, 3) for x in b],
-                    "score": round(s, 5),
-                }
-            )
