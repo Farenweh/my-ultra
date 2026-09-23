@@ -49,12 +49,17 @@ _ACTIVE_CONTEXT: DistributedValContext | None = None
 def _device_request(device: Any) -> tuple[str, list[int]]:
     """将多设备请求解析为加速器类型和本机设备号。"""
     value = parse_device(device)
+    explicit_cuda = str(device).lower().startswith("cuda")
     if value.startswith("npu"):
         device_type, _, indices = value.partition(":")
     elif value.startswith("xpu"):
         raise ValueError("独立多卡验证首版仅支持CUDA和Ascend NPU，不支持XPU")
+    elif explicit_cuda:
+        device_type, indices = "cuda", value
     else:
         device_type, indices = ("npu" if IS_ASCEND else "cuda"), value
+    if explicit_cuda and not torch.cuda.is_available():
+        raise ValueError("显式CUDA验证请求失败：当前没有可用的CUDA设备")
     if not indices or indices in {"cpu", "mps"}:
         return indices or device_type, []
     try:
@@ -449,9 +454,14 @@ def _prepare_external_worker_config(owner: Model, args: dict[str, Any]) -> None:
     rank = int(os.environ["RANK"])
     world_size = int(os.environ["WORLD_SIZE"])
     local_world_size = int(os.getenv("LOCAL_WORLD_SIZE", "1"))
-    device_request = parse_device(args.get("device"))
-    if not device_request:
-        device_type, device_ids = _visible_devices()
+    device_request = args.get("device")
+    if not parse_device(device_request):
+        if str(device_request).lower().startswith("cuda"):
+            if not torch.cuda.is_available():
+                raise ValueError("显式CUDA验证请求失败：当前没有可用的CUDA设备")
+            device_type, device_ids = "cuda", list(range(torch.cuda.device_count()))
+        else:
+            device_type, device_ids = _visible_devices()
     else:
         device_type, device_ids = _device_request(device_request)
     if len(device_ids) != local_world_size:

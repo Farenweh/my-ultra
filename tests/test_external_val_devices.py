@@ -2,6 +2,7 @@
 from types import SimpleNamespace
 
 import pytest
+import torch
 
 from ultralytics.engine import val_runtime
 
@@ -26,6 +27,31 @@ def test_external_validation_accepts_supported_device_forms(external_context, de
     assert result["device_ids"] == [0, 1]
     assert result["device_argument"] == "npu:0,1"
     assert result["global_batch"] == 4 and result["local_batch"] == 2
+
+
+@pytest.mark.parametrize("device", ("cuda:0,1", torch.device("cuda")))
+def test_external_validation_preserves_explicit_cuda(external_context, monkeypatch, device):
+    """显式 CUDA 请求在昇腾主机上也应保留 CUDA 后端。"""
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 2)
+
+    result = val_runtime.run_or_launch_distributed_validation(
+        SimpleNamespace(), {**external_context, "device": device}, lambda args: args
+    )
+
+    assert result["device_type"] == "cuda"
+    assert result["device_ids"] == [0, 1]
+    assert result["device_argument"] == "cuda:0,1"
+
+
+def test_explicit_cuda_validation_rejects_missing_cuda(external_context, monkeypatch):
+    """只有 NPU 可用时，显式 CUDA 验证请求应直接报错。"""
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+
+    with pytest.raises(ValueError, match="没有可用的CUDA"):
+        val_runtime.run_or_launch_distributed_validation(
+            SimpleNamespace(), {**external_context, "device": "cuda:0,1"}, lambda args: args
+        )
 
 
 @pytest.mark.parametrize(("device", "message"), (([0], "LOCAL_WORLD_SIZE"), ([0, 0], "互不重复"),
