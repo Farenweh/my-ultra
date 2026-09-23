@@ -302,7 +302,7 @@ run_local() {
   mamba activate "$MAMBA_ENV"
 
   cd "$LOCAL_REPO_DIR"
-  python "$TRAIN_ENTRYPOINT" "$@"
+  exec python "$TRAIN_ENTRYPOINT" "$@"
 }
 
 print_remote_log_tail() {
