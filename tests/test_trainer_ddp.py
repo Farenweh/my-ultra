@@ -83,7 +83,8 @@ def _capture_ddp_kwargs(monkeypatch, model, compile, trainer_class=BaseTrainer):
 
 
 @pytest.mark.parametrize(("nccl_available", "expected_backend"), [(True, "nccl"), (False, "gloo")])
-def test_setup_ddp_selects_cuda_backend_without_hccl_probe(monkeypatch, nccl_available, expected_backend):
+@pytest.mark.parametrize("is_ascend", (False, True))
+def test_setup_ddp_selects_cuda_backend_without_hccl_probe(monkeypatch, nccl_available, expected_backend, is_ascend):
     trainer = object.__new__(BaseTrainer)
     trainer.args = SimpleNamespace(device="0,1")
     trainer.device = torch.device("cuda", 0)
@@ -95,7 +96,7 @@ def test_setup_ddp_selects_cuda_backend_without_hccl_probe(monkeypatch, nccl_ava
     )
 
     monkeypatch.setattr(trainer_module, "dist", fake_dist)
-    monkeypatch.setattr(trainer_module, "IS_ASCEND", False)
+    monkeypatch.setattr(trainer_module, "IS_ASCEND", is_ascend)
     monkeypatch.setattr(trainer_module, "LOCAL_RANK", 0)
     monkeypatch.setattr(trainer_module, "RANK", 0)
     monkeypatch.setattr(torch.cuda, "set_device", lambda index: None)

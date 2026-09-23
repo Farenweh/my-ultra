@@ -243,9 +243,9 @@ def get_cpu_info():
 
 
 @functools.lru_cache
-def get_gpu_info(index):
+def get_gpu_info(index, device_type=None):
     """Return a string with GPU or NPU information."""
-    if IS_ASCEND:
+    if (device_type or ("npu" if IS_ASCEND else "cuda")) == "npu":
         return f"Ascend NPU: {torch.npu.get_device_name(index)}"
     properties = torch.cuda.get_device_properties(index)
     return f"{properties.name}, {properties.total_memory / (1 << 20):.0f}MiB"
@@ -361,6 +361,8 @@ def select_device(device="", newline=False, verbose=True):
         return device
 
     s = f"Ultralytics {__version__} 🚀 Python-{PYTHON_VERSION} torch-{TORCH_VERSION} "
+    use_ascend = IS_ASCEND and not str(device).lower().startswith("cuda")
+    accelerator_type = "npu" if use_ascend else "cuda"
     device = parse_device(device)
 
     if device.startswith(("npu", "xpu")):
@@ -400,9 +402,9 @@ def select_device(device="", newline=False, verbose=True):
             LOGGER.info(s if newline else s.rstrip())
         return torch.device(device_type, indices[0])
 
-    env_var = "CUDA_VISIBLE_DEVICES" if not IS_ASCEND else "ASCEND_RT_VISIBLE_DEVICES"
-    is_available = torch.cuda.is_available if not IS_ASCEND else torch.npu.is_available
-    device_count = torch.cuda.device_count if not IS_ASCEND else torch.npu.device_count
+    env_var = "ASCEND_RT_VISIBLE_DEVICES" if use_ascend else "CUDA_VISIBLE_DEVICES"
+    is_available = torch.npu.is_available if use_ascend else torch.cuda.is_available
+    device_count = torch.npu.device_count if use_ascend else torch.cuda.device_count
 
     cpu = device == "cpu"
     mps = device in {"mps", "mps:0"}  # Apple Metal Performance Shaders (MPS)
@@ -412,16 +414,16 @@ def select_device(device="", newline=False, verbose=True):
             LOGGER.info(s)
             install = (
                 "See https://pytorch.org/get-started/locally/ for up-to-date torch install instructions if no "
-                f"{'CUDA' if not IS_ASCEND else 'Ascend'} devices are seen by torch.\n"
+                f"{'Ascend' if use_ascend else 'CUDA'} devices are seen by torch.\n"
                 if device_count() == 0
                 else ""
             )
             raise ValueError(
-                f"Invalid {'CUDA' if not IS_ASCEND else 'Ascend'} 'device={device}' requested."
-                f" Use 'device=cpu' or pass valid {'CUDA' if not IS_ASCEND else 'Ascend'} device(s) if available,"
+                f"Invalid {'Ascend' if use_ascend else 'CUDA'} 'device={device}' requested."
+                f" Use 'device=cpu' or pass valid {'Ascend' if use_ascend else 'CUDA'} device(s) if available,"
                 f" i.e. 'device=0' or 'device=0,1,2,3' for Multi-GPU.\n"
-                f"\ntorch.{'cuda' if not IS_ASCEND else 'npu'}.is_available(): {is_available()}"
-                f"\ntorch.{'cuda' if not IS_ASCEND else 'npu'}.device_count(): {device_count()}"
+                f"\ntorch.{'npu' if use_ascend else 'cuda'}.is_available(): {is_available()}"
+                f"\ntorch.{'npu' if use_ascend else 'cuda'}.device_count(): {device_count()}"
                 f"\nos.environ['{env_var}']: {os.environ.get(env_var)}\n"
                 f"{install}"
             )
@@ -430,14 +432,15 @@ def select_device(device="", newline=False, verbose=True):
         if device:
             devices = device.split(",")
         else:
-            current_device = torch.npu.current_device if IS_ASCEND else torch.cuda.current_device
+            current_device = torch.npu.current_device if use_ascend else torch.cuda.current_device
             devices = [str(current_device())]
         space = " " * len(s)
         for i, d in enumerate(devices):
-            s += f"{'' if i == 0 else space}{'Ascend' if IS_ASCEND else 'CUDA'}:{d} ({get_gpu_info(int(d))})\n"
-        arg = f"{'npu' if IS_ASCEND else 'cuda'}:{devices[0]}"
+            info = get_gpu_info(int(d), accelerator_type) if IS_ASCEND and not use_ascend else get_gpu_info(int(d))
+            s += f"{'' if i == 0 else space}{'Ascend' if use_ascend else 'CUDA'}:{d} ({info})\n"
+        arg = f"{accelerator_type}:{devices[0]}"
         if device and len(devices) == 1:
-            backend = torch.npu if IS_ASCEND else torch.cuda
+            backend = torch.npu if use_ascend else torch.cuda
             backend.set_device(int(devices[0]))  # multi-device DDP ranks pin their own device in _setup_ddp()
     elif mps and TORCH_2_0 and torch.backends.mps.is_available():
         # Prefer MPS if available

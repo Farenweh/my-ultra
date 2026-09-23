@@ -340,7 +340,6 @@ def _worker_context(config: dict[str, Any]) -> DistributedValContext:
         world_size=world_size,
         dist_module=dist,
         accelerator_resolver=get_torch_device_backend,
-        is_ascend=config["device_type"] == "npu",
     )
     store = _create_store(config, rank, world_size)
     dist.barrier()

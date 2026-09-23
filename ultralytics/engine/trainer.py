@@ -378,7 +378,6 @@ class BaseTrainer(CallbackHost):
             world_size=self.world_size,
             dist_module=dist,
             accelerator_resolver=get_torch_device_backend,
-            is_ascend=IS_ASCEND,
         )
 
     @staticmethod

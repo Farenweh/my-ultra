@@ -93,6 +93,29 @@ def test_select_device_preserves_existing_npu_visibility(monkeypatch):
     assert os.environ["ASCEND_RT_VISIBLE_DEVICES"] == "6,7"
 
 
+def test_select_device_explicit_cuda_on_ascend_host(monkeypatch):
+    """显式 CUDA 请求应始终使用 CUDA 后端。"""
+    selected = []
+    monkeypatch.setattr(torch_utils, "IS_ASCEND", True)
+    monkeypatch.setattr(torch_utils.torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch_utils.torch.cuda, "device_count", lambda: 1)
+    monkeypatch.setattr(torch_utils.torch.cuda, "set_device", selected.append)
+    monkeypatch.setattr(torch_utils, "get_gpu_info", lambda index, device_type=None: "测试设备")
+
+    assert str(torch_utils.select_device("cuda:0", verbose=False)) == "cuda:0"
+    assert selected == [0]
+
+
+def test_select_device_explicit_cuda_rejects_missing_cuda_on_ascend_host(monkeypatch):
+    """有 NPU 但无 CUDA 时，显式 CUDA 请求不能静默切换到 NPU。"""
+    monkeypatch.setattr(torch_utils, "IS_ASCEND", True)
+    monkeypatch.setattr(torch_utils.torch.cuda, "is_available", lambda: False)
+    monkeypatch.setattr(torch_utils.torch.cuda, "device_count", lambda: 0)
+
+    with pytest.raises(ValueError, match="Invalid CUDA"):
+        torch_utils.select_device("cuda:0", verbose=False)
+
+
 @pytest.mark.skipif(
     not hasattr(torch_utils.torch, "npu") or not torch_utils.torch.npu.is_available(),
     reason="NPU is not available",
