@@ -10,6 +10,7 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest import mock
 
+import numpy as np
 import pytest
 import torch
 
@@ -94,6 +95,17 @@ def test_task_aligned_assigner_npu_int8_mask_reduction():
     target_idx, foreground, _ = assigner.select_highest_overlaps(mask, overlaps, 2, overlaps)
     assert torch.equal(target_idx.cpu(), torch.tensor([[0, 1, 0]]))
     assert torch.equal(foreground.cpu(), torch.tensor([[True, True, False]]))
+
+
+def test_pose_yaml_prediction_has_keypoint_shape():
+    """从 YAML 构建的姿态模型应能直接完成推理。"""
+    model = YOLO("yolo26n-pose.yaml")
+    assert tuple(model.model.kpt_shape) == tuple(model.model.model[-1].kpt_shape)
+
+    results = model.predict(np.zeros((64, 64, 3), dtype=np.uint8), imgsz=64, device="cpu", verbose=False)
+
+    assert len(results) == 1
+    assert tuple(model.predictor.model.kpt_shape) == tuple(model.model.kpt_shape)
 
 
 def test_task_aligned_assigner_cuda_oom_retries_on_cpu(monkeypatch):
