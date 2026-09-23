@@ -187,8 +187,17 @@ class BaseTrainer(CallbackHost):
             self.args.augmentations = [A.to_dict(t) for t in self.args.augmentations]  # YAML/pickle-safe, DDP-safe
         if self.k8s_distributed:
             self.args.device = self._resolve_k8s_device()
-        self.args.device = parse_device(self.args.device)  # canonical string, resolves '-1' auto-selection once
-        self.device = select_device(self.args.device)
+        device_request = self.args.device
+        parsed_device = parse_device(device_request)  # 只解析一次 '-1' 自动选择
+        explicit_cuda = str(device_request).lower().startswith("cuda")
+        self.args.device = (f"cuda:{parsed_device}" if parsed_device else "cuda") if explicit_cuda else parsed_device
+        # 无编号的 torch.device('cuda') 表示当前 CUDA 设备，未必是 cuda:0。
+        selected_request = (
+            device_request
+            if isinstance(device_request, torch.device) and device_request.type == "cuda" and device_request.index is None
+            else self.args.device
+        )
+        self.device = select_device(selected_request)
         self.accelerator = get_torch_device_backend(self.device) if self.device.type not in {"cpu", "mps"} else None
         self.validator = None
         self.metrics = None

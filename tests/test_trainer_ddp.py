@@ -115,6 +115,33 @@ def test_build_train_pipeline_rechecks_distributed_batch():
         trainer._build_train_pipeline()
 
 
+@pytest.mark.parametrize(
+    ("requested", "expected"),
+    [
+        ("cuda:0", "cuda:0"),
+        ("cuda:0,1", "cuda:0,1"),
+        (torch.device("cuda", 1), "cuda:1"),
+        (torch.device("cuda"), "cuda"),
+    ],
+)
+def test_trainer_preserves_explicit_cuda_backend(monkeypatch, requested, expected):
+    """训练器传给设备选择器的请求应保留显式 CUDA 后端。"""
+    selected = []
+
+    def capture(device):
+        selected.append(str(device))
+        raise RuntimeError("已捕获设备请求")
+
+    monkeypatch.setattr(trainer_module, "is_k8s_training_enabled", lambda: False)
+    monkeypatch.setattr(BaseTrainer, "check_resume", lambda self, overrides: None)
+    monkeypatch.setattr(trainer_module, "select_device", capture)
+
+    with pytest.raises(RuntimeError, match="已捕获设备请求"):
+        BaseTrainer(overrides={"device": requested})
+
+    assert selected == [expected]
+
+
 @pytest.mark.parametrize(("nccl_available", "expected_backend"), [(True, "nccl"), (False, "gloo")])
 @pytest.mark.parametrize("is_ascend", (False, True))
 def test_setup_ddp_selects_cuda_backend_without_hccl_probe(monkeypatch, nccl_available, expected_backend, is_ascend):
