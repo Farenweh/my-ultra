@@ -414,6 +414,8 @@ class TaskAlignedAssigner(nn.Module):
             topk_idx.scatter_(-1, max_overlaps_idx, 1.0)
             mask_pos *= topk_idx
         # Each anchor now serves at most one gt, so the column max is both its foreground flag and its gt index
+        if mask_pos.device.type == "npu":
+            mask_pos = mask_pos.bool()  # NPU 的 max 不支持 int8
         fg_mask, target_gt_idx = mask_pos.max(-2)  # (b, h*w)
         return target_gt_idx, fg_mask, mask_pos
 

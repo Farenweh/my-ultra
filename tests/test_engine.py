@@ -42,7 +42,7 @@ OPTION_NAMES = (*ASCEND_OPTION_NAMES, "USE_BATCHED_HUNGARIAN")
 def _require_npu_device():
     """返回 NPU 测试设备；无 NPU 时跳过对应测试。"""
     if not hasattr(torch, "npu") or not torch.npu.is_available():
-        pytest.skip("NPU is required for this EMA test")
+        pytest.skip("需要 NPU 设备")
     torch.npu.set_device(0)
     return torch.device("npu:0")
 
@@ -83,6 +83,17 @@ def test_task_aligned_assigner_masks_invalid_nan_metrics_before_normalization():
 
     assert torch.isfinite(target_scores).all()
     assert torch.equal(fg_mask, torch.tensor([[True, False, False]]))
+
+
+def test_task_aligned_assigner_npu_int8_mask_reduction():
+    """NPU 正样本掩码的归约应避开不支持的 int8 max。"""
+    device = _require_npu_device()
+    assigner = TaskAlignedAssigner(topk=1, num_classes=2)
+    mask = torch.tensor([[[1, 0, 0], [0, 1, 0]]], dtype=torch.int8, device=device)
+    overlaps = torch.ones(mask.shape, device=device)
+    target_idx, foreground, _ = assigner.select_highest_overlaps(mask, overlaps, 2, overlaps)
+    assert torch.equal(target_idx.cpu(), torch.tensor([[0, 1, 0]]))
+    assert torch.equal(foreground.cpu(), torch.tensor([[True, True, False]]))
 
 
 def test_task_aligned_assigner_cuda_oom_retries_on_cpu(monkeypatch):
