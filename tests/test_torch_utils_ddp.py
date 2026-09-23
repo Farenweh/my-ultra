@@ -39,11 +39,13 @@ def test_select_cpu_does_not_hide_npu_from_later_work(monkeypatch):
     assert os.environ["ASCEND_RT_VISIBLE_DEVICES"] == visible
 
 
-def test_select_device_npu_list_uses_visible_device_mapping(monkeypatch):
+def test_select_device_npu_list_uses_logical_device_indices(monkeypatch):
+    selected = []
     fake_npu = types.SimpleNamespace(
         is_available=lambda: True,
-        device_count=lambda: 1,
+        device_count=lambda: 2,
         get_device_name=lambda index: "Ascend910B",
+        set_device=selected.append,
     )
 
     monkeypatch.delenv("ASCEND_RT_VISIBLE_DEVICES", raising=False)
@@ -51,8 +53,9 @@ def test_select_device_npu_list_uses_visible_device_mapping(monkeypatch):
     monkeypatch.setattr(torch_utils.torch, "npu", fake_npu, raising=False)
     device = torch_utils.select_device([1], verbose=False)
 
-    assert os.environ["ASCEND_RT_VISIBLE_DEVICES"] == "1"
-    assert str(device) == "npu:0"
+    assert "ASCEND_RT_VISIBLE_DEVICES" not in os.environ
+    assert str(device) == "npu:1"
+    assert selected == [1]
 
 
 @pytest.mark.parametrize("device_request", ([0, 1], (0, 1), "0, 1", "0,1"))
@@ -61,6 +64,7 @@ def test_select_device_unprefixed_list_routes_to_npu(monkeypatch, device_request
         is_available=lambda: True,
         device_count=lambda: 2,
         get_device_name=lambda index: f"Ascend910B-{index}",
+        set_device=lambda index: None,
     )
 
     monkeypatch.delenv("ASCEND_RT_VISIBLE_DEVICES", raising=False)
@@ -69,8 +73,24 @@ def test_select_device_unprefixed_list_routes_to_npu(monkeypatch, device_request
     device = torch_utils.select_device(device_request, verbose=False)
 
     assert torch_utils.parse_device(device_request) == "0,1"
-    assert os.environ["ASCEND_RT_VISIBLE_DEVICES"] == "0,1"
+    assert "ASCEND_RT_VISIBLE_DEVICES" not in os.environ
     assert str(device) == "npu:0"
+
+
+def test_select_device_preserves_existing_npu_visibility(monkeypatch):
+    """已设置物理卡可见范围时，逻辑卡号不得覆盖该范围。"""
+    fake_npu = types.SimpleNamespace(
+        is_available=lambda: True,
+        device_count=lambda: 2,
+        get_device_name=lambda index: f"Ascend910B-{index}",
+        set_device=lambda index: None,
+    )
+    monkeypatch.setenv("ASCEND_RT_VISIBLE_DEVICES", "6,7")
+    monkeypatch.setattr(torch_utils, "IS_ASCEND", True)
+    monkeypatch.setattr(torch_utils.torch, "npu", fake_npu, raising=False)
+
+    assert str(torch_utils.select_device("1", verbose=False)) == "npu:1"
+    assert os.environ["ASCEND_RT_VISIBLE_DEVICES"] == "6,7"
 
 
 @pytest.mark.skipif(

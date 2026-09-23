@@ -348,11 +348,11 @@ def select_device(device="", newline=False, verbose=True):
         device(type='cpu')
 
     Notes:
-        CUDA indices are torch device indices, which reflect any externally set CUDA_VISIBLE_DEVICES. Selecting CPU
-        never modifies CUDA_VISIBLE_DEVICES or ASCEND_RT_VISIBLE_DEVICES, so a process may later initialize an
-        accelerator safely. An explicit single-GPU request is made the default CUDA device with torch.cuda.set_device()
-        so that indexless 'cuda' operations land on it, while default '' requests (resolved to the current device) and
-        multi-GPU requests (DDP ranks pin their own device in trainer._setup_ddp()) leave the current device untouched.
+        CUDA and NPU indices are torch device indices, which reflect any externally set visibility restriction.
+        Selecting a device never modifies CUDA_VISIBLE_DEVICES or ASCEND_RT_VISIBLE_DEVICES, so a process may later
+        initialize an accelerator safely. An explicit single-device request sets the current accelerator device,
+        while default '' requests (resolved to the current device) and multi-device requests (DDP ranks pin their own
+        device in trainer._setup_ddp()) leave the current device untouched.
     """
     if isinstance(device, torch.device):
         if device.type not in {"cpu", "cuda", "npu", "xpu"}:
@@ -407,13 +407,7 @@ def select_device(device="", newline=False, verbose=True):
     cpu = device == "cpu"
     mps = device in {"mps", "mps:0"}  # Apple Metal Performance Shaders (MPS)
     if not cpu and not mps and device:  # non-cpu device requested
-        if IS_ASCEND:
-            os.environ[env_var] = device  # must be set before querying NPU availability and count
-        valid = (
-            device_count() >= len(device.split(","))
-            if IS_ASCEND
-            else all(x.isdigit() and int(x) < device_count() for x in device.split(","))
-        )
+        valid = all(x.isdigit() and int(x) < device_count() for x in device.split(","))
         if not (is_available() and valid):
             LOGGER.info(s)
             install = (
@@ -440,11 +434,11 @@ def select_device(device="", newline=False, verbose=True):
             devices = [str(current_device())]
         space = " " * len(s)
         for i, d in enumerate(devices):
-            index = i if IS_ASCEND and device else int(d)
-            s += f"{'' if i == 0 else space}{'Ascend' if IS_ASCEND else 'CUDA'}:{d} ({get_gpu_info(index)})\n"
-        arg = f"{'npu' if IS_ASCEND else 'cuda'}:{0 if IS_ASCEND and device else devices[0]}"
-        if device and len(devices) == 1 and not IS_ASCEND:
-            torch.cuda.set_device(int(devices[0]))  # multi-GPU DDP ranks each pin theirs in _setup_ddp()
+            s += f"{'' if i == 0 else space}{'Ascend' if IS_ASCEND else 'CUDA'}:{d} ({get_gpu_info(int(d))})\n"
+        arg = f"{'npu' if IS_ASCEND else 'cuda'}:{devices[0]}"
+        if device and len(devices) == 1:
+            backend = torch.npu if IS_ASCEND else torch.cuda
+            backend.set_device(int(devices[0]))  # multi-device DDP ranks pin their own device in _setup_ddp()
     elif mps and TORCH_2_0 and torch.backends.mps.is_available():
         # Prefer MPS if available
         s += f"MPS ({get_cpu_info()})\n"
