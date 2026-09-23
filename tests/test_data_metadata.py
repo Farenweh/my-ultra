@@ -319,7 +319,12 @@ def test_verify_dataset_api_and_dataloader_prefetch_regression(tmp_path):
     try:
         assert result["train"]["images"] == 1
         assert loader.prefetch_factor == 4
-        assert loader.iterator is not None  # InfiniteDataLoader继续持有并复用同一worker迭代器
+        assert loader.iterator is None  # 首次迭代前不启动worker
+        next(iter(loader))
+        iterator = loader.iterator
+        assert iterator is not None
+        next(iter(loader))
+        assert loader.iterator is iterator  # 后续迭代复用同一worker迭代器
     finally:
         loader.close()
 
