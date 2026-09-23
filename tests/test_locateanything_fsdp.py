@@ -49,7 +49,6 @@ def _fsdp2_checkpoint_worker(rank: int, world_size: int, port: int, checkpoint: 
             world_size=world_size,
             dist_module=dist,
             accelerator_resolver=get_torch_device_backend,
-            is_ascend=True,
         )
     else:
         dist.init_process_group("gloo", rank=rank, world_size=world_size)

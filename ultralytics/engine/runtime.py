@@ -59,7 +59,6 @@ def initialize_distributed_runtime(
     world_size: int,
     dist_module: Any,
     accelerator_resolver,
-    is_ascend: bool,
     timeout_seconds: int = 10800,
 ) -> tuple[torch.device, Any, str]:
     """初始化CUDA、Ascend或XPU分布式运行环境并返回当前设备。"""
@@ -81,7 +80,7 @@ def initialize_distributed_runtime(
 
     backend = (
         "hccl"
-        if device_type == "npu" or is_ascend
+        if device_type == "npu"
         else "xccl"
         if device_type == "xpu"
         else "nccl"

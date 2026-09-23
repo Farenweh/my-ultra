@@ -215,7 +215,6 @@ class LocateAnythingTrainer(CallbackHost):
                 world_size=self.world_size,
                 dist_module=dist,
                 accelerator_resolver=get_torch_device_backend,
-                is_ascend=self.device_type == "npu",
             )
             if device.index != physical_id:
                 raise RuntimeError("分布式设备映射不一致")

@@ -1474,7 +1474,6 @@ def _run_distributed_worker(args: Any, model: Any = None) -> LocateMetrics | Non
         world_size=world_size,
         dist_module=dist,
         accelerator_resolver=get_torch_device_backend,
-        is_ascend=True,
     )
     try:
         output_dir = _resolve_worker_output(args)
