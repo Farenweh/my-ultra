@@ -322,17 +322,12 @@ class BaseTrainer(CallbackHost):
         """Execute the training process, using DDP subprocess for multi-GPU or direct training for single-GPU."""
         # Run subprocess if DDP training, else train normally
         try:
+            self._validate_distributed_batch_size()
             if self.ddp:
                 # Argument checks
                 if self.args.rect:
                     LOGGER.warning("'rect=True' is incompatible with Multi-GPU training, setting 'rect=False'")
                     self.args.rect = False
-                if self.args.batch < 1.0:
-                    raise ValueError(
-                        "AutoBatch with batch<1 not supported for Multi-GPU training, "
-                        f"please specify a valid batch size multiple of GPU count {self.world_size}, i.e. batch={self.world_size * 8}."
-                    )
-
                 cmd, file = None, None
                 try:
                     if self.k8s_launch_config:
@@ -354,6 +349,18 @@ class BaseTrainer(CallbackHost):
         if not self.ddp:
             self.run_callbacks("teardown")
             self._teardown_train_resources()
+
+    def _validate_distributed_batch_size(self):
+        """确保全局 batch 可以平均分给全部分布式进程。"""
+        if self.world_size > 1 and (
+            isinstance(self.batch_size, bool)
+            or not isinstance(self.batch_size, int)
+            or self.batch_size < self.world_size
+            or self.batch_size % self.world_size
+        ):
+            raise ValueError(
+                f"分布式训练 batch={self.batch_size!r} 必须是不小于 WORLD_SIZE={self.world_size} 的整数倍。"
+            )
 
     def _setup_scheduler(self):
         """Initialize training learning rate scheduler."""
@@ -447,6 +454,7 @@ class BaseTrainer(CallbackHost):
 
     def _build_train_pipeline(self):
         """Build dataloaders and update optimizer settings for the current batch size."""
+        self._validate_distributed_batch_size()
         batch_size = self.batch_size // max(self.world_size, 1)
         dataloader_rank = RANK if self.world_size > 1 else -1
         self.train_loader = self.get_dataloader(

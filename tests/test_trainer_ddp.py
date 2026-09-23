@@ -82,6 +82,39 @@ def _capture_ddp_kwargs(monkeypatch, model, compile, trainer_class=BaseTrainer):
     return captured
 
 
+@pytest.mark.parametrize("ddp", (False, True))
+@pytest.mark.parametrize("batch", (0.5, 1, 3, 2.0, True))
+def test_train_rejects_invalid_distributed_batch_before_launch(monkeypatch, ddp, batch):
+    """父进程和外部 torchrun worker 都应拒绝不能均分的全局 batch。"""
+    trainer = object.__new__(BaseTrainer)
+    trainer.world_size = 2
+    trainer.batch_size = batch
+    trainer.ddp = ddp
+    trainer._do_train = lambda: pytest.fail("不应开始训练")
+    monkeypatch.setattr(trainer_module, "unset_deterministic", lambda: None)
+
+    with pytest.raises(ValueError, match="WORLD_SIZE=2"):
+        trainer.train()
+
+
+@pytest.mark.parametrize("batch", (2, 4, 8))
+def test_distributed_batch_accepts_exact_multiples(batch):
+    trainer = object.__new__(BaseTrainer)
+    trainer.world_size = 2
+    trainer.batch_size = batch
+    trainer._validate_distributed_batch_size()
+
+
+def test_build_train_pipeline_rechecks_distributed_batch():
+    """重建 dataloader 时也应防止向下取整丢失样本。"""
+    trainer = object.__new__(BaseTrainer)
+    trainer.world_size = 3
+    trainer.batch_size = 4
+
+    with pytest.raises(ValueError, match="WORLD_SIZE=3"):
+        trainer._build_train_pipeline()
+
+
 @pytest.mark.parametrize(("nccl_available", "expected_backend"), [(True, "nccl"), (False, "gloo")])
 @pytest.mark.parametrize("is_ascend", (False, True))
 def test_setup_ddp_selects_cuda_backend_without_hccl_probe(monkeypatch, nccl_available, expected_backend, is_ascend):
