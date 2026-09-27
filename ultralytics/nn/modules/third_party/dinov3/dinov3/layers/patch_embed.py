@@ -6,7 +6,32 @@
 import math
 from typing import Callable, Tuple, Union
 
+import torch.nn.functional as F
 from torch import Tensor, nn
+
+
+def project_nonoverlapping_patches(x: Tensor, projection: nn.Conv2d) -> Tensor:
+    """将互不重叠的卷积 patch 等价展开为线性投影，保留原卷积参数及其梯度。"""
+    batch, channels, height, width = x.shape
+    ph, pw = projection.kernel_size
+    grid_h, grid_w = height // ph, width // pw
+    if grid_h < 1 or grid_w < 1:
+        raise ValueError("输入图像的高宽不能小于 patch 的高宽。")
+    # 与无 padding 的原卷积一致，忽略右侧和底部不足一个 patch 的像素。
+    patches = x[..., : grid_h * ph, : grid_w * pw].reshape(batch, channels, grid_h, ph, grid_w, pw)
+    patches = patches.permute(0, 2, 4, 1, 3, 5).reshape(batch, grid_h * grid_w, channels * ph * pw)
+    return F.linear(patches, projection.weight.flatten(1), projection.bias)
+
+
+class _PatchProjection(nn.Conv2d):
+    """昇腾始终使用等价线性投影，保留 Conv2d 的参数和模块 hook。"""
+
+    def _conv_forward(self, x: Tensor, weight: Tensor, bias: Tensor | None) -> Tensor:
+        if x.device.type == "npu":
+            ph, pw = self.kernel_size
+            tokens = project_nonoverlapping_patches(x, self)
+            return tokens.transpose(1, 2).reshape(x.shape[0], self.out_channels, x.shape[2] // ph, x.shape[3] // pw)
+        return super()._conv_forward(x, weight, bias)
 
 
 def make_2tuple(x):
@@ -58,15 +83,16 @@ class PatchEmbed(nn.Module):
 
         self.flatten_embedding = flatten_embedding
 
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_HW, stride=patch_HW)
+        self.proj = _PatchProjection(in_chans, embed_dim, kernel_size=patch_HW, stride=patch_HW)
         self.norm = norm_layer(embed_dim) if norm_layer else nn.Identity()
 
-    def forward(self, x: Tensor) -> Tensor:
-        _, _, H, W = x.shape
-        # patch_H, patch_W = self.patch_size
-        # assert H % patch_H == 0, f"Input image height {H} is not a multiple of patch height {patch_H}"
-        # assert W % patch_W == 0, f"Input image width {W} is not a multiple of patch width: {patch_W}"
+    def __setstate__(self, state):
+        """旧完整 checkpoint 的 Conv2d 原位升级，保留参数对象、状态与 hook。"""
+        super().__setstate__(state)
+        if type(self.proj) is nn.Conv2d:
+            self.proj.__class__ = _PatchProjection
 
+    def forward(self, x: Tensor) -> Tensor:
         x = self.proj(x)  # B C H W
         H, W = x.size(2), x.size(3)
         x = x.flatten(2).transpose(1, 2)  # B HW C

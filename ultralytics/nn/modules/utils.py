@@ -172,8 +172,10 @@ def multi_scale_deformable_attn_pytorch(
     sampling_locations: torch.Tensor,
     attention_weights: torch.Tensor,
     _fastpath_cache: dict | None = None,
+    *,
+    multi_scale: bool = True,
 ) -> torch.Tensor:
-    """Implement multi-scale deformable attention in PyTorch.
+    """统一执行可变形注意力，封装 MMCV 单尺度、通用加速和 PyTorch 回退路径。
 
     Folds the (num_levels, num_points) axes into a single num_total_points axis so every traced tensor stays at rank <=
     5, the maximum rank supported by CoreML's MIL converter. Numerically equivalent to the rank-6 reference
@@ -187,6 +189,7 @@ def multi_scale_deformable_attn_pytorch(
         attention_weights (torch.Tensor): Attention weights with shape (bs, num_queries, num_heads, num_levels *
             num_points).
         _fastpath_cache (dict, optional): Private per-MSDeformAttn metadata cache.
+        multi_scale (bool): True 使用通用路径；False 要求单尺度，并在昇腾上优先使用 MMCV 单尺度接口。
 
     Returns:
         (torch.Tensor): Output tensor with shape (bs, num_queries, num_heads * embed_dims).
@@ -197,9 +200,22 @@ def multi_scale_deformable_attn_pytorch(
     bs, _, num_heads, embed_dims = value.shape
     _, num_queries, _, num_total_points, _ = sampling_locations.shape
     num_levels = len(value_spatial_shapes)
+    if not multi_scale and num_levels != 1:
+        raise ValueError("multi_scale=False 要求只提供一个特征尺度。")
     if num_total_points % num_levels:
         raise ValueError(f"num_total_points={num_total_points} must be divisible by num_levels={num_levels}.")
     num_points = num_total_points // num_levels
+    if not multi_scale and IS_ASCEND and value.device.type == "npu":
+        try:
+            from mmcv.ops import single_scale_deformable_attn
+        except ImportError:
+            pass  # 标准 MMCV 未提供此接口时，继续使用已有的通用路径。
+        else:
+            output = single_scale_deformable_attn(
+                value, value_spatial_shapes[0], sampling_locations, attention_weights
+            )
+            if output is not None:
+                return output
     _raise_if_ascend_bf16_grid_sample(value, sampling_locations)
 
     # Ascend fast path via MMCV fused op, fallback to Ultralytics handwritten path when unavailable/unsupported.
