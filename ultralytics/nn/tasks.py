@@ -51,6 +51,7 @@ from ultralytics.nn.modules import (
     Depth,
     Detect,
     DeformableTransformerEncoder,
+    DeformableQueryFeatureDecoder,
     DWConv,
     DWConvTranspose2d,
     Focus,
@@ -2366,6 +2367,13 @@ def parse_model(d, ch, verbose=True):
             hidden_dim = args[0] if args else 256
             args = [input_ch, *args]
             c2 = [hidden_dim] * len(input_ch)
+        elif m is DeformableQueryFeatureDecoder:
+            if not isinstance(f, list) or len(f) != 2:
+                raise ValueError("查询特征解码器的from必须依次指定原图和DINOv3特征两路。")
+            c2 = args[0] if args else 256
+            patch_size = args[6] if len(args) > 6 else 4
+            cstride = strides[f[0]] * patch_size
+            args = [input_channels(f), *args]
         elif m is RTDETRDecoder:  # special case, channels arg must be passed in index 1
             args.insert(1, input_channels(f))
         elif m is CBLinear:

@@ -24,6 +24,8 @@ __all__ = (
     "DeformableTransformerEncoderLayer",
     "DeformableTransformerDecoder",
     "DeformableTransformerDecoderLayer",
+    "DeformableQueryFeatureDecoder",
+    "DeformableQueryFeatureDecoderLayer",
     "LayerNorm2d",
     "MLPBlock",
     "MSDeformAttn",
@@ -632,12 +634,13 @@ class MSDeformAttn(nn.Module):
                 or self._cached_offset_normalizer.device != query.device
             ):
                 self._cached_value_shapes = value_shapes_tuple
-                self._cached_offset_normalizer = (
-                    torch.as_tensor(value_shapes_tuple, dtype=query.dtype, device=query.device)
-                    .flip(-1)[:, None, :]
-                    .expand(-1, self.n_points, -1)
-                    .reshape(n_total_points, 2)
-                )
+                with torch.inference_mode(False), torch.no_grad():
+                    self._cached_offset_normalizer = (
+                        torch.as_tensor(value_shapes_tuple, dtype=query.dtype, device=query.device)
+                        .flip(-1)[:, None, :]
+                        .expand(-1, self.n_points, -1)
+                        .reshape(n_total_points, 2)
+                    )
             offset_normalizer = self._cached_offset_normalizer
             sampling_offsets = sampling_offsets / offset_normalizer
             if num_reference_levels == 1:
@@ -791,6 +794,147 @@ class DeformableTransformerEncoder(nn.Module):
             outputs.append(output.contiguous())
             start += tokens
         return outputs
+
+
+class DeformableQueryFeatureDecoderLayer(nn.Module):
+    """对高分辨率查询依次执行可变形自注意力、交叉注意力和前馈网络。"""
+
+    def __init__(
+        self,
+        hidden_dim: int = 256,
+        n_heads: int = 8,
+        d_ffn: int = 1024,
+        dropout: float = 0.0,
+        n_points: int = 4,
+    ):
+        super().__init__()
+        self.self_attn = MSDeformAttn(hidden_dim, 1, n_heads, n_points)
+        self.cross_attn = MSDeformAttn(hidden_dim, 1, n_heads, n_points)
+        self.linear1 = nn.Linear(hidden_dim, d_ffn)
+        self.linear2 = nn.Linear(d_ffn, hidden_dim)
+        self.dropout1 = nn.Dropout(dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.dropout3 = nn.Dropout(dropout)
+        self.dropout4 = nn.Dropout(dropout)
+        self.norm1 = nn.LayerNorm(hidden_dim)
+        self.norm2 = nn.LayerNorm(hidden_dim)
+        self.norm3 = nn.LayerNorm(hidden_dim)
+
+    def forward(
+        self,
+        query: torch.Tensor,
+        memory: torch.Tensor,
+        query_shape: list[int],
+        memory_shape: list[int],
+        reference_points: torch.Tensor,
+        query_pos: torch.Tensor,
+    ) -> torch.Tensor:
+        """在同一归一化图像坐标系中查询 1/4 和 1/16 特征。"""
+        attended = self.self_attn(query + query_pos, reference_points, query, [query_shape])
+        query = self.norm1(query + self.dropout1(attended))
+        attended = self.cross_attn(query + query_pos, reference_points, memory, [memory_shape])
+        query = self.norm2(query + self.dropout2(attended))
+        feedforward = self.linear2(self.dropout3(F.relu(self.linear1(query))))
+        return self.norm3(query + self.dropout4(feedforward))
+
+
+class DeformableQueryFeatureDecoder(nn.Module):
+    """从原图 patch 查询 DINOv3 特征，返回可供检测头使用的 1/4 特征图。"""
+
+    def __init__(
+        self,
+        ch: list[int],
+        hidden_dim: int = 256,
+        num_layers: int = 6,
+        n_heads: int = 8,
+        d_ffn: int = 1024,
+        dropout: float = 0.0,
+        n_points: int = 4,
+        patch_size: int = 4,
+    ):
+        super().__init__()
+        if len(ch) != 2:
+            raise ValueError(f"查询特征解码器需要[原图, DINOv3特征]两路输入，实际得到{len(ch)}路。")
+        if hidden_dim % n_heads or hidden_dim % 4:
+            raise ValueError("查询特征维度必须同时能被注意力头数和4整除。")
+        if num_layers < 1 or patch_size < 1 or 16 % patch_size:
+            raise ValueError("解码层数必须大于0，patch size必须是16的正因数。")
+        self.hidden_dim = hidden_dim
+        self.patch_size = patch_size
+        self.patch_embed = nn.Conv2d(ch[0], hidden_dim, patch_size, stride=patch_size)
+        self.memory_proj = nn.Sequential(
+            nn.Conv2d(ch[1], hidden_dim, 1, bias=False), nn.BatchNorm2d(hidden_dim)
+        )
+        self.layers = nn.ModuleList(
+            DeformableQueryFeatureDecoderLayer(hidden_dim, n_heads, d_ffn, dropout, n_points)
+            for _ in range(num_layers)
+        )
+        self._query_geometry_cache = None
+
+    def _apply(self, fn):
+        """设备和精度迁移时丢弃非持久缓存，兼容旧版完整模型权重。"""
+        self._query_geometry_cache = None
+        return super()._apply(fn)
+
+    def __getstate__(self):
+        """运行时几何缓存不进入完整模型 checkpoint 或 EMA 深拷贝。"""
+        state = super().__getstate__().copy()
+        state.pop("_query_geometry_cache", None)
+        return state
+
+    def _query_geometry(self, h: int, w: int, like: torch.Tensor):
+        """只缓存最近一个网格；缓存不进入 state_dict 或 EMA 参数列表。"""
+        if torch.jit.is_tracing() or torch.onnx.is_in_onnx_export():
+            reference = self._reference_points(h, w, like)
+            return reference, self._position_embedding(reference, self.hidden_dim)
+        key = (h, w, like.device, like.dtype, self.hidden_dim)
+        cached = getattr(self, "_query_geometry_cache", None)
+        if cached is None or cached[0] != key:
+            with torch.inference_mode(False), torch.no_grad():
+                reference = self._reference_points(h, w, like)
+                position = self._position_embedding(reference, self.hidden_dim)
+            cached = (key, reference, position)
+            self._query_geometry_cache = cached
+        return cached[1:]
+
+    @staticmethod
+    def _reference_points(h: int, w: int, like: torch.Tensor) -> torch.Tensor:
+        """按 BCHW 展平顺序生成 (x, y) 归一化像素中心。"""
+        y = (torch.arange(h, device=like.device, dtype=torch.float32) + 0.5) / h
+        x = (torch.arange(w, device=like.device, dtype=torch.float32) + 0.5) / w
+        grid_y, grid_x = torch.meshgrid(y, x, indexing="ij") if TORCH_1_11 else torch.meshgrid(y, x)
+        return torch.stack((grid_x, grid_y), dim=-1).reshape(1, h * w, 1, 2).to(dtype=like.dtype)
+
+    @staticmethod
+    def _position_embedding(reference_points: torch.Tensor, hidden_dim: int) -> torch.Tensor:
+        """根据查询网格生成与其展平顺序一致的二维正弦位置编码。"""
+        coordinates = reference_points.squeeze(2).float() * (2.0 * math.pi)
+        frequencies = torch.arange(hidden_dim // 4, device=coordinates.device, dtype=torch.float32)
+        frequencies = 1.0 / (10000.0 ** (frequencies / (hidden_dim // 4)))
+        x = coordinates[..., 0:1] * frequencies
+        y = coordinates[..., 1:2] * frequencies
+        return torch.cat((x.sin(), x.cos(), y.sin(), y.cos()), dim=-1).to(dtype=reference_points.dtype)
+
+    def forward(self, x: list[torch.Tensor]) -> torch.Tensor:
+        """接收原图和 C3k2 特征，返回 1/4 特征图。"""
+        if not isinstance(x, (list, tuple)) or len(x) != 2:
+            raise ValueError("查询特征解码器需要[原图, DINOv3特征]两路输入。")
+        image, memory_map = x
+        if image.shape[-2] % 16 or image.shape[-1] % 16:
+            raise ValueError("原图高宽须为16的倍数，以便对齐DINOv3特征。")
+        query_map = self.patch_embed(image)
+        memory_map = self.memory_proj(memory_map)
+        batch, _, query_h, query_w = query_map.shape
+        memory_h, memory_w = memory_map.shape[-2:]
+        ratio = 16 // self.patch_size
+        if (query_h, query_w) != (memory_h * ratio, memory_w * ratio):
+            raise ValueError("原图patch特征与DINOv3 stride=16特征尺寸未对齐。")
+        query = query_map.flatten(2).transpose(1, 2)
+        memory = memory_map.flatten(2).transpose(1, 2)
+        reference_points, query_pos = self._query_geometry(query_h, query_w, query)
+        for layer in self.layers:
+            query = layer(query, memory, [query_h, query_w], [memory_h, memory_w], reference_points, query_pos)
+        return query.transpose(1, 2).reshape(batch, self.hidden_dim, query_h, query_w).contiguous()
 
 
 class DeformableTransformerDecoderLayer(nn.Module):
