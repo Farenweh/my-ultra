@@ -1,0 +1,16 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+# DINOv3-L + 1/4 查询特征解码器，使用 1/4 和 1/16 特征进行 RT-DETR 检测。
+
+nc: 80
+scales:
+  l: [1.00, 1.00, 1024]
+
+backbone:
+  # 保留原图，以便 C3k2 之后的查询特征解码器执行 patch=4 嵌入。
+  - [-1, 1, nn.Identity, []] # 0 原图
+  - [-1, 1, DINOv3ViT, ["l"]] # 1 stride 16
+
+head:
+  - [-1, 2, C3k2, [1024, True]] # 2 stride 16
+  - [[0, 2], 1, DeformableQueryFeatureDecoder, [256, 6, 8, 1024, 0.0, 4, 4]] # 3 stride 4
+  - [[3, 2], 1, RTDETRDecoder, [nc]] # 4 stride 4 + stride 16
