@@ -582,6 +582,8 @@ class MSDeformAttn(nn.Module):
         value: torch.Tensor,
         value_shapes: list,
         value_mask: torch.Tensor | None = None,
+        *,
+        multi_scale: bool = True,
     ) -> torch.Tensor:
         """Perform forward pass for multiscale deformable attention.
 
@@ -594,6 +596,7 @@ class MSDeformAttn(nn.Module):
             value_shapes (list): List with shape [n_levels, 2], [(H_0, W_0), (H_1, W_1), ..., (H_{L-1}, W_{L-1})].
             value_mask (torch.Tensor, optional): Mask tensor with shape [bs, value_length], True for padding elements,
                 False for non-padding elements.
+            multi_scale (bool): True 使用支持单/多尺度的通用路径；False 使用单尺度路径，要求 n_levels=1。
 
         Returns:
             (torch.Tensor): Output tensor with shape [bs, Length_{query}, C].
@@ -601,6 +604,8 @@ class MSDeformAttn(nn.Module):
         References:
             https://github.com/PaddlePaddle/PaddleDetection/blob/develop/ppdet/modeling/transformers/deformable_transformer.py
         """
+        if not multi_scale and (self.n_levels != 1 or len(value_shapes) != 1):
+            raise ValueError("multi_scale=False 要求 n_levels=1 且只提供一个特征尺度。")
         self._ensure_runtime_caches()
         bs, len_q = query.shape[:2]
         len_v = value.shape[1]
@@ -659,7 +664,12 @@ class MSDeformAttn(nn.Module):
         else:
             raise ValueError(f"Last dim of reference_points must be 2 or 4, but got {num_points}.")
         output = multi_scale_deformable_attn_pytorch(
-            value, value_shapes, sampling_locations, attention_weights, self._msda_fastpath_cache
+            value,
+            value_shapes,
+            sampling_locations,
+            attention_weights,
+            self._msda_fastpath_cache,
+            multi_scale=multi_scale,
         )
         return self.output_proj(output)
 
@@ -830,9 +840,9 @@ class DeformableQueryFeatureDecoderLayer(nn.Module):
         query_pos: torch.Tensor,
     ) -> torch.Tensor:
         """在同一归一化图像坐标系中查询 1/4 和 1/16 特征。"""
-        attended = self.self_attn(query + query_pos, reference_points, query, [query_shape])
+        attended = self.self_attn(query + query_pos, reference_points, query, [query_shape], multi_scale=False)
         query = self.norm1(query + self.dropout1(attended))
-        attended = self.cross_attn(query + query_pos, reference_points, memory, [memory_shape])
+        attended = self.cross_attn(query + query_pos, reference_points, memory, [memory_shape], multi_scale=False)
         query = self.norm2(query + self.dropout2(attended))
         feedforward = self.linear2(self.dropout3(F.relu(self.linear1(query))))
         return self.norm3(query + self.dropout4(feedforward))
