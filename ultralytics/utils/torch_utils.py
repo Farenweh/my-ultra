@@ -105,6 +105,30 @@ def get_torch_device_backend(device: torch.device | str):
     return torch.get_device_module(device_type) if hasattr(torch, "get_device_module") else getattr(torch, device_type)
 
 
+@torch.no_grad()
+def prepare_npu_fused_optimizer(model: nn.Module) -> int:
+    """为非 C0 对齐的 BN 参数保留私有格式空间，防止融合后相邻参数被 padding 清零覆盖。"""
+    parameters = [
+        parameter
+        for module in unwrap_model(model).modules()
+        if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d)) and module.num_features % 16
+        for parameter in (module.weight, module.bias)
+        if parameter is not None and parameter.requires_grad and parameter.device.type == "npu"
+    ]
+    if not parameters:
+        return 0
+
+    import torch_npu
+
+    converted = 0
+    for parameter in parameters:
+        if torch_npu.get_npu_format(parameter) != 3:  # ACL_FORMAT_NC1HWC0
+            # 保留 Parameter 身份；应在 DDP 构造、首次融合及优化器状态加载前准备物理布局。
+            parameter.data = torch_npu.npu_format_cast(parameter.data, 3)
+            converted += 1
+    return converted
+
+
 @contextmanager
 def torch_distributed_zero_first(local_rank: int, global_rank: bool = False):
     """Ensure all processes in distributed training wait for the local master (rank 0) to complete a task first."""
@@ -1145,8 +1169,9 @@ class ModelEMA:
                 v *= decay
                 v += (1 - decay) * msd[k].detach()
                 # assert v.dtype == msd[k].dtype == torch.float32, f'{k}: EMA {v.dtype},  model {msd[k].dtype}'
+        model_buffers = dict(unwrap_model(model).named_buffers())
         for k, v in self.ema.named_buffers():
-            v.copy_(msd[k].detach())
+            v.copy_(model_buffers[k].detach())
 
     def update_attr(self, model, include=(), exclude=()):
         """Copy attributes from model to EMA, with options to include/exclude certain attributes.

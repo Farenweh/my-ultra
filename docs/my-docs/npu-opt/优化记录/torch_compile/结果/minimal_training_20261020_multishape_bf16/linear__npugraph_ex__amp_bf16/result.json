@@ -1,0 +1,208 @@
+{
+  "模型": "linear",
+  "后端": "npugraph_ex",
+  "精度": "amp_bf16",
+  "状态": "通过",
+  "阶段": "完成",
+  "环境": {
+    "Python": "3.12.14",
+    "PyTorch": "2.14.0+cpu",
+    "TorchNPU": "2.14.0",
+    "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+    "NPU": "Ascend910B2",
+    "设备": "3",
+    "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+    "TASK_QUEUE_ENABLE": "1",
+    "编译后端": [
+      "cudagraphs",
+      "inductor",
+      "npu",
+      "npugraph_ex",
+      "npugraphs",
+      "openxla",
+      "tvm"
+    ],
+    "版本": {
+      "triton": "3.6.0",
+      "triton-ascend": "3.6.0",
+      "torch-mlir": null
+    }
+  },
+  "输入形状": [
+    4,
+    16
+  ],
+  "参数量": 136,
+  "fullgraph": true,
+  "dynamic": false,
+  "优化器": "SGD(lr=0.01, foreach=False)",
+  "容差": {
+    "atol": 0.0001,
+    "rtol": 0.01
+  },
+  "每步输入形状": [
+    [
+      4,
+      16
+    ],
+    [
+      6,
+      16
+    ],
+    [
+      3,
+      16
+    ],
+    [
+      4,
+      16
+    ],
+    [
+      6,
+      16
+    ],
+    [
+      3,
+      16
+    ]
+  ],
+  "完成步数": 6,
+  "eager梯度函数": "AddmmBackward0",
+  "逐步编译计数": [
+    {
+      "stats": {
+        "calls_captured": 1,
+        "unique_graphs": 1
+      },
+      "npugraph_ex": {
+        "captured_graph_1": 1,
+        "captured_graph_2": 1
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 2,
+        "unique_graphs": 2
+      },
+      "npugraph_ex": {
+        "captured_graph_1": 1,
+        "captured_graph_2": 1,
+        "captured_graph_3": 1,
+        "captured_graph_4": 1
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 3,
+        "unique_graphs": 3
+      },
+      "npugraph_ex": {
+        "captured_graph_1": 1,
+        "captured_graph_2": 1,
+        "captured_graph_3": 1,
+        "captured_graph_4": 1,
+        "captured_graph_5": 1,
+        "captured_graph_6": 1
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 3,
+        "unique_graphs": 3
+      },
+      "npugraph_ex": {
+        "captured_graph_1": 1,
+        "captured_graph_2": 1,
+        "captured_graph_3": 1,
+        "captured_graph_4": 1,
+        "captured_graph_5": 1,
+        "captured_graph_6": 1
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 3,
+        "unique_graphs": 3
+      },
+      "npugraph_ex": {
+        "captured_graph_1": 1,
+        "captured_graph_2": 1,
+        "captured_graph_3": 1,
+        "captured_graph_4": 1,
+        "captured_graph_5": 1,
+        "captured_graph_6": 1
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 3,
+        "unique_graphs": 3
+      },
+      "npugraph_ex": {
+        "captured_graph_1": 1,
+        "captured_graph_2": 1,
+        "captured_graph_3": 1,
+        "captured_graph_4": 1,
+        "captured_graph_5": 1,
+        "captured_graph_6": 1
+      }
+    }
+  ],
+  "编译梯度函数": "CompiledFunctionBackward",
+  "最大绝对误差": {
+    "输出": 0.0,
+    "loss": 0.0,
+    "梯度": 0.0,
+    "状态": 0.0
+  },
+  "超差项": [],
+  "更新参数数量": 2,
+  "eager每步毫秒": [
+    213.71851954609156,
+    2.2305315360426903,
+    1.8341876566410065,
+    1.0437443852424622,
+    1.0775458067655563,
+    1.0814154520630836
+  ],
+  "候选每步毫秒": [
+    1910.1932598277926,
+    200.16487129032612,
+    196.4551554992795,
+    2.6242192834615707,
+    2.44283489882946,
+    2.4537360295653343
+  ],
+  "eager损失": [
+    1.9255635738372803,
+    1.4929417371749878,
+    0.7445681095123291,
+    1.7919875383377075,
+    0.9998012781143188,
+    1.0068228244781494
+  ],
+  "候选损失": [
+    1.9255635738372803,
+    1.4929417371749878,
+    0.7445681095123291,
+    1.7919875383377075,
+    0.9998012781143188,
+    1.0068228244781494
+  ],
+  "Dynamo计数": {
+    "stats": {
+      "calls_captured": 3,
+      "unique_graphs": 3
+    },
+    "npugraph_ex": {
+      "captured_graph_1": 1,
+      "captured_graph_2": 1,
+      "captured_graph_3": 1,
+      "captured_graph_4": 1,
+      "captured_graph_5": 1,
+      "captured_graph_6": 1
+    }
+  },
+  "BN计数": {},
+  "总耗时秒": 17.5183837255463
+}

@@ -63,23 +63,32 @@ def _capture_ddp_kwargs(monkeypatch, model, compile, trainer_class=BaseTrainer):
     trainer.world_size = 2
 
     captured = {}
+    lifecycle = []
+
+    def build_train_pipeline():
+        lifecycle.append("训练流程已准备")
 
     def distributed_data_parallel(model, **kwargs):
+        assert lifecycle == ["训练流程已准备"], "DDP 必须在训练流程确定参数物理布局后构造"
+        lifecycle.append("DDP 已构造")
         captured.update(kwargs)
         return model
 
     def stop_after_ddp():
-        raise RuntimeError("DDP configured")
+        lifecycle.append("验证器入口")
+        raise RuntimeError("DDP 已配置")
 
     monkeypatch.setattr(trainer_module, "RANK", -1)
     monkeypatch.setattr(trainer_module, "IS_ASCEND", False)
     monkeypatch.setattr(trainer_module, "PROFILE", "")
     monkeypatch.setattr(trainer_module, "attempt_compile", lambda model, **kwargs: model)
     monkeypatch.setattr(nn.parallel, "DistributedDataParallel", distributed_data_parallel)
-    trainer._build_train_pipeline = stop_after_ddp
+    trainer._build_train_pipeline = build_train_pipeline
+    trainer.get_validator = stop_after_ddp
 
-    with pytest.raises(RuntimeError, match="DDP configured"):
+    with pytest.raises(RuntimeError, match="DDP 已配置"):
         trainer._setup_train()
+    assert lifecycle == ["训练流程已准备", "DDP 已构造", "验证器入口"]
     return captured
 
 

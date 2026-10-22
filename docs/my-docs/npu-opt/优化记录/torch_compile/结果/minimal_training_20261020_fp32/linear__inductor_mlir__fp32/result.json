@@ -1,0 +1,49 @@
+{
+  "模型": "linear",
+  "后端": "inductor_mlir",
+  "精度": "fp32",
+  "状态": "失败",
+  "阶段": "创建编译包装",
+  "环境": {
+    "Python": "3.12.14",
+    "PyTorch": "2.14.0+cpu",
+    "TorchNPU": "2.14.0",
+    "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+    "NPU": "Ascend910B2",
+    "设备": "0",
+    "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+    "TASK_QUEUE_ENABLE": "1",
+    "编译后端": [
+      "cudagraphs",
+      "inductor",
+      "npu",
+      "npugraph_ex",
+      "npugraphs",
+      "openxla",
+      "tvm"
+    ],
+    "版本": {
+      "triton": "3.6.0",
+      "triton-ascend": "3.6.0",
+      "torch-mlir": null
+    }
+  },
+  "输入形状": [
+    4,
+    16
+  ],
+  "参数量": 136,
+  "fullgraph": true,
+  "dynamic": false,
+  "优化器": "SGD(lr=0.01, foreach=False)",
+  "容差": {
+    "atol": 1e-05,
+    "rtol": 0.0001
+  },
+  "完成步数": 0,
+  "eager梯度函数": "AddmmBackward0",
+  "错误类型": "ImportError",
+  "错误": "torch_mlir is not installed, install it first.",
+  "堆栈": "Traceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/__init__.py\", line 85, in _load_mlir_backend\n    import torch_mlir\nModuleNotFoundError: No module named 'torch_mlir'\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 151, in worker\n    compiled = candidate if backend == \"raw_eager\" else torch.compile(\n                                                        ^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/__init__.py\", line 3276, in compile\n    backend = _TorchCompileInductorWrapper(mode, options, dynamic, name)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/utils/_dynamo.py\", line 216, in new_init\n    with _NpuBackendScope(backend):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/utils/_dynamo.py\", line 119, in __enter__\n    register_inductor_npu()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/utils/_dynamo.py\", line 88, in register_inductor_npu\n    _InductorNpuRegistry.register_inductor_npu()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/utils/_dynamo.py\", line 59, in register_inductor_npu\n    sys.modules[\"torch_npu._inductor\"]._load_backend()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/__init__.py\", line 403, in _load_backend\n    loader()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/__init__.py\", line 88, in _load_mlir_backend\n    raise ImportError(\"torch_mlir is not installed, install it first.\") from e\nImportError: torch_mlir is not installed, install it first.\n",
+  "总耗时秒": 18.93185509275645
+}

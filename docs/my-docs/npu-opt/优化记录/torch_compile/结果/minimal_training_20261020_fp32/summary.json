@@ -1,0 +1,2566 @@
+{
+  "时间": "2026-10-20T10:23:35.422950+08:00",
+  "说明": "单卡最小训练可用性测试；并行案例的时延不用于性能比较。",
+  "结果": [
+    {
+      "模型": "linear",
+      "后端": "raw_eager",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "0",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        4,
+        16
+      ],
+      "参数量": 136,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "AddmmBackward0",
+      "最大绝对误差": {
+        "输出": 0.0,
+        "loss": 0.0,
+        "梯度": 0.0,
+        "状态": 0.0
+      },
+      "超差项": [],
+      "更新参数数量": 2,
+      "eager每步毫秒": [
+        205.90640231966972,
+        1.112557016313076,
+        0.9432444348931313,
+        0.829172320663929,
+        0.8839331567287445,
+        0.8290726691484451
+      ],
+      "候选每步毫秒": [
+        0.8230619132518768,
+        0.8180523291230202,
+        0.7980316877365112,
+        0.8251117542386055,
+        0.8119614794850349,
+        0.8074622601270676
+      ],
+      "eager损失": [
+        1.9241571426391602,
+        1.362740397453308,
+        1.232029914855957,
+        2.1471714973449707,
+        1.3128330707550049,
+        1.1482012271881104
+      ],
+      "候选损失": [
+        1.9241571426391602,
+        1.362740397453308,
+        1.232029914855957,
+        2.1471714973449707,
+        1.3128330707550049,
+        1.1482012271881104
+      ],
+      "Dynamo计数": {},
+      "BN计数": {},
+      "总耗时秒": 17.995003265328705,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/linear__raw_eager__fp32/run.log"
+    },
+    {
+      "模型": "linear",
+      "后端": "eager",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "0",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        4,
+        16
+      ],
+      "参数量": 136,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "AddmmBackward0",
+      "编译梯度函数": "AddmmBackward0",
+      "最大绝对误差": {
+        "输出": 0.0,
+        "loss": 0.0,
+        "梯度": 0.0,
+        "状态": 0.0
+      },
+      "超差项": [],
+      "更新参数数量": 2,
+      "eager每步毫秒": [
+        246.68308719992638,
+        1.2005185708403587,
+        0.9330837056040764,
+        0.8977334946393967,
+        0.9113634005188942,
+        0.915144570171833
+      ],
+      "候选每步毫秒": [
+        107.67879988998175,
+        1.150316558778286,
+        1.0741250589489937,
+        1.086966134607792,
+        1.0775942355394363,
+        1.0914858430624008
+      ],
+      "eager损失": [
+        1.9241571426391602,
+        1.362740397453308,
+        1.232029914855957,
+        2.1471714973449707,
+        1.3128330707550049,
+        1.1482012271881104
+      ],
+      "候选损失": [
+        1.9241571426391602,
+        1.362740397453308,
+        1.232029914855957,
+        2.1471714973449707,
+        1.3128330707550049,
+        1.1482012271881104
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 1,
+          "unique_graphs": 1
+        }
+      },
+      "BN计数": {},
+      "总耗时秒": 15.316065834835172,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/linear__eager__fp32/run.log"
+    },
+    {
+      "模型": "linear",
+      "后端": "aot_eager",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "0",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        4,
+        16
+      ],
+      "参数量": 136,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "AddmmBackward0",
+      "编译梯度函数": "CompiledFunctionBackward",
+      "最大绝对误差": {
+        "输出": 0.0,
+        "loss": 0.0,
+        "梯度": 0.0,
+        "状态": 0.0
+      },
+      "超差项": [],
+      "更新参数数量": 2,
+      "eager每步毫秒": [
+        203.80318071693182,
+        1.2645777314901352,
+        0.9212726727128029,
+        0.8814837783575058,
+        0.8850526064634323,
+        0.887162983417511
+      ],
+      "候选每步毫秒": [
+        2869.564368389547,
+        2.126561477780342,
+        1.6627339646220207,
+        1.6632545739412308,
+        1.627444289624691,
+        1.571953296661377
+      ],
+      "eager损失": [
+        1.9241571426391602,
+        1.362740397453308,
+        1.232029914855957,
+        2.1471714973449707,
+        1.3128330707550049,
+        1.1482012271881104
+      ],
+      "候选损失": [
+        1.9241571426391602,
+        1.362740397453308,
+        1.232029914855957,
+        2.1471714973449707,
+        1.3128330707550049,
+        1.1482012271881104
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 1,
+          "unique_graphs": 1
+        },
+        "aot_autograd": {
+          "total": 1,
+          "ok": 1
+        }
+      },
+      "BN计数": {},
+      "总耗时秒": 17.10620351601392,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/linear__aot_eager__fp32/run.log"
+    },
+    {
+      "模型": "linear",
+      "后端": "inductor",
+      "精度": "fp32",
+      "状态": "失败",
+      "阶段": "编译训练:反向",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "0",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        4,
+        16
+      ],
+      "参数量": 136,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 0,
+      "eager梯度函数": "AddmmBackward0",
+      "错误类型": "InductorError",
+      "错误": "LoweringException: TypeError: make_reduction() got an unexpected keyword argument 'strict_sum'\n  target: aten.sum.dim_IntList\n  args[0]: TensorBox(StorageBox(\n    InputBuffer(name='tangents_1', layout=FixedLayout('npu:0', torch.float32, size=[4, 8], stride=[8, 1]))\n  ))\n  args[1]: [0]\n  args[2]: True",
+      "堆栈": "Traceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 154, in worker\n    actual, candidate_times = run(candidate, compiled, backend != \"raw_eager\")\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 119, in run\n    loss.backward()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_tensor.py\", line 623, in backward\n    torch.autograd.backward(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/autograd/__init__.py\", line 395, in backward\n    _engine_run_backward(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/autograd/graph.py\", line 1072, in _engine_run_backward\n    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/autograd/function.py\", line 374, in apply_boxed\n    return self._get_user_fn()(self, *args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 3532, in backward\n    return CompiledFunction._bwd_fn(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/codegen.py:codegen(compiled_function_backward)\", line 16, in _compiled_backward\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/codegen.py:codegen(compiled_function_backward)\", line 10, in impl_fn\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 3588, in _backward_impl\n    compiled_bw = backward_compiler.get_or_compile(\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 2904, in get_or_compile\n    self.compiled_bw = self.bw_compiler(\n                       ^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/schemas.py\", line 1504, in __call__\n    output_code = self.compiler_fn(gm, example_inputs)\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/backends/common.py\", line 108, in _wrapped_bw_compiler\n    disable(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 1548, in _fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_utils_internal.py\", line 114, in wrapper_function\n    return function(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 3204, in bw_compiler\n    return compile_fx_backward(\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 2825, in compile_fx_backward\n    return inner_compile(\n           ^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 919, in compile_fx_inner\n    compiled_graph = wrap_compiler_debug(\n                     ^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/repro/after_aot.py\", line 325, in debug_wrapper\n    inner_compiled_fn = compiler_fn(gm, example_inputs)\n                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1192, in _compile_fx_inner\n    raise InductorError(e, currentframe()).with_traceback(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1169, in _compile_fx_inner\n    mb_compiled_graph = fx_codegen_and_compile(\n                        ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 2001, in fx_codegen_and_compile\n    return scheme.codegen_and_compile(gm, example_inputs, inputs_to_check, graph_kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1660, in codegen_and_compile\n    graph.run(*example_inputs)\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1135, in run\n    return super().run(*args)\n           ^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/interpreter.py\", line 197, in run\n    self.env[node] = self.run_node(node)\n                     ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 2062, in run_node\n    result = super().run_node(n)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/interpreter.py\", line 294, in run_node\n    return getattr(self, n.op)(n.target, args, kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1567, in call_function\n    raise LoweringException(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1544, in call_function\n    out = lowerings[target](*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 525, in wrapped\n    out = decomp_fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 7971, in sum_\n    fn = make_reduction(\"sum\", override_return_dtype=dtype, strict_sum=strict_sum)\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntorch._inductor.exc.InductorError: LoweringException: TypeError: make_reduction() got an unexpected keyword argument 'strict_sum'\n  target: aten.sum.dim_IntList\n  args[0]: TensorBox(StorageBox(\n    InputBuffer(name='tangents_1', layout=FixedLayout('npu:0', torch.float32, size=[4, 8], stride=[8, 1]))\n  ))\n  args[1]: [0]\n  args[2]: True\n",
+      "总耗时秒": 23.979997935704887,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/linear__inductor__fp32/run.log"
+    },
+    {
+      "模型": "linear",
+      "后端": "inductor_reduce_overhead",
+      "精度": "fp32",
+      "状态": "失败",
+      "阶段": "编译训练:反向",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "0",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        4,
+        16
+      ],
+      "参数量": 136,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 0,
+      "eager梯度函数": "AddmmBackward0",
+      "错误类型": "InductorError",
+      "错误": "LoweringException: TypeError: make_reduction() got an unexpected keyword argument 'strict_sum'\n  target: aten.sum.dim_IntList\n  args[0]: TensorBox(StorageBox(\n    InputBuffer(name='tangents_1', layout=FixedLayout('npu:0', torch.float32, size=[4, 8], stride=[8, 1]))\n  ))\n  args[1]: [0]\n  args[2]: True",
+      "堆栈": "Traceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 154, in worker\n    actual, candidate_times = run(candidate, compiled, backend != \"raw_eager\")\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 119, in run\n    loss.backward()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_tensor.py\", line 623, in backward\n    torch.autograd.backward(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/autograd/__init__.py\", line 395, in backward\n    _engine_run_backward(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/autograd/graph.py\", line 1072, in _engine_run_backward\n    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/autograd/function.py\", line 374, in apply_boxed\n    return self._get_user_fn()(self, *args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 3532, in backward\n    return CompiledFunction._bwd_fn(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/codegen.py:codegen(compiled_function_backward)\", line 16, in _compiled_backward\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/codegen.py:codegen(compiled_function_backward)\", line 10, in impl_fn\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 3588, in _backward_impl\n    compiled_bw = backward_compiler.get_or_compile(\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 2904, in get_or_compile\n    self.compiled_bw = self.bw_compiler(\n                       ^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/schemas.py\", line 1504, in __call__\n    output_code = self.compiler_fn(gm, example_inputs)\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/backends/common.py\", line 108, in _wrapped_bw_compiler\n    disable(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 1548, in _fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_utils_internal.py\", line 114, in wrapper_function\n    return function(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 3204, in bw_compiler\n    return compile_fx_backward(\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 2825, in compile_fx_backward\n    return inner_compile(\n           ^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/contextlib.py\", line 81, in inner\n    return func(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 919, in compile_fx_inner\n    compiled_graph = wrap_compiler_debug(\n                     ^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/repro/after_aot.py\", line 325, in debug_wrapper\n    inner_compiled_fn = compiler_fn(gm, example_inputs)\n                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1192, in _compile_fx_inner\n    raise InductorError(e, currentframe()).with_traceback(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1169, in _compile_fx_inner\n    mb_compiled_graph = fx_codegen_and_compile(\n                        ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 2001, in fx_codegen_and_compile\n    return scheme.codegen_and_compile(gm, example_inputs, inputs_to_check, graph_kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1660, in codegen_and_compile\n    graph.run(*example_inputs)\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1135, in run\n    return super().run(*args)\n           ^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/interpreter.py\", line 197, in run\n    self.env[node] = self.run_node(node)\n                     ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 2062, in run_node\n    result = super().run_node(n)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/interpreter.py\", line 294, in run_node\n    return getattr(self, n.op)(n.target, args, kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1567, in call_function\n    raise LoweringException(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1544, in call_function\n    out = lowerings[target](*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 525, in wrapped\n    out = decomp_fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 7971, in sum_\n    fn = make_reduction(\"sum\", override_return_dtype=dtype, strict_sum=strict_sum)\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntorch._inductor.exc.InductorError: LoweringException: TypeError: make_reduction() got an unexpected keyword argument 'strict_sum'\n  target: aten.sum.dim_IntList\n  args[0]: TensorBox(StorageBox(\n    InputBuffer(name='tangents_1', layout=FixedLayout('npu:0', torch.float32, size=[4, 8], stride=[8, 1]))\n  ))\n  args[1]: [0]\n  args[2]: True\n",
+      "总耗时秒": 19.488929773680866,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/linear__inductor_reduce_overhead__fp32/run.log"
+    },
+    {
+      "模型": "linear",
+      "后端": "inductor_mlir",
+      "精度": "fp32",
+      "状态": "失败",
+      "阶段": "创建编译包装",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "0",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        4,
+        16
+      ],
+      "参数量": 136,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 0,
+      "eager梯度函数": "AddmmBackward0",
+      "错误类型": "ImportError",
+      "错误": "torch_mlir is not installed, install it first.",
+      "堆栈": "Traceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/__init__.py\", line 85, in _load_mlir_backend\n    import torch_mlir\nModuleNotFoundError: No module named 'torch_mlir'\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 151, in worker\n    compiled = candidate if backend == \"raw_eager\" else torch.compile(\n                                                        ^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/__init__.py\", line 3276, in compile\n    backend = _TorchCompileInductorWrapper(mode, options, dynamic, name)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/utils/_dynamo.py\", line 216, in new_init\n    with _NpuBackendScope(backend):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/utils/_dynamo.py\", line 119, in __enter__\n    register_inductor_npu()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/utils/_dynamo.py\", line 88, in register_inductor_npu\n    _InductorNpuRegistry.register_inductor_npu()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/utils/_dynamo.py\", line 59, in register_inductor_npu\n    sys.modules[\"torch_npu._inductor\"]._load_backend()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/__init__.py\", line 403, in _load_backend\n    loader()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/__init__.py\", line 88, in _load_mlir_backend\n    raise ImportError(\"torch_mlir is not installed, install it first.\") from e\nImportError: torch_mlir is not installed, install it first.\n",
+      "总耗时秒": 18.93185509275645,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/linear__inductor_mlir__fp32/run.log"
+    },
+    {
+      "模型": "linear",
+      "后端": "inductor_dvm",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "0",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        4,
+        16
+      ],
+      "参数量": 136,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "AddmmBackward0",
+      "编译梯度函数": "CompiledFunctionBackward",
+      "最大绝对误差": {
+        "输出": 0.0,
+        "loss": 0.0,
+        "梯度": 2.9802322387695312e-08,
+        "状态": 0.0
+      },
+      "超差项": [],
+      "更新参数数量": 2,
+      "eager每步毫秒": [
+        244.4301825016737,
+        1.4364104717969894,
+        0.9470637887716293,
+        0.9391335770487785,
+        0.8893636986613274,
+        0.9173545986413956
+      ],
+      "候选每步毫秒": [
+        1827.5614250451326,
+        2.672199159860611,
+        1.8232567235827446,
+        1.831386238336563,
+        1.855897717177868,
+        1.791686750948429
+      ],
+      "eager损失": [
+        1.9241571426391602,
+        1.362740397453308,
+        1.232029914855957,
+        2.1471714973449707,
+        1.3128330707550049,
+        1.1482012271881104
+      ],
+      "候选损失": [
+        1.9241571426391602,
+        1.362740397453308,
+        1.232029914855957,
+        2.1471714973449707,
+        1.3128330707550049,
+        1.1482012271881104
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 1,
+          "unique_graphs": 1
+        },
+        "aot_autograd": {
+          "total": 1,
+          "autograd_cache_miss": 1,
+          "ok": 1,
+          "autograd_cache_saved": 1
+        },
+        "inductor": {
+          "pattern_matcher_count": 2,
+          "pattern_matcher_nodes": 3,
+          "fxgraph_cache_miss": 2,
+          "extern_calls": 4
+        }
+      },
+      "BN计数": {},
+      "总耗时秒": 19.074801332317293,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/linear__inductor_dvm__fp32/run.log"
+    },
+    {
+      "模型": "linear",
+      "后端": "npu",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "0",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        4,
+        16
+      ],
+      "参数量": 136,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "AddmmBackward0",
+      "编译梯度函数": "CompiledFunctionBackward",
+      "最大绝对误差": {
+        "输出": 1.1920928955078125e-07,
+        "loss": 2.384185791015625e-07,
+        "梯度": 5.960464477539063e-08,
+        "状态": 1.4901161193847656e-08
+      },
+      "超差项": [],
+      "更新参数数量": 2,
+      "eager每步毫秒": [
+        219.38112657517195,
+        1.3306690379977226,
+        0.9332625195384026,
+        0.9209839627146721,
+        0.9334329515695572,
+        0.9422441944479942
+      ],
+      "候选每步毫秒": [
+        19447.92154338211,
+        3.3054575324058533,
+        1.9773095846176147,
+        2.009538933634758,
+        2.008078619837761,
+        1.9704485312104225
+      ],
+      "eager损失": [
+        1.9241571426391602,
+        1.362740397453308,
+        1.232029914855957,
+        2.1471714973449707,
+        1.3128330707550049,
+        1.1482012271881104
+      ],
+      "候选损失": [
+        1.9241573810577393,
+        1.3627402782440186,
+        1.232029914855957,
+        2.1471712589263916,
+        1.3128330707550049,
+        1.1482012271881104
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 1,
+          "unique_graphs": 1
+        }
+      },
+      "BN计数": {},
+      "总耗时秒": 38.707981052808464,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/linear__npu__fp32/run.log"
+    },
+    {
+      "模型": "linear",
+      "后端": "npugraphs",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "0",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        4,
+        16
+      ],
+      "参数量": 136,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "AddmmBackward0",
+      "编译梯度函数": "CompiledFunctionBackward",
+      "最大绝对误差": {
+        "输出": 0.0,
+        "loss": 0.0,
+        "梯度": 0.0,
+        "状态": 0.0
+      },
+      "超差项": [],
+      "更新参数数量": 2,
+      "eager每步毫秒": [
+        214.19198997318745,
+        1.4208508655428886,
+        0.9312033653259277,
+        0.9066229686141014,
+        0.9233038872480392,
+        0.9004231542348862
+      ],
+      "候选每步毫秒": [
+        4740.982247516513,
+        29.008704237639904,
+        2.30267271399498,
+        1.9112378358840942,
+        1.8830085173249245,
+        1.9093379378318787
+      ],
+      "eager损失": [
+        1.9241571426391602,
+        1.362740397453308,
+        1.232029914855957,
+        2.1471714973449707,
+        1.3128330707550049,
+        1.1482012271881104
+      ],
+      "候选损失": [
+        1.9241571426391602,
+        1.362740397453308,
+        1.232029914855957,
+        2.1471714973449707,
+        1.3128330707550049,
+        1.1482012271881104
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 1,
+          "unique_graphs": 1
+        },
+        "aot_autograd": {
+          "total": 1,
+          "ok": 1
+        },
+        "inductor": {
+          "npugraph_recorded_non_static_inputs": 4
+        }
+      },
+      "BN计数": {},
+      "总耗时秒": 19.329141448251903,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/linear__npugraphs__fp32/run.log"
+    },
+    {
+      "模型": "linear",
+      "后端": "npugraph_ex",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "0",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        4,
+        16
+      ],
+      "参数量": 136,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "AddmmBackward0",
+      "编译梯度函数": "CompiledFunctionBackward",
+      "最大绝对误差": {
+        "输出": 0.0,
+        "loss": 0.0,
+        "梯度": 0.0,
+        "状态": 0.0
+      },
+      "超差项": [],
+      "更新参数数量": 2,
+      "eager每步毫秒": [
+        206.2624441459775,
+        1.1948775500059128,
+        0.9028343483805656,
+        0.8981628343462944,
+        0.8946722373366356,
+        0.9063929319381714
+      ],
+      "候选每步毫秒": [
+        1902.0569836720824,
+        3.2728873193264008,
+        2.614258788526058,
+        2.5894781574606895,
+        2.6246579363942146,
+        2.6108380407094955
+      ],
+      "eager损失": [
+        1.9241571426391602,
+        1.362740397453308,
+        1.232029914855957,
+        2.1471714973449707,
+        1.3128330707550049,
+        1.1482012271881104
+      ],
+      "候选损失": [
+        1.9241571426391602,
+        1.362740397453308,
+        1.232029914855957,
+        2.1471714973449707,
+        1.3128330707550049,
+        1.1482012271881104
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 1,
+          "unique_graphs": 1
+        },
+        "npugraph_ex": {
+          "captured_graph_1": 1,
+          "captured_graph_2": 1
+        }
+      },
+      "BN计数": {},
+      "总耗时秒": 17.03436716645956,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/linear__npugraph_ex__fp32/run.log"
+    },
+    {
+      "模型": "conv_bn_relu",
+      "后端": "raw_eager",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "1",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        3,
+        8,
+        8
+      ],
+      "参数量": 232,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "ReluBackward0",
+      "最大绝对误差": {
+        "输出": 0.0,
+        "loss": 0.0,
+        "梯度": 1.4901161193847656e-08,
+        "状态": 7.450580596923828e-09
+      },
+      "超差项": [],
+      "更新参数数量": 3,
+      "eager每步毫秒": [
+        133.2116024568677,
+        1.7875554040074348,
+        1.373189501464367,
+        1.336430199444294,
+        1.3569407165050507,
+        1.3183597475290298
+      ],
+      "候选每步毫秒": [
+        1.3275183737277985,
+        1.3349689543247223,
+        1.296929083764553,
+        1.2951791286468506,
+        1.3204189017415047,
+        1.3131387531757355
+      ],
+      "eager损失": [
+        1.4708720445632935,
+        1.5288983583450317,
+        1.533689022064209,
+        1.4625062942504883,
+        1.5780482292175293,
+        1.5197131633758545
+      ],
+      "候选损失": [
+        1.4708720445632935,
+        1.5288983583450317,
+        1.533689022064209,
+        1.4625062942504883,
+        1.5780482292175293,
+        1.5197131633758545
+      ],
+      "Dynamo计数": {},
+      "BN计数": {
+        "1.num_batches_tracked": 6
+      },
+      "总耗时秒": 18.099642870016396,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/conv_bn_relu__raw_eager__fp32/run.log"
+    },
+    {
+      "模型": "conv_bn_relu",
+      "后端": "eager",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "1",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        3,
+        8,
+        8
+      ],
+      "参数量": 232,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "ReluBackward0",
+      "编译梯度函数": "ReluBackward0",
+      "最大绝对误差": {
+        "输出": 0.0,
+        "loss": 0.0,
+        "梯度": 1.4901161193847656e-08,
+        "状态": 7.450580596923828e-09
+      },
+      "超差项": [],
+      "更新参数数量": 3,
+      "eager每步毫秒": [
+        124.53489564359188,
+        2.0923810079693794,
+        1.7248354852199554,
+        1.5524821355938911,
+        1.5614330768585205,
+        1.7627254128456116
+      ],
+      "候选每步毫秒": [
+        357.70601499825716,
+        1.559993252158165,
+        1.4835121110081673,
+        1.4574602246284485,
+        1.4582620933651924,
+        1.4976821839809418
+      ],
+      "eager损失": [
+        1.4708720445632935,
+        1.5288983583450317,
+        1.533689022064209,
+        1.4625062942504883,
+        1.5780482292175293,
+        1.5197131633758545
+      ],
+      "候选损失": [
+        1.4708720445632935,
+        1.5288983583450317,
+        1.533689022064209,
+        1.4625062942504883,
+        1.5780482292175293,
+        1.5197131633758545
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 4,
+          "unique_graphs": 1
+        }
+      },
+      "BN计数": {
+        "1.num_batches_tracked": 6
+      },
+      "总耗时秒": 13.899974066764116,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/conv_bn_relu__eager__fp32/run.log"
+    },
+    {
+      "模型": "conv_bn_relu",
+      "后端": "aot_eager",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "1",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        3,
+        8,
+        8
+      ],
+      "参数量": 232,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "ReluBackward0",
+      "编译梯度函数": "CompiledFunctionBackward",
+      "最大绝对误差": {
+        "输出": 0.0,
+        "loss": 0.0,
+        "梯度": 1.4901161193847656e-08,
+        "状态": 7.450580596923828e-09
+      },
+      "超差项": [],
+      "更新参数数量": 3,
+      "eager每步毫秒": [
+        131.03122916072607,
+        1.543932594358921,
+        1.318768598139286,
+        1.3195797801017761,
+        1.2607285752892494,
+        1.2860288843512535
+      ],
+      "候选每步毫秒": [
+        2870.202638208866,
+        2.372405491769314,
+        2.158612012863159,
+        2.0493604242801666,
+        2.264292910695076,
+        2.224242314696312
+      ],
+      "eager损失": [
+        1.4708720445632935,
+        1.5288983583450317,
+        1.533689022064209,
+        1.4625062942504883,
+        1.5780482292175293,
+        1.5197131633758545
+      ],
+      "候选损失": [
+        1.4708720445632935,
+        1.5288983583450317,
+        1.533689022064209,
+        1.4625062942504883,
+        1.5780482292175293,
+        1.5197131633758545
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 4,
+          "unique_graphs": 1
+        },
+        "aot_autograd": {
+          "total": 1,
+          "ok": 1
+        }
+      },
+      "BN计数": {
+        "1.num_batches_tracked": 6
+      },
+      "总耗时秒": 17.5951308645308,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/conv_bn_relu__aot_eager__fp32/run.log"
+    },
+    {
+      "模型": "conv_bn_relu",
+      "后端": "inductor",
+      "精度": "fp32",
+      "状态": "失败",
+      "阶段": "编译训练:前向",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "1",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        3,
+        8,
+        8
+      ],
+      "参数量": 232,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 0,
+      "eager梯度函数": "ReluBackward0",
+      "错误类型": "InductorError",
+      "错误": "LoweringException: TypeError: make_reduction() got an unexpected keyword argument 'strict_sum'\n  target: aten.var_mean.correction\n  args[0]: TensorBox(StorageBox(\n    FallbackKernel(\n      python_kernel_name='torch.ops.aten.convolution.default',\n      name=buf0,\n      layout=FixedLayout('npu:1', torch.float32, size=[2, 8, 8, 8], stride=[512, 64, 8, 1]),\n      inputs=[InputBuffer(name='primals_2', layout=FixedLayout('npu:1', torch.float32, size=[2, 3, 8, 8], stride=[192, 64, 8, 1])), InputBuffer(name='primals_1', layout=FixedLayout('npu:1', torch.float32, size=[8, 3, 3, 3], stride=[27, 9, 3, 1]))],\n      constant_args=(None, 1, 1, 1, 1, 1, 1, False, 0, 0, 1),\n      kwargs={},\n      output_view=None,\n      python_kernel_name=torch.ops.aten.convolution.default,\n      cpp_kernel_name=None,\n      ordered_kwargs_for_cpp_kernel=[],\n      op_overload=aten.convolution.default,\n      arg_properties=[{'name': 'input', 'type': Tensor, 'default_value': None}, {'name': 'weight', 'type': Tensor, 'default_value': None}, {'name': 'bias', 'type': Optional[Tensor], 'default_value': None}, {'name': 'stride', 'type': List[int], 'default_value': None}, {'name': 'padding', 'type': List[int], 'default_value': None}, {'name': 'dilation', 'type': List[int], 'default_value': None}, {'name': 'transposed', 'type': bool, 'default_value': None}, {'name': 'output_padding', 'type': List[int], 'default_value': None}, {'name': 'groups', 'type': int, 'default_value': None}],\n      allarg_properties={'input': {'type': Tensor, 'default_value': None}, 'weight': {'type': Tensor, 'default_value': None}, 'bias': {'type': Optional[Tensor], 'default_value': None}, 'stride': {'type': List[int], 'default_value': None}, 'padding': {'type': List[int], 'default_value': None}, 'dilation': {'type': List[int], 'default_value': None}, 'transposed': {'type': bool, 'default_value': None}, 'output_padding': {'type': List[int], 'default_value': None}, 'groups': {'type': int, 'default_value': None}},\n      kwarg_properties=None,\n      unbacked_bindings={},\n      mutation_outputs=[],\n      origin_node=convolution,\n      origins=OrderedSet([convolution])\n    )\n  ))\n  args[1]: [0, 2, 3]\n  kwargs: {'correction': 0, 'keepdim': True}\n\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\n",
+      "堆栈": "Traceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 154, in worker\n    actual, candidate_times = run(candidate, compiled, backend != \"raw_eager\")\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 116, in run\n    output = train_model(inputs)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 563, in __call__\n    return super().__call__(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 1783, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 1794, in _call_impl\n    return forward_call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 1278, in compile_wrapper\n    raise e.remove_dynamo_frames() from None  # see TORCHDYNAMO_VERBOSE=1\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1192, in _compile_fx_inner\n    raise InductorError(e, currentframe()).with_traceback(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1169, in _compile_fx_inner\n    mb_compiled_graph = fx_codegen_and_compile(\n                        ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 2001, in fx_codegen_and_compile\n    return scheme.codegen_and_compile(gm, example_inputs, inputs_to_check, graph_kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1660, in codegen_and_compile\n    graph.run(*example_inputs)\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1135, in run\n    return super().run(*args)\n           ^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/interpreter.py\", line 197, in run\n    self.env[node] = self.run_node(node)\n                     ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 2062, in run_node\n    result = super().run_node(n)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/interpreter.py\", line 294, in run_node\n    return getattr(self, n.op)(n.target, args, kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1567, in call_function\n    raise LoweringException(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1544, in call_function\n    out = lowerings[target](*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering_patch.py\", line 190, in dispatcher\n    return handler(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 525, in wrapped\n    out = decomp_fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py\", line 968, in var_mean\n    return var_mean_helper_(\n           ^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py\", line 957, in var_mean_helper_\n    var_mean_sum_(**kwargs)\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py\", line 862, in var_mean_sum_\n    x_mean = mean(x, axis, keepdim=True)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 525, in wrapped\n    out = decomp_fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py\", line 267, in mean\n    sum_result = sum_(x, axis, keepdim)\n                 ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 525, in wrapped\n    out = decomp_fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 7971, in sum_\n    fn = make_reduction(\"sum\", override_return_dtype=dtype, strict_sum=strict_sum)\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntorch._inductor.exc.InductorError: LoweringException: TypeError: make_reduction() got an unexpected keyword argument 'strict_sum'\n  target: aten.var_mean.correction\n  args[0]: TensorBox(StorageBox(\n    FallbackKernel(\n      python_kernel_name='torch.ops.aten.convolution.default',\n      name=buf0,\n      layout=FixedLayout('npu:1', torch.float32, size=[2, 8, 8, 8], stride=[512, 64, 8, 1]),\n      inputs=[InputBuffer(name='primals_2', layout=FixedLayout('npu:1', torch.float32, size=[2, 3, 8, 8], stride=[192, 64, 8, 1])), InputBuffer(name='primals_1', layout=FixedLayout('npu:1', torch.float32, size=[8, 3, 3, 3], stride=[27, 9, 3, 1]))],\n      constant_args=(None, 1, 1, 1, 1, 1, 1, False, 0, 0, 1),\n      kwargs={},\n      output_view=None,\n      python_kernel_name=torch.ops.aten.convolution.default,\n      cpp_kernel_name=None,\n      ordered_kwargs_for_cpp_kernel=[],\n      op_overload=aten.convolution.default,\n      arg_properties=[{'name': 'input', 'type': Tensor, 'default_value': None}, {'name': 'weight', 'type': Tensor, 'default_value': None}, {'name': 'bias', 'type': Optional[Tensor], 'default_value': None}, {'name': 'stride', 'type': List[int], 'default_value': None}, {'name': 'padding', 'type': List[int], 'default_value': None}, {'name': 'dilation', 'type': List[int], 'default_value': None}, {'name': 'transposed', 'type': bool, 'default_value': None}, {'name': 'output_padding', 'type': List[int], 'default_value': None}, {'name': 'groups', 'type': int, 'default_value': None}],\n      allarg_properties={'input': {'type': Tensor, 'default_value': None}, 'weight': {'type': Tensor, 'default_value': None}, 'bias': {'type': Optional[Tensor], 'default_value': None}, 'stride': {'type': List[int], 'default_value': None}, 'padding': {'type': List[int], 'default_value': None}, 'dilation': {'type': List[int], 'default_value': None}, 'transposed': {'type': bool, 'default_value': None}, 'output_padding': {'type': List[int], 'default_value': None}, 'groups': {'type': int, 'default_value': None}},\n      kwarg_properties=None,\n      unbacked_bindings={},\n      mutation_outputs=[],\n      origin_node=convolution,\n      origins=OrderedSet([convolution])\n    )\n  ))\n  args[1]: [0, 2, 3]\n  kwargs: {'correction': 0, 'keepdim': True}\n\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\n\n",
+      "总耗时秒": 23.712499296292663,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/conv_bn_relu__inductor__fp32/run.log"
+    },
+    {
+      "模型": "conv_bn_relu",
+      "后端": "inductor_reduce_overhead",
+      "精度": "fp32",
+      "状态": "失败",
+      "阶段": "编译训练:前向",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "1",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        3,
+        8,
+        8
+      ],
+      "参数量": 232,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 0,
+      "eager梯度函数": "ReluBackward0",
+      "错误类型": "InductorError",
+      "错误": "LoweringException: TypeError: make_reduction() got an unexpected keyword argument 'strict_sum'\n  target: aten.var_mean.correction\n  args[0]: TensorBox(StorageBox(\n    FallbackKernel(\n      python_kernel_name='torch.ops.aten.convolution.default',\n      name=buf0,\n      layout=FixedLayout('npu:1', torch.float32, size=[2, 8, 8, 8], stride=[512, 64, 8, 1]),\n      inputs=[InputBuffer(name='primals_2', layout=FixedLayout('npu:1', torch.float32, size=[2, 3, 8, 8], stride=[192, 64, 8, 1])), InputBuffer(name='primals_1', layout=FixedLayout('npu:1', torch.float32, size=[8, 3, 3, 3], stride=[27, 9, 3, 1]))],\n      constant_args=(None, 1, 1, 1, 1, 1, 1, False, 0, 0, 1),\n      kwargs={},\n      output_view=None,\n      python_kernel_name=torch.ops.aten.convolution.default,\n      cpp_kernel_name=None,\n      ordered_kwargs_for_cpp_kernel=[],\n      op_overload=aten.convolution.default,\n      arg_properties=[{'name': 'input', 'type': Tensor, 'default_value': None}, {'name': 'weight', 'type': Tensor, 'default_value': None}, {'name': 'bias', 'type': Optional[Tensor], 'default_value': None}, {'name': 'stride', 'type': List[int], 'default_value': None}, {'name': 'padding', 'type': List[int], 'default_value': None}, {'name': 'dilation', 'type': List[int], 'default_value': None}, {'name': 'transposed', 'type': bool, 'default_value': None}, {'name': 'output_padding', 'type': List[int], 'default_value': None}, {'name': 'groups', 'type': int, 'default_value': None}],\n      allarg_properties={'input': {'type': Tensor, 'default_value': None}, 'weight': {'type': Tensor, 'default_value': None}, 'bias': {'type': Optional[Tensor], 'default_value': None}, 'stride': {'type': List[int], 'default_value': None}, 'padding': {'type': List[int], 'default_value': None}, 'dilation': {'type': List[int], 'default_value': None}, 'transposed': {'type': bool, 'default_value': None}, 'output_padding': {'type': List[int], 'default_value': None}, 'groups': {'type': int, 'default_value': None}},\n      kwarg_properties=None,\n      unbacked_bindings={},\n      mutation_outputs=[],\n      origin_node=convolution,\n      origins=OrderedSet([convolution])\n    )\n  ))\n  args[1]: [0, 2, 3]\n  kwargs: {'correction': 0, 'keepdim': True}\n\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\n",
+      "堆栈": "Traceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 154, in worker\n    actual, candidate_times = run(candidate, compiled, backend != \"raw_eager\")\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 116, in run\n    output = train_model(inputs)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 563, in __call__\n    return super().__call__(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 1783, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 1794, in _call_impl\n    return forward_call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 1278, in compile_wrapper\n    raise e.remove_dynamo_frames() from None  # see TORCHDYNAMO_VERBOSE=1\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1192, in _compile_fx_inner\n    raise InductorError(e, currentframe()).with_traceback(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1169, in _compile_fx_inner\n    mb_compiled_graph = fx_codegen_and_compile(\n                        ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 2001, in fx_codegen_and_compile\n    return scheme.codegen_and_compile(gm, example_inputs, inputs_to_check, graph_kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1660, in codegen_and_compile\n    graph.run(*example_inputs)\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1135, in run\n    return super().run(*args)\n           ^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/interpreter.py\", line 197, in run\n    self.env[node] = self.run_node(node)\n                     ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 2062, in run_node\n    result = super().run_node(n)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/interpreter.py\", line 294, in run_node\n    return getattr(self, n.op)(n.target, args, kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1567, in call_function\n    raise LoweringException(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1544, in call_function\n    out = lowerings[target](*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering_patch.py\", line 190, in dispatcher\n    return handler(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 525, in wrapped\n    out = decomp_fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py\", line 968, in var_mean\n    return var_mean_helper_(\n           ^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py\", line 957, in var_mean_helper_\n    var_mean_sum_(**kwargs)\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py\", line 862, in var_mean_sum_\n    x_mean = mean(x, axis, keepdim=True)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 525, in wrapped\n    out = decomp_fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py\", line 267, in mean\n    sum_result = sum_(x, axis, keepdim)\n                 ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 525, in wrapped\n    out = decomp_fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 7971, in sum_\n    fn = make_reduction(\"sum\", override_return_dtype=dtype, strict_sum=strict_sum)\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntorch._inductor.exc.InductorError: LoweringException: TypeError: make_reduction() got an unexpected keyword argument 'strict_sum'\n  target: aten.var_mean.correction\n  args[0]: TensorBox(StorageBox(\n    FallbackKernel(\n      python_kernel_name='torch.ops.aten.convolution.default',\n      name=buf0,\n      layout=FixedLayout('npu:1', torch.float32, size=[2, 8, 8, 8], stride=[512, 64, 8, 1]),\n      inputs=[InputBuffer(name='primals_2', layout=FixedLayout('npu:1', torch.float32, size=[2, 3, 8, 8], stride=[192, 64, 8, 1])), InputBuffer(name='primals_1', layout=FixedLayout('npu:1', torch.float32, size=[8, 3, 3, 3], stride=[27, 9, 3, 1]))],\n      constant_args=(None, 1, 1, 1, 1, 1, 1, False, 0, 0, 1),\n      kwargs={},\n      output_view=None,\n      python_kernel_name=torch.ops.aten.convolution.default,\n      cpp_kernel_name=None,\n      ordered_kwargs_for_cpp_kernel=[],\n      op_overload=aten.convolution.default,\n      arg_properties=[{'name': 'input', 'type': Tensor, 'default_value': None}, {'name': 'weight', 'type': Tensor, 'default_value': None}, {'name': 'bias', 'type': Optional[Tensor], 'default_value': None}, {'name': 'stride', 'type': List[int], 'default_value': None}, {'name': 'padding', 'type': List[int], 'default_value': None}, {'name': 'dilation', 'type': List[int], 'default_value': None}, {'name': 'transposed', 'type': bool, 'default_value': None}, {'name': 'output_padding', 'type': List[int], 'default_value': None}, {'name': 'groups', 'type': int, 'default_value': None}],\n      allarg_properties={'input': {'type': Tensor, 'default_value': None}, 'weight': {'type': Tensor, 'default_value': None}, 'bias': {'type': Optional[Tensor], 'default_value': None}, 'stride': {'type': List[int], 'default_value': None}, 'padding': {'type': List[int], 'default_value': None}, 'dilation': {'type': List[int], 'default_value': None}, 'transposed': {'type': bool, 'default_value': None}, 'output_padding': {'type': List[int], 'default_value': None}, 'groups': {'type': int, 'default_value': None}},\n      kwarg_properties=None,\n      unbacked_bindings={},\n      mutation_outputs=[],\n      origin_node=convolution,\n      origins=OrderedSet([convolution])\n    )\n  ))\n  args[1]: [0, 2, 3]\n  kwargs: {'correction': 0, 'keepdim': True}\n\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\n\n",
+      "总耗时秒": 19.860441202297807,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/conv_bn_relu__inductor_reduce_overhead__fp32/run.log"
+    },
+    {
+      "模型": "conv_bn_relu",
+      "后端": "inductor_mlir",
+      "精度": "fp32",
+      "状态": "失败",
+      "阶段": "创建编译包装",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "1",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        3,
+        8,
+        8
+      ],
+      "参数量": 232,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 0,
+      "eager梯度函数": "ReluBackward0",
+      "错误类型": "ImportError",
+      "错误": "torch_mlir is not installed, install it first.",
+      "堆栈": "Traceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/__init__.py\", line 85, in _load_mlir_backend\n    import torch_mlir\nModuleNotFoundError: No module named 'torch_mlir'\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 151, in worker\n    compiled = candidate if backend == \"raw_eager\" else torch.compile(\n                                                        ^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/__init__.py\", line 3276, in compile\n    backend = _TorchCompileInductorWrapper(mode, options, dynamic, name)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/utils/_dynamo.py\", line 216, in new_init\n    with _NpuBackendScope(backend):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/utils/_dynamo.py\", line 119, in __enter__\n    register_inductor_npu()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/utils/_dynamo.py\", line 88, in register_inductor_npu\n    _InductorNpuRegistry.register_inductor_npu()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/utils/_dynamo.py\", line 59, in register_inductor_npu\n    sys.modules[\"torch_npu._inductor\"]._load_backend()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/__init__.py\", line 403, in _load_backend\n    loader()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/__init__.py\", line 88, in _load_mlir_backend\n    raise ImportError(\"torch_mlir is not installed, install it first.\") from e\nImportError: torch_mlir is not installed, install it first.\n",
+      "总耗时秒": 18.496186276897788,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/conv_bn_relu__inductor_mlir__fp32/run.log"
+    },
+    {
+      "模型": "conv_bn_relu",
+      "后端": "inductor_dvm",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "1",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        3,
+        8,
+        8
+      ],
+      "参数量": 232,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "ReluBackward0",
+      "编译梯度函数": "CompiledFunctionBackward",
+      "最大绝对误差": {
+        "输出": 4.76837158203125e-07,
+        "loss": 1.1920928955078125e-07,
+        "梯度": 2.3208558559417725e-06,
+        "状态": 5.960464477539063e-08
+      },
+      "超差项": [],
+      "更新参数数量": 3,
+      "eager每步毫秒": [
+        133.2243960350752,
+        1.7005447298288345,
+        1.336919143795967,
+        1.2792078778147697,
+        1.2768888846039772,
+        1.2931488454341888
+      ],
+      "候选每步毫秒": [
+        2854.2299270629883,
+        3.2409382984042168,
+        2.208481542766094,
+        2.013268880546093,
+        2.1295007318258286,
+        2.04376969486475
+      ],
+      "eager损失": [
+        1.4708720445632935,
+        1.5288983583450317,
+        1.533689022064209,
+        1.4625062942504883,
+        1.5780482292175293,
+        1.5197131633758545
+      ],
+      "候选损失": [
+        1.4708720445632935,
+        1.5288983583450317,
+        1.533689022064209,
+        1.4625064134597778,
+        1.5780482292175293,
+        1.5197131633758545
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 4,
+          "unique_graphs": 1
+        },
+        "aot_autograd": {
+          "total": 1,
+          "autograd_cache_miss": 1,
+          "ok": 1,
+          "autograd_cache_saved": 1
+        },
+        "inductor": {
+          "fxgraph_cache_miss": 2,
+          "extern_calls": 4
+        }
+      },
+      "BN计数": {
+        "1.num_batches_tracked": 6
+      },
+      "总耗时秒": 21.188089071772993,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/conv_bn_relu__inductor_dvm__fp32/run.log"
+    },
+    {
+      "模型": "conv_bn_relu",
+      "后端": "npu",
+      "精度": "fp32",
+      "状态": "数值不一致",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "1",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        3,
+        8,
+        8
+      ],
+      "参数量": 232,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "ReluBackward0",
+      "编译梯度函数": "CompiledFunctionBackward",
+      "最大绝对误差": {
+        "输出": 0.02124953269958496,
+        "loss": 0.0025892257690429688,
+        "梯度": 0.08855348080396652,
+        "状态": 0.5645555257797241
+      },
+      "超差项": [
+        "第1步 梯度/0.weight",
+        "第1步 梯度/1.weight",
+        "第1步 状态/0.weight",
+        "第1步 状态/1.weight",
+        "第2步 输出/输出",
+        "第2步 loss/loss",
+        "第2步 梯度/0.weight",
+        "第2步 梯度/1.weight",
+        "第2步 梯度/1.bias",
+        "第2步 状态/0.weight",
+        "第2步 状态/1.weight",
+        "第2步 状态/1.bias",
+        "第2步 状态/1.running_mean",
+        "第2步 状态/1.running_var",
+        "第3步 输出/输出",
+        "第3步 loss/loss",
+        "第3步 梯度/0.weight",
+        "第3步 梯度/1.weight",
+        "第3步 梯度/1.bias",
+        "第3步 状态/0.weight",
+        "第3步 状态/1.weight",
+        "第3步 状态/1.bias",
+        "第3步 状态/1.running_mean",
+        "第3步 状态/1.running_var",
+        "第4步 输出/输出",
+        "第4步 loss/loss",
+        "第4步 梯度/0.weight",
+        "第4步 梯度/1.weight",
+        "第4步 梯度/1.bias",
+        "第4步 状态/0.weight",
+        "第4步 状态/1.weight",
+        "第4步 状态/1.bias",
+        "第4步 状态/1.running_mean",
+        "第4步 状态/1.running_var",
+        "第5步 输出/输出",
+        "第5步 loss/loss",
+        "第5步 梯度/0.weight",
+        "第5步 梯度/1.weight",
+        "第5步 梯度/1.bias",
+        "第5步 状态/0.weight",
+        "第5步 状态/1.weight",
+        "第5步 状态/1.bias",
+        "第5步 状态/1.running_mean",
+        "第5步 状态/1.running_var",
+        "第6步 输出/输出",
+        "第6步 loss/loss",
+        "第6步 梯度/0.weight",
+        "第6步 梯度/1.weight",
+        "第6步 梯度/1.bias",
+        "第6步 状态/0.weight",
+        "第6步 状态/1.weight",
+        "第6步 状态/1.bias",
+        "第6步 状态/1.running_mean",
+        "第6步 状态/1.running_var"
+      ],
+      "更新参数数量": 3,
+      "eager每步毫秒": [
+        126.9046850502491,
+        1.4768419787287712,
+        1.2613683938980103,
+        1.171768642961979,
+        1.1734981089830399,
+        1.1445563286542892
+      ],
+      "候选每步毫秒": [
+        31397.344714961946,
+        2.9689744114875793,
+        2.254823222756386,
+        2.111220732331276,
+        2.054080367088318,
+        2.03039962798357
+      ],
+      "eager损失": [
+        1.4708720445632935,
+        1.5288983583450317,
+        1.533689022064209,
+        1.4625062942504883,
+        1.5780482292175293,
+        1.5197131633758545
+      ],
+      "候选损失": [
+        1.4708720445632935,
+        1.529486894607544,
+        1.5347909927368164,
+        1.4639992713928223,
+        1.5798897743225098,
+        1.5223023891448975
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 4,
+          "unique_graphs": 1
+        }
+      },
+      "BN计数": {
+        "1.num_batches_tracked": 6
+      },
+      "总耗时秒": 49.9846030138433,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/conv_bn_relu__npu__fp32/run.log"
+    },
+    {
+      "模型": "conv_bn_relu",
+      "后端": "npugraphs",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "1",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        3,
+        8,
+        8
+      ],
+      "参数量": 232,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "ReluBackward0",
+      "编译梯度函数": "CompiledFunctionBackward",
+      "最大绝对误差": {
+        "输出": 0.0,
+        "loss": 0.0,
+        "梯度": 1.4901161193847656e-08,
+        "状态": 1.4901161193847656e-08
+      },
+      "超差项": [],
+      "更新参数数量": 3,
+      "eager每步毫秒": [
+        141.411486081779,
+        1.6489438712596893,
+        1.342439092695713,
+        1.3509895652532578,
+        1.3140290975570679,
+        1.305299811065197
+      ],
+      "候选每步毫秒": [
+        3738.343327306211,
+        22.225314751267433,
+        2.796950750052929,
+        2.310223877429962,
+        2.308034338057041,
+        2.201591618359089
+      ],
+      "eager损失": [
+        1.4708720445632935,
+        1.5288983583450317,
+        1.533689022064209,
+        1.4625062942504883,
+        1.5780482292175293,
+        1.5197131633758545
+      ],
+      "候选损失": [
+        1.4708720445632935,
+        1.5288983583450317,
+        1.533689022064209,
+        1.4625062942504883,
+        1.5780482292175293,
+        1.5197131633758545
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 4,
+          "unique_graphs": 1
+        },
+        "aot_autograd": {
+          "total": 1,
+          "ok": 1
+        },
+        "inductor": {
+          "npugraph_recorded_non_static_inputs": 8
+        }
+      },
+      "BN计数": {
+        "1.num_batches_tracked": 6
+      },
+      "总耗时秒": 20.027872778475285,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/conv_bn_relu__npugraphs__fp32/run.log"
+    },
+    {
+      "模型": "conv_bn_relu",
+      "后端": "npugraph_ex",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "1",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        3,
+        8,
+        8
+      ],
+      "参数量": 232,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "ReluBackward0",
+      "编译梯度函数": "CompiledFunctionBackward",
+      "最大绝对误差": {
+        "输出": 0.0,
+        "loss": 0.0,
+        "梯度": 1.4901161193847656e-08,
+        "状态": 1.4901161193847656e-08
+      },
+      "超差项": [],
+      "更新参数数量": 3,
+      "eager每步毫秒": [
+        131.44276104867458,
+        1.7636753618717194,
+        1.3966402038931847,
+        1.3816291466355324,
+        1.6064336523413658,
+        1.5147523954510689
+      ],
+      "候选每步毫秒": [
+        2186.9503865018487,
+        4.354364238679409,
+        3.2545486465096474,
+        3.1724469736218452,
+        3.231007605791092,
+        3.1533967703580856
+      ],
+      "eager损失": [
+        1.4708720445632935,
+        1.5288983583450317,
+        1.533689022064209,
+        1.4625062942504883,
+        1.5780482292175293,
+        1.5197131633758545
+      ],
+      "候选损失": [
+        1.4708720445632935,
+        1.5288983583450317,
+        1.533689022064209,
+        1.4625062942504883,
+        1.5780482292175293,
+        1.5197131633758545
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 4,
+          "unique_graphs": 1
+        },
+        "npugraph_ex": {
+          "captured_graph_1": 1,
+          "captured_graph_2": 1
+        }
+      },
+      "BN计数": {
+        "1.num_batches_tracked": 6
+      },
+      "总耗时秒": 15.22910678666085,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/conv_bn_relu__npugraph_ex__fp32/run.log"
+    },
+    {
+      "模型": "transformer",
+      "后端": "raw_eager",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "2",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        8,
+        32
+      ],
+      "参数量": 8544,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "NativeLayerNormBackward0",
+      "最大绝对误差": {
+        "输出": 0.0,
+        "loss": 0.0,
+        "梯度": 0.0,
+        "状态": 0.0
+      },
+      "超差项": [],
+      "更新参数数量": 12,
+      "eager每步毫秒": [
+        305.26192113757133,
+        4.51662577688694,
+        3.9047766476869583,
+        3.869236446917057,
+        3.9278874173760414,
+        3.9207879453897476
+      ],
+      "候选每步毫秒": [
+        3.9428267627954483,
+        3.971167840063572,
+        3.89658659696579,
+        3.944587893784046,
+        3.893716260790825,
+        3.9316462352871895
+      ],
+      "eager损失": [
+        1.8812313079833984,
+        2.157564163208008,
+        2.1061527729034424,
+        1.893338918685913,
+        1.9266841411590576,
+        1.8487544059753418
+      ],
+      "候选损失": [
+        1.8812313079833984,
+        2.157564163208008,
+        2.1061527729034424,
+        1.893338918685913,
+        1.9266841411590576,
+        1.8487544059753418
+      ],
+      "Dynamo计数": {},
+      "BN计数": {},
+      "总耗时秒": 18.291405476629734,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/transformer__raw_eager__fp32/run.log"
+    },
+    {
+      "模型": "transformer",
+      "后端": "eager",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "2",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        8,
+        32
+      ],
+      "参数量": 8544,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "NativeLayerNormBackward0",
+      "编译梯度函数": "NativeLayerNormBackward0",
+      "最大绝对误差": {
+        "输出": 0.0,
+        "loss": 0.0,
+        "梯度": 0.0,
+        "状态": 0.0
+      },
+      "超差项": [],
+      "更新参数数量": 12,
+      "eager每步毫秒": [
+        392.62233581393957,
+        5.134624429047108,
+        4.511545412242413,
+        4.453044384717941,
+        4.6389782801270485,
+        4.548345692455769
+      ],
+      "候选每步毫秒": [
+        637.5853065401316,
+        4.690498113632202,
+        4.5982664451003075,
+        4.540666937828064,
+        4.559537395834923,
+        4.625758156180382
+      ],
+      "eager损失": [
+        1.8812313079833984,
+        2.157564163208008,
+        2.1061527729034424,
+        1.893338918685913,
+        1.9266841411590576,
+        1.8487544059753418
+      ],
+      "候选损失": [
+        1.8812313079833984,
+        2.157564163208008,
+        2.1061527729034424,
+        1.893338918685913,
+        1.9266841411590576,
+        1.8487544059753418
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 14,
+          "unique_graphs": 1
+        }
+      },
+      "BN计数": {},
+      "总耗时秒": 14.628509948961437,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/transformer__eager__fp32/run.log"
+    },
+    {
+      "模型": "transformer",
+      "后端": "aot_eager",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "2",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        8,
+        32
+      ],
+      "参数量": 8544,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "NativeLayerNormBackward0",
+      "编译梯度函数": "CompiledFunctionBackward",
+      "最大绝对误差": {
+        "输出": 0.0,
+        "loss": 0.0,
+        "梯度": 0.0,
+        "状态": 0.0
+      },
+      "超差项": [],
+      "更新参数数量": 12,
+      "eager每步毫秒": [
+        415.00254068523645,
+        5.196644924581051,
+        4.315703175961971,
+        4.510954953730106,
+        4.55266609787941,
+        4.485185258090496
+      ],
+      "候选每步毫秒": [
+        2646.4764969423413,
+        5.815684795379639,
+        5.437688902020454,
+        5.4809898138046265,
+        5.461299791932106,
+        5.357758142054081
+      ],
+      "eager损失": [
+        1.8812313079833984,
+        2.157564163208008,
+        2.1061527729034424,
+        1.893338918685913,
+        1.9266841411590576,
+        1.8487544059753418
+      ],
+      "候选损失": [
+        1.8812313079833984,
+        2.157564163208008,
+        2.1061527729034424,
+        1.893338918685913,
+        1.9266841411590576,
+        1.8487544059753418
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 14,
+          "unique_graphs": 1
+        },
+        "aot_autograd": {
+          "total": 1,
+          "ok": 1
+        }
+      },
+      "BN计数": {},
+      "总耗时秒": 16.438889735378325,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/transformer__aot_eager__fp32/run.log"
+    },
+    {
+      "模型": "transformer",
+      "后端": "inductor",
+      "精度": "fp32",
+      "状态": "失败",
+      "阶段": "编译训练:前向",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "2",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        8,
+        32
+      ],
+      "参数量": 8544,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 0,
+      "eager梯度函数": "NativeLayerNormBackward0",
+      "错误类型": "InductorError",
+      "错误": "LoweringException: TypeError: make_reduction() got an unexpected keyword argument 'strict_sum'\n  target: aten.native_layer_norm.default\n  args[0]: TensorBox(StorageBox(\n    ComputedBuffer(name='buf11', layout=FixedLayout('npu:2', torch.float32, size=[2, 8, 32], stride=[256, 32, 1]), data=Pointwise(\n      'npu',\n      torch.float32,\n      def inner_fn(index):\n          i0, i1, i2 = index\n          tmp0 = ops.load(primals_1, i2 + 32 * i1 + 256 * i0)\n          tmp1 = ops.load(primals_5, i2)\n          tmp2 = ops.load(buf10, i2 + 32 * i0 + 64 * i1)\n          tmp3 = tmp1 + tmp2\n          tmp4 = tmp0 + tmp3\n          return tmp4\n      ,\n      ranges=[2, 8, 32],\n      origin_node=add_1,\n      origins=OrderedSet([add_1, permute_8, view_11, add_tensor_2])\n    ), _split_size=None, _original_inner_fn=None, _original_ranges=None, _original_reduction_ranges=None)\n  ))\n  args[1]: [32]\n  args[2]: TensorBox(StorageBox(\n    InputBuffer(name='primals_6', layout=FixedLayout('npu:2', torch.float32, size=[32], stride=[1]))\n  ))\n  args[3]: TensorBox(StorageBox(\n    InputBuffer(name='primals_7', layout=FixedLayout('npu:2', torch.float32, size=[32], stride=[1]))\n  ))\n  args[4]: 1e-05\n\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\n",
+      "堆栈": "Traceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 154, in worker\n    actual, candidate_times = run(candidate, compiled, backend != \"raw_eager\")\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 116, in run\n    output = train_model(inputs)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 563, in __call__\n    return super().__call__(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 1783, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 1794, in _call_impl\n    return forward_call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 1278, in compile_wrapper\n    raise e.remove_dynamo_frames() from None  # see TORCHDYNAMO_VERBOSE=1\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1192, in _compile_fx_inner\n    raise InductorError(e, currentframe()).with_traceback(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1169, in _compile_fx_inner\n    mb_compiled_graph = fx_codegen_and_compile(\n                        ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 2001, in fx_codegen_and_compile\n    return scheme.codegen_and_compile(gm, example_inputs, inputs_to_check, graph_kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1660, in codegen_and_compile\n    graph.run(*example_inputs)\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1135, in run\n    return super().run(*args)\n           ^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/interpreter.py\", line 197, in run\n    self.env[node] = self.run_node(node)\n                     ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 2062, in run_node\n    result = super().run_node(n)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/interpreter.py\", line 294, in run_node\n    return getattr(self, n.op)(n.target, args, kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1567, in call_function\n    raise LoweringException(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1544, in call_function\n    out = lowerings[target](*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 525, in wrapped\n    out = decomp_fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py\", line 1148, in native_layer_norm\n    var, mean = var_mean_helper_(\n                ^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py\", line 957, in var_mean_helper_\n    var_mean_sum_(**kwargs)\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py\", line 862, in var_mean_sum_\n    x_mean = mean(x, axis, keepdim=True)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 525, in wrapped\n    out = decomp_fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py\", line 267, in mean\n    sum_result = sum_(x, axis, keepdim)\n                 ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 525, in wrapped\n    out = decomp_fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 7971, in sum_\n    fn = make_reduction(\"sum\", override_return_dtype=dtype, strict_sum=strict_sum)\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntorch._inductor.exc.InductorError: LoweringException: TypeError: make_reduction() got an unexpected keyword argument 'strict_sum'\n  target: aten.native_layer_norm.default\n  args[0]: TensorBox(StorageBox(\n    ComputedBuffer(name='buf11', layout=FixedLayout('npu:2', torch.float32, size=[2, 8, 32], stride=[256, 32, 1]), data=Pointwise(\n      'npu',\n      torch.float32,\n      def inner_fn(index):\n          i0, i1, i2 = index\n          tmp0 = ops.load(primals_1, i2 + 32 * i1 + 256 * i0)\n          tmp1 = ops.load(primals_5, i2)\n          tmp2 = ops.load(buf10, i2 + 32 * i0 + 64 * i1)\n          tmp3 = tmp1 + tmp2\n          tmp4 = tmp0 + tmp3\n          return tmp4\n      ,\n      ranges=[2, 8, 32],\n      origin_node=add_1,\n      origins=OrderedSet([add_1, permute_8, view_11, add_tensor_2])\n    ), _split_size=None, _original_inner_fn=None, _original_ranges=None, _original_reduction_ranges=None)\n  ))\n  args[1]: [32]\n  args[2]: TensorBox(StorageBox(\n    InputBuffer(name='primals_6', layout=FixedLayout('npu:2', torch.float32, size=[32], stride=[1]))\n  ))\n  args[3]: TensorBox(StorageBox(\n    InputBuffer(name='primals_7', layout=FixedLayout('npu:2', torch.float32, size=[32], stride=[1]))\n  ))\n  args[4]: 1e-05\n\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\n\n",
+      "总耗时秒": 24.764192326925695,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/transformer__inductor__fp32/run.log"
+    },
+    {
+      "模型": "transformer",
+      "后端": "inductor_reduce_overhead",
+      "精度": "fp32",
+      "状态": "失败",
+      "阶段": "编译训练:前向",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "2",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        8,
+        32
+      ],
+      "参数量": 8544,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 0,
+      "eager梯度函数": "NativeLayerNormBackward0",
+      "错误类型": "InductorError",
+      "错误": "LoweringException: TypeError: make_reduction() got an unexpected keyword argument 'strict_sum'\n  target: aten.native_layer_norm.default\n  args[0]: TensorBox(StorageBox(\n    ComputedBuffer(name='buf11', layout=FixedLayout('npu:2', torch.float32, size=[2, 8, 32], stride=[256, 32, 1]), data=Pointwise(\n      'npu',\n      torch.float32,\n      def inner_fn(index):\n          i0, i1, i2 = index\n          tmp0 = ops.load(primals_1, i2 + 32 * i1 + 256 * i0)\n          tmp1 = ops.load(primals_5, i2)\n          tmp2 = ops.load(buf10, i2 + 32 * i0 + 64 * i1)\n          tmp3 = tmp1 + tmp2\n          tmp4 = tmp0 + tmp3\n          return tmp4\n      ,\n      ranges=[2, 8, 32],\n      origin_node=add_1,\n      origins=OrderedSet([add_1, permute_8, view_11, add_tensor_2])\n    ), _split_size=None, _original_inner_fn=None, _original_ranges=None, _original_reduction_ranges=None)\n  ))\n  args[1]: [32]\n  args[2]: TensorBox(StorageBox(\n    InputBuffer(name='primals_6', layout=FixedLayout('npu:2', torch.float32, size=[32], stride=[1]))\n  ))\n  args[3]: TensorBox(StorageBox(\n    InputBuffer(name='primals_7', layout=FixedLayout('npu:2', torch.float32, size=[32], stride=[1]))\n  ))\n  args[4]: 1e-05\n\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\n",
+      "堆栈": "Traceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 154, in worker\n    actual, candidate_times = run(candidate, compiled, backend != \"raw_eager\")\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 116, in run\n    output = train_model(inputs)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 563, in __call__\n    return super().__call__(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 1783, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 1794, in _call_impl\n    return forward_call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 1278, in compile_wrapper\n    raise e.remove_dynamo_frames() from None  # see TORCHDYNAMO_VERBOSE=1\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1192, in _compile_fx_inner\n    raise InductorError(e, currentframe()).with_traceback(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1169, in _compile_fx_inner\n    mb_compiled_graph = fx_codegen_and_compile(\n                        ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 2001, in fx_codegen_and_compile\n    return scheme.codegen_and_compile(gm, example_inputs, inputs_to_check, graph_kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1660, in codegen_and_compile\n    graph.run(*example_inputs)\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1135, in run\n    return super().run(*args)\n           ^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/interpreter.py\", line 197, in run\n    self.env[node] = self.run_node(node)\n                     ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 2062, in run_node\n    result = super().run_node(n)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/interpreter.py\", line 294, in run_node\n    return getattr(self, n.op)(n.target, args, kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1567, in call_function\n    raise LoweringException(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1544, in call_function\n    out = lowerings[target](*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 525, in wrapped\n    out = decomp_fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py\", line 1148, in native_layer_norm\n    var, mean = var_mean_helper_(\n                ^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py\", line 957, in var_mean_helper_\n    var_mean_sum_(**kwargs)\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py\", line 862, in var_mean_sum_\n    x_mean = mean(x, axis, keepdim=True)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 525, in wrapped\n    out = decomp_fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py\", line 267, in mean\n    sum_result = sum_(x, axis, keepdim)\n                 ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 525, in wrapped\n    out = decomp_fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 7971, in sum_\n    fn = make_reduction(\"sum\", override_return_dtype=dtype, strict_sum=strict_sum)\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntorch._inductor.exc.InductorError: LoweringException: TypeError: make_reduction() got an unexpected keyword argument 'strict_sum'\n  target: aten.native_layer_norm.default\n  args[0]: TensorBox(StorageBox(\n    ComputedBuffer(name='buf11', layout=FixedLayout('npu:2', torch.float32, size=[2, 8, 32], stride=[256, 32, 1]), data=Pointwise(\n      'npu',\n      torch.float32,\n      def inner_fn(index):\n          i0, i1, i2 = index\n          tmp0 = ops.load(primals_1, i2 + 32 * i1 + 256 * i0)\n          tmp1 = ops.load(primals_5, i2)\n          tmp2 = ops.load(buf10, i2 + 32 * i0 + 64 * i1)\n          tmp3 = tmp1 + tmp2\n          tmp4 = tmp0 + tmp3\n          return tmp4\n      ,\n      ranges=[2, 8, 32],\n      origin_node=add_1,\n      origins=OrderedSet([add_1, permute_8, view_11, add_tensor_2])\n    ), _split_size=None, _original_inner_fn=None, _original_ranges=None, _original_reduction_ranges=None)\n  ))\n  args[1]: [32]\n  args[2]: TensorBox(StorageBox(\n    InputBuffer(name='primals_6', layout=FixedLayout('npu:2', torch.float32, size=[32], stride=[1]))\n  ))\n  args[3]: TensorBox(StorageBox(\n    InputBuffer(name='primals_7', layout=FixedLayout('npu:2', torch.float32, size=[32], stride=[1]))\n  ))\n  args[4]: 1e-05\n\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\n\n",
+      "总耗时秒": 20.131331290118396,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/transformer__inductor_reduce_overhead__fp32/run.log"
+    },
+    {
+      "模型": "transformer",
+      "后端": "inductor_mlir",
+      "精度": "fp32",
+      "状态": "失败",
+      "阶段": "创建编译包装",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "2",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        8,
+        32
+      ],
+      "参数量": 8544,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 0,
+      "eager梯度函数": "NativeLayerNormBackward0",
+      "错误类型": "ImportError",
+      "错误": "torch_mlir is not installed, install it first.",
+      "堆栈": "Traceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/__init__.py\", line 85, in _load_mlir_backend\n    import torch_mlir\nModuleNotFoundError: No module named 'torch_mlir'\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 151, in worker\n    compiled = candidate if backend == \"raw_eager\" else torch.compile(\n                                                        ^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/__init__.py\", line 3276, in compile\n    backend = _TorchCompileInductorWrapper(mode, options, dynamic, name)\n              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/utils/_dynamo.py\", line 216, in new_init\n    with _NpuBackendScope(backend):\n         ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/utils/_dynamo.py\", line 119, in __enter__\n    register_inductor_npu()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/utils/_dynamo.py\", line 88, in register_inductor_npu\n    _InductorNpuRegistry.register_inductor_npu()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/utils/_dynamo.py\", line 59, in register_inductor_npu\n    sys.modules[\"torch_npu._inductor\"]._load_backend()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/__init__.py\", line 403, in _load_backend\n    loader()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/__init__.py\", line 88, in _load_mlir_backend\n    raise ImportError(\"torch_mlir is not installed, install it first.\") from e\nImportError: torch_mlir is not installed, install it first.\n",
+      "总耗时秒": 18.462634216994047,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/transformer__inductor_mlir__fp32/run.log"
+    },
+    {
+      "模型": "transformer",
+      "后端": "inductor_dvm",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "2",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        8,
+        32
+      ],
+      "参数量": 8544,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "NativeLayerNormBackward0",
+      "编译梯度函数": "CompiledFunctionBackward",
+      "最大绝对误差": {
+        "输出": 4.76837158203125e-07,
+        "loss": 0.0,
+        "梯度": 2.9802322387695312e-08,
+        "状态": 1.4901161193847656e-08
+      },
+      "超差项": [],
+      "更新参数数量": 12,
+      "eager每步毫秒": [
+        360.11732183396816,
+        4.789669997990131,
+        3.8978569209575653,
+        3.9684679359197617,
+        4.055009223520756,
+        4.017338156700134
+      ],
+      "候选每步毫秒": [
+        4922.919366508722,
+        7.6521821320056915,
+        5.798835307359695,
+        5.63439168035984,
+        5.7892752811312675,
+        5.734574049711227
+      ],
+      "eager损失": [
+        1.8812313079833984,
+        2.157564163208008,
+        2.1061527729034424,
+        1.893338918685913,
+        1.9266841411590576,
+        1.8487544059753418
+      ],
+      "候选损失": [
+        1.8812313079833984,
+        2.157564163208008,
+        2.1061527729034424,
+        1.893338918685913,
+        1.9266841411590576,
+        1.8487544059753418
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 14,
+          "unique_graphs": 1
+        },
+        "aot_autograd": {
+          "total": 1,
+          "autograd_cache_miss": 1,
+          "ok": 1,
+          "autograd_cache_saved": 1
+        },
+        "inductor": {
+          "pattern_matcher_count": 39,
+          "pattern_matcher_nodes": 42,
+          "fxgraph_cache_miss": 2,
+          "extern_calls": 72
+        }
+      },
+      "BN计数": {},
+      "总耗时秒": 23.55502990912646,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/transformer__inductor_dvm__fp32/run.log"
+    },
+    {
+      "模型": "transformer",
+      "后端": "npu",
+      "精度": "fp32",
+      "状态": "失败",
+      "阶段": "编译训练:前向",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "2",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        8,
+        32
+      ],
+      "参数量": 8544,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 0,
+      "eager梯度函数": "NativeLayerNormBackward0",
+      "错误类型": "RuntimeError",
+      "错误": "only supported softmax_layout=TND\n[ERROR] 2026-10-20-02:22:39 (PID:55242, Device:2, RankID:-1) ERR01001 OPS invalid parameter\nTraceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/dynamo/torchair/_utils/error_code.py\", line 45, in wapper\n    return func(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/dynamo/torchair/core/_backend.py\", line 212, in run\n    return super(TorchNpuGraph, self).run((inputs, assigned_outputs, stream))  # pylint: disable=super-with-arguments\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_compile.py\", line 54, in inner\n    return disable_fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 1548, in _fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 477, in __torch_dispatch__\n    res = func(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_ops.py\", line 916, in __call__\n    return self._op(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: only supported softmax_layout=TND\n[ERROR] 2026-10-20-02:22:39 (PID:55242, Device:2, RankID:-1) ERR01001 OPS invalid parameter\n\n\n[ERROR] 2026-10-20-02:22:39 (PID:55242, Device:2, RankID:-1) ERR03005 GRAPH internal error",
+      "堆栈": "Traceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/dynamo/torchair/_utils/error_code.py\", line 45, in wapper\n    return func(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/dynamo/torchair/core/_backend.py\", line 212, in run\n    return super(TorchNpuGraph, self).run((inputs, assigned_outputs, stream))  # pylint: disable=super-with-arguments\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_compile.py\", line 54, in inner\n    return disable_fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 1548, in _fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 477, in __torch_dispatch__\n    res = func(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_ops.py\", line 916, in __call__\n    return self._op(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: only supported softmax_layout=TND\n[ERROR] 2026-10-20-02:22:39 (PID:55242, Device:2, RankID:-1) ERR01001 OPS invalid parameter\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 154, in worker\n    actual, candidate_times = run(candidate, compiled, backend != \"raw_eager\")\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 116, in run\n    output = train_model(inputs)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 563, in __call__\n    return super().__call__(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 1783, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 1794, in _call_impl\n    return forward_call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 1261, in compile_wrapper\n    result = fn(*args, **kwargs)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/external_utils.py\", line 67, in inner\n    @functools.wraps(fn)\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 1548, in _fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/aot_autograd.py\", line 1289, in forward\n    return compiled_fn(full_args)\n           ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 1189, in runtime_wrapper\n    result = _codegen_runtime_wrapper(\n             ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/codegen.py:codegen(runtime_wrapper_orchestration)\", line 11, in _runtime_wrapper\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/utils.py\", line 118, in g\n    return f(*args)\n           ^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 3521, in forward\n    return CompiledFunction._fwd_fn(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/codegen.py:codegen(compiled_function_forward)\", line 2, in _compiled_forward\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/utils.py\", line 118, in g\n    return f(*args)\n           ^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/dynamo/torchair/npu_fx_compiler.py\", line 592, in __call__\n    gm_result = self.run_kernel(*args, **kwargs)\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/dynamo/torchair/_ge_concrete_graph/fx2ge_converter.py\", line 1194, in __call__\n    ge_outputs = self.graph.run(inputs)\n                 ^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/dynamo/torchair/ge/_ge_graph.py\", line 903, in run\n    return self._executor.run(inputs, assigned_outputs, stream)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/dynamo/torchair/_utils/error_code.py\", line 48, in wapper\n    raise type(e)(\"\\n\".join(msg))\nRuntimeError: only supported softmax_layout=TND\n[ERROR] 2026-10-20-02:22:39 (PID:55242, Device:2, RankID:-1) ERR01001 OPS invalid parameter\nTraceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/dynamo/torchair/_utils/error_code.py\", line 45, in wapper\n    return func(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/dynamo/torchair/core/_backend.py\", line 212, in run\n    return super(TorchNpuGraph, self).run((inputs, assigned_outputs, stream))  # pylint: disable=super-with-arguments\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_compile.py\", line 54, in inner\n    return disable_fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 1548, in _fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 477, in __torch_dispatch__\n    res = func(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_ops.py\", line 916, in __call__\n    return self._op(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: only supported softmax_layout=TND\n[ERROR] 2026-10-20-02:22:39 (PID:55242, Device:2, RankID:-1) ERR01001 OPS invalid parameter\n\n\n[ERROR] 2026-10-20-02:22:39 (PID:55242, Device:2, RankID:-1) ERR03005 GRAPH internal error\n",
+      "总耗时秒": 74.96695221029222,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/transformer__npu__fp32/run.log"
+    },
+    {
+      "模型": "transformer",
+      "后端": "npugraphs",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "2",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        8,
+        32
+      ],
+      "参数量": 8544,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "NativeLayerNormBackward0",
+      "编译梯度函数": "CompiledFunctionBackward",
+      "最大绝对误差": {
+        "输出": 0.0,
+        "loss": 0.0,
+        "梯度": 0.0,
+        "状态": 0.0
+      },
+      "超差项": [],
+      "更新参数数量": 12,
+      "eager每步毫秒": [
+        378.07151582092047,
+        4.595967009663582,
+        3.8980673998594284,
+        3.920767456293106,
+        4.1182395070791245,
+        3.977007232606411
+      ],
+      "候选每步毫秒": [
+        4596.2067022919655,
+        28.932361863553524,
+        3.794935531914234,
+        2.6853997260332108,
+        2.7334699407219887,
+        2.634909003973007
+      ],
+      "eager损失": [
+        1.8812313079833984,
+        2.157564163208008,
+        2.1061527729034424,
+        1.893338918685913,
+        1.9266841411590576,
+        1.8487544059753418
+      ],
+      "候选损失": [
+        1.8812313079833984,
+        2.157564163208008,
+        2.1061527729034424,
+        1.893338918685913,
+        1.9266841411590576,
+        1.8487544059753418
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 14,
+          "unique_graphs": 1
+        },
+        "aot_autograd": {
+          "total": 1,
+          "ok": 1
+        },
+        "inductor": {
+          "npugraph_recorded_non_static_inputs": 14
+        }
+      },
+      "BN计数": {},
+      "总耗时秒": 19.690441558137536,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/transformer__npugraphs__fp32/run.log"
+    },
+    {
+      "模型": "transformer",
+      "后端": "npugraph_ex",
+      "精度": "fp32",
+      "状态": "通过",
+      "阶段": "完成",
+      "环境": {
+        "Python": "3.12.14",
+        "PyTorch": "2.14.0+cpu",
+        "TorchNPU": "2.14.0",
+        "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+        "NPU": "Ascend910B2",
+        "设备": "2",
+        "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+        "TASK_QUEUE_ENABLE": "1",
+        "编译后端": [
+          "cudagraphs",
+          "inductor",
+          "npu",
+          "npugraph_ex",
+          "npugraphs",
+          "openxla",
+          "tvm"
+        ],
+        "版本": {
+          "triton": "3.6.0",
+          "triton-ascend": "3.6.0",
+          "torch-mlir": null
+        }
+      },
+      "输入形状": [
+        2,
+        8,
+        32
+      ],
+      "参数量": 8544,
+      "fullgraph": true,
+      "dynamic": false,
+      "优化器": "SGD(lr=0.01, foreach=False)",
+      "容差": {
+        "atol": 1e-05,
+        "rtol": 0.0001
+      },
+      "完成步数": 6,
+      "eager梯度函数": "NativeLayerNormBackward0",
+      "编译梯度函数": "CompiledFunctionBackward",
+      "最大绝对误差": {
+        "输出": 0.0,
+        "loss": 0.0,
+        "梯度": 0.0,
+        "状态": 0.0
+      },
+      "超差项": [],
+      "更新参数数量": 12,
+      "eager每步毫秒": [
+        336.4197453483939,
+        4.763788543641567,
+        3.8298266008496284,
+        3.8781361654400826,
+        4.087010398507118,
+        3.9684586226940155
+      ],
+      "候选每步毫秒": [
+        3141.776429489255,
+        6.166029721498489,
+        4.102020524442196,
+        4.067258909344673,
+        4.128559492528439,
+        4.08173818141222
+      ],
+      "eager损失": [
+        1.8812313079833984,
+        2.157564163208008,
+        2.1061527729034424,
+        1.893338918685913,
+        1.9266841411590576,
+        1.8487544059753418
+      ],
+      "候选损失": [
+        1.8812313079833984,
+        2.157564163208008,
+        2.1061527729034424,
+        1.893338918685913,
+        1.9266841411590576,
+        1.8487544059753418
+      ],
+      "Dynamo计数": {
+        "stats": {
+          "calls_captured": 14,
+          "unique_graphs": 1
+        },
+        "npugraph_ex": {
+          "captured_graph_1": 1,
+          "captured_graph_2": 1
+        }
+      },
+      "BN计数": {},
+      "总耗时秒": 17.623533625155687,
+      "日志": "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/minimal_training_20261020_fp32/transformer__npugraph_ex__fp32/run.log"
+    }
+  ]
+}

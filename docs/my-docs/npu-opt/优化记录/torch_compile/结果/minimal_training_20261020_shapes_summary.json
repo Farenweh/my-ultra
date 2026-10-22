@@ -1,0 +1,236 @@
+{
+  "日期": "2026-10-20",
+  "环境": {
+    "Python": "3.12.14",
+    "PyTorch": "2.14.0+cpu",
+    "TorchNPU": "2.14.0",
+    "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+    "NPU": "Ascend910B2",
+    "设备": "0",
+    "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+    "TASK_QUEUE_ENABLE": "1",
+    "编译后端": [
+      "cudagraphs",
+      "inductor",
+      "npu",
+      "npugraph_ex",
+      "npugraphs",
+      "openxla",
+      "tvm"
+    ],
+    "版本": {
+      "triton": "3.6.0",
+      "triton-ascend": "3.6.0",
+      "torch-mlir": null
+    }
+  },
+  "对照": "同权重初始化的 eager，逐步比较输出、loss、梯度、参数和 BN 状态；SGD，fullgraph=True，未开启错误回退。",
+  "测试顺序": "三组形状 A→B→C→A→B→C，每项共6步，FP32/BF16各测。",
+  "形状": {
+    "linear": [
+      [
+        4,
+        16
+      ],
+      [
+        6,
+        16
+      ],
+      [
+        3,
+        16
+      ],
+      [
+        4,
+        16
+      ],
+      [
+        6,
+        16
+      ],
+      [
+        3,
+        16
+      ]
+    ],
+    "conv_bn_relu": [
+      [
+        2,
+        3,
+        8,
+        10
+      ],
+      [
+        3,
+        3,
+        10,
+        12
+      ],
+      [
+        4,
+        3,
+        12,
+        14
+      ],
+      [
+        2,
+        3,
+        8,
+        10
+      ],
+      [
+        3,
+        3,
+        10,
+        12
+      ],
+      [
+        4,
+        3,
+        12,
+        14
+      ]
+    ],
+    "transformer": [
+      [
+        2,
+        8,
+        32
+      ],
+      [
+        3,
+        12,
+        32
+      ],
+      [
+        4,
+        6,
+        32
+      ],
+      [
+        2,
+        8,
+        32
+      ],
+      [
+        3,
+        12,
+        32
+      ],
+      [
+        4,
+        6,
+        32
+      ]
+    ]
+  },
+  "统计": {
+    "通过": 26,
+    "失败": 10
+  },
+  "结果矩阵": {
+    "符号动态": {
+      "inductor_dvm": {
+        "linear": {
+          "fp32": "通过",
+          "amp_bf16": "通过"
+        },
+        "conv_bn_relu": {
+          "fp32": "失败",
+          "amp_bf16": "失败"
+        },
+        "transformer": {
+          "fp32": "通过",
+          "amp_bf16": "通过"
+        }
+      },
+      "npugraphs": {
+        "linear": {
+          "fp32": "失败",
+          "amp_bf16": "失败"
+        },
+        "conv_bn_relu": {
+          "fp32": "失败",
+          "amp_bf16": "失败"
+        },
+        "transformer": {
+          "fp32": "通过",
+          "amp_bf16": "通过"
+        }
+      },
+      "npugraph_ex": {
+        "linear": {
+          "fp32": "失败",
+          "amp_bf16": "失败"
+        },
+        "conv_bn_relu": {
+          "fp32": "失败",
+          "amp_bf16": "失败"
+        },
+        "transformer": {
+          "fp32": "通过",
+          "amp_bf16": "通过"
+        }
+      }
+    },
+    "静态多形状缓存": {
+      "inductor_dvm": {
+        "linear": {
+          "fp32": "通过",
+          "amp_bf16": "通过"
+        },
+        "conv_bn_relu": {
+          "fp32": "通过",
+          "amp_bf16": "通过"
+        },
+        "transformer": {
+          "fp32": "通过",
+          "amp_bf16": "通过"
+        }
+      },
+      "npugraphs": {
+        "linear": {
+          "fp32": "通过",
+          "amp_bf16": "通过"
+        },
+        "conv_bn_relu": {
+          "fp32": "通过",
+          "amp_bf16": "通过"
+        },
+        "transformer": {
+          "fp32": "通过",
+          "amp_bf16": "通过"
+        }
+      },
+      "npugraph_ex": {
+        "linear": {
+          "fp32": "通过",
+          "amp_bf16": "通过"
+        },
+        "conv_bn_relu": {
+          "fp32": "通过",
+          "amp_bf16": "通过"
+        },
+        "transformer": {
+          "fp32": "通过",
+          "amp_bf16": "通过"
+        }
+      }
+    }
+  },
+  "判读": {
+    "静态多形状缓存": "dynamic=False 允许新形状触发新编译；三个后端全部通过，Dynamo图数量为1→2→3→3→3→3，说明重复形状复用缓存。",
+    "符号动态": "dynamic=True 尽量泛化维度，但当前实现仍存在专门化和错误。DVM线性层一个Dynamo图覆盖三种batch；Transformer仍按形状产生三个Dynamo图。",
+    "DVM卷积块失败": "BN动态方差计算表达式 IntTrueDiv 触发 TypeError: Expected a number but got IntTrueDiv。",
+    "NPUGraphs失败": "线性层和卷积块在第三种形状前向时出现 aclnnInplaceCopy 输入形状不匹配。",
+    "NPUGraph_EX失败": "线性层和卷积块在第二种形状反向时出现 TensorMetadata/NoneType 重建错误。"
+  },
+  "原始汇总": {
+    "dynamic_fp32": "minimal_training_20261020_dynamic_fp32/summary.json",
+    "dynamic_bf16": "minimal_training_20261020_dynamic_bf16/summary.json",
+    "multishape_fp32": "minimal_training_20261020_multishape_fp32/summary.json",
+    "multishape_bf16": "minimal_training_20261020_multishape_bf16/summary.json"
+  },
+  "复现": "python docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py --vary-shapes --backend inductor_dvm npugraphs npugraph_ex --output /tmp/npu_multishape；增加 --dynamic 测符号动态，增加 --dtype amp_bf16 测 BF16。",
+  "限制": "仅覆盖固定rank、三组小形状、单卡6步训练；不代表任意算子、无限形状档位、动态rank、数据依赖输出形状、DDP或长训练收敛支持。"
+}

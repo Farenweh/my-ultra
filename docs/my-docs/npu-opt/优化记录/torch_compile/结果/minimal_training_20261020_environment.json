@@ -1,0 +1,27 @@
+{
+  "时间": "2026-10-20T10:20:43.172628+08:00",
+  "解释器": "/root/work/filestorage/zhoufei/hermite/envs/torch/bin/python",
+  "系统": "Linux-4.19.90-2107.6.0.0251.71.oe1.bclinux.aarch64-aarch64-with-glibc2.39",
+  "文件": {
+    "/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/version.py": {
+      "SHA256": "4edb12deef2a8ec0378499dfe1fb2e62b6c9ce54f4c9c564e5109d0357613dfd",
+      "内容": "__version__ = '2.14.0'\ngit_version = '54e365d3e3614299bccd17f06916544c3880c9fc'\n"
+    },
+    "/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering.py": {
+      "SHA256": "6ea09a5758c2888729a7aceb29f38c10d83a749404bc98e7982d147cf9bee12e"
+    },
+    "/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py": {
+      "SHA256": "c2ea8692e9948b82175cf8fc3ad9fa67e98b04c9b9e1fba5ae2ac77902d18e0c"
+    },
+    "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0/share/info/runtime/version.info": {
+      "SHA256": "c758f2c7ba7b944c27e9f0858f2a9988e359fd689d284a88f9bf22b78fb363f1",
+      "内容": "Version=9.2.0\nversion_dir=cann\ntimestamp=20261015_201912253\n"
+    },
+    "/usr/local/Ascend/driver/version.info": {
+      "SHA256": "1bc07a765a4b4c765510ec7979113ea03b0217f1dcc0c2eb4646d011d7f88902",
+      "内容": "Version=25.5.2\nascendhal_version=7.35.23\naicpu_version=1.0\ntdt_version=1.0\nlog_version=1.0\nprof_version=2.0\ndvppkernels_version=1.1\ntsfw_version=1.0\nInnerversion=V100R001C23SPC007B221\ncompatible_version=[V100R001C19],[V100R001C20],[V100R001C21],[V100R001C22],[V100R001C23]\ncompatible_version_fw=[7.0.0,8.9.9]\npackage_version=25.5.2\n"
+    }
+  },
+  "官方后端说明": "https://www.hiascend.com/document/detail/en/Pytorch/2610/userguide/torchcompile/docs/en/torch_compile/pytorch_inductor_desc.md",
+  "测试范围": "固定形状、单卡、无 dropout 的最小训练；前向模型入图，loss 和 SGD 在图外；不代表 DDP、动态形状或长训练收敛。"
+}

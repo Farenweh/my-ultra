@@ -97,6 +97,7 @@ from ultralytics.utils.torch_utils import (
     init_seeds,
     one_cycle,
     parse_device,
+    prepare_npu_fused_optimizer,
     prepare_qat,
     qat_state,
     restore_qat,
@@ -678,26 +679,6 @@ class BaseTrainer(CallbackHost):
         # resume training would directly load DistillationModel so check here
         if self.args.distill_model is not None and not isinstance(unwrap_model(self.model), DistillationModel):
             self.model = DistillationModel(student_model=self.model, teacher_model=self.args.distill_model)
-        if self.world_size > 1:
-            # static_graph=True permits params used >1 time per forward (e.g. flow_model in
-            # o2m+o2o pose loss branches) under torch.compile.
-            compiled = bool(self.args.compile)
-            ddp_kwargs = {"static_graph": self._get_ddp_static_graph()} if TORCH_1_11 else {}
-            ddp_kwargs["forward_sync_buffers" if TORCH_2_13 else "broadcast_buffers"] = False
-            padding = self._align_ddp_broadcast_buffers(self.model, self.world_size)
-            if padding and RANK in {-1, 0}:
-                LOGGER.info(
-                    "DDP buffer alignment padding: "
-                    + ", ".join(f"{device}/{dtype}: {pad_bytes}B" for (device, dtype), pad_bytes in padding.items())
-                )
-            self.model = nn.parallel.DistributedDataParallel(
-                self.model,
-                device_ids=[self.device.index],
-                find_unused_parameters=False if compiled else self._resolve_ddp_find_unused_parameters(self.model),
-                # Ascend 融合优化器会改写 p.grad data pointer，不能接收 DDP bucket view 梯度。
-                gradient_as_bucket_view=self._resolve_ddp_gradient_as_bucket_view(),
-                **ddp_kwargs,
-            )
 
         # Batch size
         if self.batch_size < 1 and RANK == -1:  # single-GPU only, estimate best batch size
@@ -755,6 +736,28 @@ class BaseTrainer(CallbackHost):
             )
 
         self._build_train_pipeline()
+        # 先构建优化器并确定参数物理布局，再让 DDP 缓存 bucket 长度与偏移。
+        if self.world_size > 1:
+            # static_graph=True permits params used >1 time per forward (e.g. flow_model in
+            # o2m+o2o pose loss branches) under torch.compile.
+            compiled = bool(self.args.compile)
+            ddp_kwargs = {"static_graph": self._get_ddp_static_graph()} if TORCH_1_11 else {}
+            ddp_kwargs["forward_sync_buffers" if TORCH_2_13 else "broadcast_buffers"] = False
+            padding = self._align_ddp_broadcast_buffers(self.model, self.world_size)
+            if padding and RANK in {-1, 0}:
+                LOGGER.info(
+                    "DDP buffer alignment padding: "
+                    + ", ".join(f"{device}/{dtype}: {pad_bytes}B" for (device, dtype), pad_bytes in padding.items())
+                )
+            self.model = nn.parallel.DistributedDataParallel(
+                self.model,
+                device_ids=[self.device.index],
+                find_unused_parameters=False if compiled else self._resolve_ddp_find_unused_parameters(self.model),
+                # Ascend 融合优化器会改写 p.grad data pointer，不能接收 DDP bucket view 梯度。
+                gradient_as_bucket_view=self._resolve_ddp_gradient_as_bucket_view(),
+                **ddp_kwargs,
+            )
+
         self.validator = self.get_validator()
         self.set_class_weights()  # compute class weights after dataloader is ready
         self.ema = ModelEMA(self.model, batch_scale=self._ema_batch_scale())  # 保留上游类别权重初始化顺序
@@ -2137,6 +2140,10 @@ class BaseTrainer(CallbackHost):
             fused_name = f"NpuFused{name}"
             fused_optimizer_cls = getattr(torch_npu.optim, fused_name, None)
             if fused_optimizer_cls is not None:
+                if USE_ASCEND_INTERNAL_FORMAT is not False:
+                    converted = prepare_npu_fused_optimizer(model)
+                    if converted:
+                        LOGGER.info(f"Ascend 融合优化器：已为 {converted} 个 BN 参数保留 NC1HWC0 对齐存储。")
                 optimizer_cls = fused_optimizer_cls
             elif USE_ASCEND_FUSED_OPTIMIZER is True:
                 raise RuntimeError(f"USE_ASCEND_FUSED_OPTIMIZER=1 requires torch_npu.optim.{fused_name}.")

@@ -1,0 +1,126 @@
+{
+  "状态": "通过",
+  "配置": {
+    "backend": "inductor_dvm",
+    "mode": "direct",
+    "fullgraph": false,
+    "device": 1,
+    "preinit_momentum": false,
+    "output": "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/probe/inductor_dvm_fixed.json"
+  },
+  "捕获图": [
+    {
+      "节点数": 12,
+      "算子": [
+        "detach",
+        "clone",
+        "add_",
+        "detach",
+        "clone",
+        "add_",
+        "detach",
+        "clone",
+        "add_",
+        "detach",
+        "clone",
+        "add_"
+      ]
+    },
+    {
+      "节点数": 12,
+      "算子": [
+        "mul_",
+        "add_",
+        "add_",
+        "mul_",
+        "add_",
+        "add_",
+        "mul_",
+        "add_",
+        "add_",
+        "mul_",
+        "add_",
+        "add_"
+      ]
+    }
+  ],
+  "逐步结果": [
+    {
+      "步": 1,
+      "参数最大绝对误差": 0.0,
+      "momentum最大绝对误差": 0.0,
+      "累计图数": 1
+    },
+    {
+      "步": 2,
+      "参数最大绝对误差": 0.0,
+      "momentum最大绝对误差": 2.9802322387695312e-08,
+      "累计图数": 2
+    },
+    {
+      "步": 3,
+      "参数最大绝对误差": 0.0,
+      "momentum最大绝对误差": 0.0,
+      "累计图数": 2
+    },
+    {
+      "步": 4,
+      "参数最大绝对误差": 0.0,
+      "momentum最大绝对误差": 4.76837158203125e-07,
+      "累计图数": 2
+    },
+    {
+      "步": 5,
+      "参数最大绝对误差": 0.0,
+      "momentum最大绝对误差": 9.5367431640625e-07,
+      "累计图数": 2
+    },
+    {
+      "步": 6,
+      "参数最大绝对误差": 0.0,
+      "momentum最大绝对误差": 9.5367431640625e-07,
+      "累计图数": 2
+    },
+    {
+      "步": 7,
+      "参数最大绝对误差": 0.0,
+      "momentum最大绝对误差": 9.5367431640625e-07,
+      "累计图数": 2
+    },
+    {
+      "步": 8,
+      "参数最大绝对误差": 0.0,
+      "momentum最大绝对误差": 0.0,
+      "累计图数": 2
+    }
+  ],
+  "Dynamo计数": {
+    "frames": {
+      "total": 9,
+      "ok": 9
+    },
+    "graph_break": {
+      "Call to `torch._dynamo.graph_break()`\n  Explanation: User-inserted graph break. Message: None\n  Hint: Remove the `torch._dynamo.graph_break()` call.\n\n  Developer debug context: Called `torch._dynamo.graph_break()` with args `[]`, kwargs `{}`\n\n For more details about this graph break, please visit: https://meta-pytorch.github.io/compile-graph-break-site/gb/gb0025.html": 1
+    },
+    "resumes": {
+      "torch_dynamo_resume_in_wrapper_at_549": 1
+    },
+    "stats": {
+      "calls_captured": 24,
+      "unique_graphs": 2
+    },
+    "aot_autograd": {
+      "total": 2,
+      "autograd_cache_miss": 2,
+      "autograd_cache_saved": 2,
+      "ok": 2
+    },
+    "inductor": {
+      "fxgraph_cache_miss": 2,
+      "async_compile_cache_miss": 8,
+      "triton_bundler_save_kernel": 1408,
+      "benchmarking.TritonBenchmarker.benchmark_gpu": 245
+    }
+  },
+  "总耗时秒": 93.24250377807766
+}

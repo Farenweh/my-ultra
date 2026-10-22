@@ -1,0 +1,112 @@
+{
+  "模型": "conv_bn_relu",
+  "后端": "npugraph_ex",
+  "精度": "fp32",
+  "状态": "失败",
+  "阶段": "编译训练:反向",
+  "环境": {
+    "Python": "3.12.14",
+    "PyTorch": "2.14.0+cpu",
+    "TorchNPU": "2.14.0",
+    "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+    "NPU": "Ascend910B2",
+    "设备": "1",
+    "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+    "TASK_QUEUE_ENABLE": "1",
+    "编译后端": [
+      "cudagraphs",
+      "inductor",
+      "npu",
+      "npugraph_ex",
+      "npugraphs",
+      "openxla",
+      "tvm"
+    ],
+    "版本": {
+      "triton": "3.6.0",
+      "triton-ascend": "3.6.0",
+      "torch-mlir": null
+    }
+  },
+  "输入形状": [
+    2,
+    3,
+    8,
+    8
+  ],
+  "参数量": 232,
+  "fullgraph": true,
+  "dynamic": true,
+  "优化器": "SGD(lr=0.01, foreach=False)",
+  "容差": {
+    "atol": 1e-05,
+    "rtol": 0.0001
+  },
+  "每步输入形状": [
+    [
+      2,
+      3,
+      8,
+      10
+    ],
+    [
+      3,
+      3,
+      10,
+      12
+    ],
+    [
+      4,
+      3,
+      12,
+      14
+    ],
+    [
+      2,
+      3,
+      8,
+      10
+    ],
+    [
+      3,
+      3,
+      10,
+      12
+    ],
+    [
+      4,
+      3,
+      12,
+      14
+    ]
+  ],
+  "完成步数": 1,
+  "eager梯度函数": "ReluBackward0",
+  "逐步编译计数": [
+    {
+      "stats": {
+        "calls_captured": 12,
+        "unique_graphs": 1
+      },
+      "npugraph_ex": {
+        "captured_graph_1": 1,
+        "captured_graph_2": 1
+      }
+    }
+  ],
+  "编译梯度函数": "CompiledFunctionBackward",
+  "错误类型": "RuntimeError",
+  "错误": "Unsupported input type[<class 'NoneType'>] when reconstructing tensor from metadata, expected input type: TensorMetadata.",
+  "堆栈": "Traceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 172, in worker\n    actual, candidate_times = run(candidate, compiled, backend != \"raw_eager\")\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 135, in run\n    loss.backward()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_tensor.py\", line 623, in backward\n    torch.autograd.backward(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/autograd/__init__.py\", line 395, in backward\n    _engine_run_backward(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/autograd/graph.py\", line 1072, in _engine_run_backward\n    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/autograd/function.py\", line 374, in apply_boxed\n    return self._get_user_fn()(self, *args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 3532, in backward\n    return CompiledFunction._bwd_fn(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/codegen.py:codegen(compiled_function_backward)\", line 16, in _compiled_backward\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/codegen.py:codegen(compiled_function_backward)\", line 10, in impl_fn\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 3613, in _backward_impl\n    return call_func_at_runtime_with_args(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/utils.py\", line 161, in call_func_at_runtime_with_args\n    out = normalize_as_list(f(*args))\n                            ^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/dynamo/npugraph_ex/npu_fx_compiler.py\", line 551, in __call__\n    gm_result = self.run_kernel(*args, **kwargs)\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<string>\", line 90, in kernel\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/dynamo/npugraph_ex/_acl_concrete_graph/acl_graph.py\", line 942, in __call__\n    return self.reconstruct_outputs(fn_key)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/dynamo/npugraph_ex/_acl_concrete_graph/acl_graph.py\", line 1629, in reconstruct_outputs\n    ret = self.construct_outputs_based_on_ref(graph_key)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/dynamo/npugraph_ex/_acl_concrete_graph/acl_graph.py\", line 1697, in construct_outputs_based_on_ref\n    output_i = reconstruct_from_tensor_metadata(output_meta)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/dynamo/npugraph_ex/_acl_concrete_graph/utils.py\", line 165, in reconstruct_from_tensor_metadata\n    raise RuntimeError(\nRuntimeError: Unsupported input type[<class 'NoneType'>] when reconstructing tensor from metadata, expected input type: TensorMetadata.\n",
+  "Dynamo计数": {
+    "stats": {
+      "calls_captured": 12,
+      "unique_graphs": 1
+    },
+    "npugraph_ex": {
+      "captured_graph_1": 2,
+      "captured_graph_2": 2
+    }
+  },
+  "总耗时秒": 20.119317047297955
+}

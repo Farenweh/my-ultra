@@ -1,0 +1,251 @@
+{
+  "模型": "linear",
+  "后端": "inductor_dvm",
+  "精度": "amp_bf16",
+  "状态": "通过",
+  "阶段": "完成",
+  "环境": {
+    "Python": "3.12.14",
+    "PyTorch": "2.14.0+cpu",
+    "TorchNPU": "2.14.0",
+    "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+    "NPU": "Ascend910B2",
+    "设备": "3",
+    "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+    "TASK_QUEUE_ENABLE": "1",
+    "编译后端": [
+      "cudagraphs",
+      "inductor",
+      "npu",
+      "npugraph_ex",
+      "npugraphs",
+      "openxla",
+      "tvm"
+    ],
+    "版本": {
+      "triton": "3.6.0",
+      "triton-ascend": "3.6.0",
+      "torch-mlir": null
+    }
+  },
+  "输入形状": [
+    4,
+    16
+  ],
+  "参数量": 136,
+  "fullgraph": true,
+  "dynamic": false,
+  "优化器": "SGD(lr=0.01, foreach=False)",
+  "容差": {
+    "atol": 0.0001,
+    "rtol": 0.01
+  },
+  "每步输入形状": [
+    [
+      4,
+      16
+    ],
+    [
+      6,
+      16
+    ],
+    [
+      3,
+      16
+    ],
+    [
+      4,
+      16
+    ],
+    [
+      6,
+      16
+    ],
+    [
+      3,
+      16
+    ]
+  ],
+  "完成步数": 6,
+  "eager梯度函数": "AddmmBackward0",
+  "逐步编译计数": [
+    {
+      "stats": {
+        "calls_captured": 1,
+        "unique_graphs": 1
+      },
+      "aot_autograd": {
+        "total": 1,
+        "autograd_cache_hit": 1,
+        "ok": 1
+      },
+      "inductor": {
+        "extern_calls": 4,
+        "fxgraph_cache_hit": 2
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 2,
+        "unique_graphs": 2
+      },
+      "aot_autograd": {
+        "total": 2,
+        "autograd_cache_hit": 1,
+        "ok": 2,
+        "autograd_cache_miss": 1,
+        "autograd_cache_saved": 1
+      },
+      "inductor": {
+        "extern_calls": 8,
+        "fxgraph_cache_hit": 2,
+        "pattern_matcher_count": 3,
+        "pattern_matcher_nodes": 5,
+        "fxgraph_cache_miss": 2
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 3,
+        "unique_graphs": 3
+      },
+      "aot_autograd": {
+        "total": 3,
+        "autograd_cache_hit": 1,
+        "ok": 3,
+        "autograd_cache_miss": 2,
+        "autograd_cache_saved": 2
+      },
+      "inductor": {
+        "extern_calls": 12,
+        "fxgraph_cache_hit": 2,
+        "pattern_matcher_count": 6,
+        "pattern_matcher_nodes": 10,
+        "fxgraph_cache_miss": 4
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 3,
+        "unique_graphs": 3
+      },
+      "aot_autograd": {
+        "total": 3,
+        "autograd_cache_hit": 1,
+        "ok": 3,
+        "autograd_cache_miss": 2,
+        "autograd_cache_saved": 2
+      },
+      "inductor": {
+        "extern_calls": 12,
+        "fxgraph_cache_hit": 2,
+        "pattern_matcher_count": 6,
+        "pattern_matcher_nodes": 10,
+        "fxgraph_cache_miss": 4
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 3,
+        "unique_graphs": 3
+      },
+      "aot_autograd": {
+        "total": 3,
+        "autograd_cache_hit": 1,
+        "ok": 3,
+        "autograd_cache_miss": 2,
+        "autograd_cache_saved": 2
+      },
+      "inductor": {
+        "extern_calls": 12,
+        "fxgraph_cache_hit": 2,
+        "pattern_matcher_count": 6,
+        "pattern_matcher_nodes": 10,
+        "fxgraph_cache_miss": 4
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 3,
+        "unique_graphs": 3
+      },
+      "aot_autograd": {
+        "total": 3,
+        "autograd_cache_hit": 1,
+        "ok": 3,
+        "autograd_cache_miss": 2,
+        "autograd_cache_saved": 2
+      },
+      "inductor": {
+        "extern_calls": 12,
+        "fxgraph_cache_hit": 2,
+        "pattern_matcher_count": 6,
+        "pattern_matcher_nodes": 10,
+        "fxgraph_cache_miss": 4
+      }
+    }
+  ],
+  "编译梯度函数": "CompiledFunctionBackward",
+  "最大绝对误差": {
+    "输出": 0.0,
+    "loss": 0.0,
+    "梯度": 0.0,
+    "状态": 0.0
+  },
+  "超差项": [],
+  "更新参数数量": 2,
+  "eager每步毫秒": [
+    231.4118780195713,
+    2.5657368823885918,
+    2.185181714594364,
+    1.186906360089779,
+    1.2710988521575928,
+    1.2860195711255074
+  ],
+  "候选每步毫秒": [
+    694.2490451037884,
+    1404.9820816144347,
+    558.9592540636659,
+    2.7232998982071877,
+    2.199983224272728,
+    2.001718617975712
+  ],
+  "eager损失": [
+    1.9255635738372803,
+    1.4929417371749878,
+    0.7445681095123291,
+    1.7919875383377075,
+    0.9998012781143188,
+    1.0068228244781494
+  ],
+  "候选损失": [
+    1.9255635738372803,
+    1.4929417371749878,
+    0.7445681095123291,
+    1.7919875383377075,
+    0.9998012781143188,
+    1.0068228244781494
+  ],
+  "Dynamo计数": {
+    "stats": {
+      "calls_captured": 3,
+      "unique_graphs": 3
+    },
+    "aot_autograd": {
+      "total": 3,
+      "autograd_cache_hit": 1,
+      "ok": 3,
+      "autograd_cache_miss": 2,
+      "autograd_cache_saved": 2
+    },
+    "inductor": {
+      "extern_calls": 12,
+      "fxgraph_cache_hit": 2,
+      "pattern_matcher_count": 6,
+      "pattern_matcher_nodes": 10,
+      "fxgraph_cache_miss": 4
+    }
+  },
+  "BN计数": {},
+  "总耗时秒": 22.132423504255712
+}

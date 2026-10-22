@@ -1,0 +1,14 @@
+{
+  "状态": "失败",
+  "配置": {
+    "backend": "npugraphs",
+    "mode": "direct",
+    "fullgraph": true,
+    "device": 3,
+    "output": "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/probe/npugraphs_fullgraph.json"
+  },
+  "错误类型": "Unsupported",
+  "错误": "Call to `torch._dynamo.graph_break()`\n  Explanation: User-inserted graph break. Message: None\n  Hint: Remove the `torch._dynamo.graph_break()` call.\n\n  Developer debug context: Called `torch._dynamo.graph_break()` with args `[]`, kwargs `{}`\n\n For more details about this graph break, please visit: https://meta-pytorch.github.io/compile-graph-break-site/gb/gb0025.html\n\nfrom user code:\n   File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/optim/optimizer.py\", line 549, in wrapper\n    out = func(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/optim/optimizer.py\", line 78, in _use_grad\n    torch._dynamo.graph_break()\n\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\n",
+  "堆栈": "Traceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/probe_compile_optimizer.py\", line 89, in <module>\n    main(arguments, outcome)\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/probe_compile_optimizer.py\", line 65, in main\n    compiled()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 1272, in compile_wrapper\n    raise e.with_traceback(\ntorch._dynamo.exc.Unsupported: Call to `torch._dynamo.graph_break()`\n  Explanation: User-inserted graph break. Message: None\n  Hint: Remove the `torch._dynamo.graph_break()` call.\n\n  Developer debug context: Called `torch._dynamo.graph_break()` with args `[]`, kwargs `{}`\n\n For more details about this graph break, please visit: https://meta-pytorch.github.io/compile-graph-break-site/gb/gb0025.html\n\nfrom user code:\n   File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/optim/optimizer.py\", line 549, in wrapper\n    out = func(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/optim/optimizer.py\", line 78, in _use_grad\n    torch._dynamo.graph_break()\n\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\n\n",
+  "总耗时秒": 15.23426213953644
+}

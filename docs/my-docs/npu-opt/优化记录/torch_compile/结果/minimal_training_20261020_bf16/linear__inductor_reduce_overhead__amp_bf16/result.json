@@ -1,0 +1,49 @@
+{
+  "模型": "linear",
+  "后端": "inductor_reduce_overhead",
+  "精度": "amp_bf16",
+  "状态": "失败",
+  "阶段": "编译训练:反向",
+  "环境": {
+    "Python": "3.12.14",
+    "PyTorch": "2.14.0+cpu",
+    "TorchNPU": "2.14.0",
+    "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+    "NPU": "Ascend910B2",
+    "设备": "3",
+    "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+    "TASK_QUEUE_ENABLE": "1",
+    "编译后端": [
+      "cudagraphs",
+      "inductor",
+      "npu",
+      "npugraph_ex",
+      "npugraphs",
+      "openxla",
+      "tvm"
+    ],
+    "版本": {
+      "triton": "3.6.0",
+      "triton-ascend": "3.6.0",
+      "torch-mlir": null
+    }
+  },
+  "输入形状": [
+    4,
+    16
+  ],
+  "参数量": 136,
+  "fullgraph": true,
+  "dynamic": false,
+  "优化器": "SGD(lr=0.01, foreach=False)",
+  "容差": {
+    "atol": 0.0001,
+    "rtol": 0.01
+  },
+  "完成步数": 0,
+  "eager梯度函数": "AddmmBackward0",
+  "错误类型": "InductorError",
+  "错误": "LoweringException: TypeError: make_reduction() got an unexpected keyword argument 'strict_sum'\n  target: aten.sum.dim_IntList\n  args[0]: TensorBox(StorageBox(\n    InputBuffer(name='tangents_1', layout=FixedLayout('npu:3', torch.bfloat16, size=[4, 8], stride=[8, 1]))\n  ))\n  args[1]: [0]\n  args[2]: True\n  kwargs: {'dtype': torch.float32}",
+  "堆栈": "Traceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 154, in worker\n    actual, candidate_times = run(candidate, compiled, backend != \"raw_eager\")\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 119, in run\n    loss.backward()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_tensor.py\", line 623, in backward\n    torch.autograd.backward(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/autograd/__init__.py\", line 395, in backward\n    _engine_run_backward(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/autograd/graph.py\", line 1072, in _engine_run_backward\n    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/autograd/function.py\", line 374, in apply_boxed\n    return self._get_user_fn()(self, *args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 3532, in backward\n    return CompiledFunction._bwd_fn(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/codegen.py:codegen(compiled_function_backward)\", line 16, in _compiled_backward\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/codegen.py:codegen(compiled_function_backward)\", line 10, in impl_fn\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 3588, in _backward_impl\n    compiled_bw = backward_compiler.get_or_compile(\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 2904, in get_or_compile\n    self.compiled_bw = self.bw_compiler(\n                       ^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/schemas.py\", line 1504, in __call__\n    output_code = self.compiler_fn(gm, example_inputs)\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/backends/common.py\", line 108, in _wrapped_bw_compiler\n    disable(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 1548, in _fn\n    return fn(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_utils_internal.py\", line 114, in wrapper_function\n    return function(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 3204, in bw_compiler\n    return compile_fx_backward(\n           ^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 2825, in compile_fx_backward\n    return inner_compile(\n           ^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/contextlib.py\", line 81, in inner\n    return func(*args, **kwds)\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 919, in compile_fx_inner\n    compiled_graph = wrap_compiler_debug(\n                     ^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/repro/after_aot.py\", line 325, in debug_wrapper\n    inner_compiled_fn = compiler_fn(gm, example_inputs)\n                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1192, in _compile_fx_inner\n    raise InductorError(e, currentframe()).with_traceback(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1169, in _compile_fx_inner\n    mb_compiled_graph = fx_codegen_and_compile(\n                        ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 2001, in fx_codegen_and_compile\n    return scheme.codegen_and_compile(gm, example_inputs, inputs_to_check, graph_kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1660, in codegen_and_compile\n    graph.run(*example_inputs)\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1135, in run\n    return super().run(*args)\n           ^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/interpreter.py\", line 197, in run\n    self.env[node] = self.run_node(node)\n                     ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 2062, in run_node\n    result = super().run_node(n)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/interpreter.py\", line 294, in run_node\n    return getattr(self, n.op)(n.target, args, kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1567, in call_function\n    raise LoweringException(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1544, in call_function\n    out = lowerings[target](*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 525, in wrapped\n    out = decomp_fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/lowering.py\", line 7971, in sum_\n    fn = make_reduction(\"sum\", override_return_dtype=dtype, strict_sum=strict_sum)\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntorch._inductor.exc.InductorError: LoweringException: TypeError: make_reduction() got an unexpected keyword argument 'strict_sum'\n  target: aten.sum.dim_IntList\n  args[0]: TensorBox(StorageBox(\n    InputBuffer(name='tangents_1', layout=FixedLayout('npu:3', torch.bfloat16, size=[4, 8], stride=[8, 1]))\n  ))\n  args[1]: [0]\n  args[2]: True\n  kwargs: {'dtype': torch.float32}\n",
+  "总耗时秒": 21.863727495074272
+}

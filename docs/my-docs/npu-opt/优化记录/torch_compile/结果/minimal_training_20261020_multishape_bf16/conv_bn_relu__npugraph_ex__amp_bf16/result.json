@@ -1,0 +1,224 @@
+{
+  "模型": "conv_bn_relu",
+  "后端": "npugraph_ex",
+  "精度": "amp_bf16",
+  "状态": "通过",
+  "阶段": "完成",
+  "环境": {
+    "Python": "3.12.14",
+    "PyTorch": "2.14.0+cpu",
+    "TorchNPU": "2.14.0",
+    "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+    "NPU": "Ascend910B2",
+    "设备": "4",
+    "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+    "TASK_QUEUE_ENABLE": "1",
+    "编译后端": [
+      "cudagraphs",
+      "inductor",
+      "npu",
+      "npugraph_ex",
+      "npugraphs",
+      "openxla",
+      "tvm"
+    ],
+    "版本": {
+      "triton": "3.6.0",
+      "triton-ascend": "3.6.0",
+      "torch-mlir": null
+    }
+  },
+  "输入形状": [
+    2,
+    3,
+    8,
+    8
+  ],
+  "参数量": 232,
+  "fullgraph": true,
+  "dynamic": false,
+  "优化器": "SGD(lr=0.01, foreach=False)",
+  "容差": {
+    "atol": 0.0001,
+    "rtol": 0.01
+  },
+  "每步输入形状": [
+    [
+      2,
+      3,
+      8,
+      10
+    ],
+    [
+      3,
+      3,
+      10,
+      12
+    ],
+    [
+      4,
+      3,
+      12,
+      14
+    ],
+    [
+      2,
+      3,
+      8,
+      10
+    ],
+    [
+      3,
+      3,
+      10,
+      12
+    ],
+    [
+      4,
+      3,
+      12,
+      14
+    ]
+  ],
+  "完成步数": 6,
+  "eager梯度函数": "ReluBackward0",
+  "逐步编译计数": [
+    {
+      "stats": {
+        "calls_captured": 4,
+        "unique_graphs": 1
+      },
+      "npugraph_ex": {
+        "captured_graph_1": 1,
+        "captured_graph_2": 1
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 8,
+        "unique_graphs": 2
+      },
+      "npugraph_ex": {
+        "captured_graph_1": 1,
+        "captured_graph_2": 1,
+        "captured_graph_3": 1,
+        "captured_graph_4": 1
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 12,
+        "unique_graphs": 3
+      },
+      "npugraph_ex": {
+        "captured_graph_1": 1,
+        "captured_graph_2": 1,
+        "captured_graph_3": 1,
+        "captured_graph_4": 1,
+        "captured_graph_5": 1,
+        "captured_graph_6": 1
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 12,
+        "unique_graphs": 3
+      },
+      "npugraph_ex": {
+        "captured_graph_1": 1,
+        "captured_graph_2": 1,
+        "captured_graph_3": 1,
+        "captured_graph_4": 1,
+        "captured_graph_5": 1,
+        "captured_graph_6": 1
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 12,
+        "unique_graphs": 3
+      },
+      "npugraph_ex": {
+        "captured_graph_1": 1,
+        "captured_graph_2": 1,
+        "captured_graph_3": 1,
+        "captured_graph_4": 1,
+        "captured_graph_5": 1,
+        "captured_graph_6": 1
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 12,
+        "unique_graphs": 3
+      },
+      "npugraph_ex": {
+        "captured_graph_1": 1,
+        "captured_graph_2": 1,
+        "captured_graph_3": 1,
+        "captured_graph_4": 1,
+        "captured_graph_5": 1,
+        "captured_graph_6": 1
+      }
+    }
+  ],
+  "编译梯度函数": "CompiledFunctionBackward",
+  "最大绝对误差": {
+    "输出": 0.0,
+    "loss": 0.0,
+    "梯度": 0.0,
+    "状态": 0.0
+  },
+  "超差项": [],
+  "更新参数数量": 3,
+  "eager每步毫秒": [
+    125.30709430575371,
+    3.1064348295331,
+    2.4465760216116905,
+    1.5166932716965675,
+    1.4946218580007553,
+    1.490010879933834
+  ],
+  "候选每步毫秒": [
+    2117.9948011413217,
+    416.7209127917886,
+    418.72148122638464,
+    3.3858688548207283,
+    3.046344965696335,
+    3.3678803592920303
+  ],
+  "eager损失": [
+    1.4841033220291138,
+    1.5142700672149658,
+    1.4734865427017212,
+    1.6077150106430054,
+    1.5261458158493042,
+    1.4946351051330566
+  ],
+  "候选损失": [
+    1.4841033220291138,
+    1.5142700672149658,
+    1.4734865427017212,
+    1.6077150106430054,
+    1.5261458158493042,
+    1.4946351051330566
+  ],
+  "Dynamo计数": {
+    "stats": {
+      "calls_captured": 12,
+      "unique_graphs": 3
+    },
+    "npugraph_ex": {
+      "captured_graph_1": 1,
+      "captured_graph_2": 1,
+      "captured_graph_3": 1,
+      "captured_graph_4": 1,
+      "captured_graph_5": 1,
+      "captured_graph_6": 1
+    }
+  },
+  "BN计数": {
+    "1.num_batches_tracked": 6
+  },
+  "总耗时秒": 17.9055706737563
+}

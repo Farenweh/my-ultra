@@ -1,0 +1,58 @@
+{
+  "状态": "失败",
+  "阶段": "npugraph_ex:正确性第1步",
+  "后端": "npugraph_ex",
+  "精度": "fp32",
+  "命令": [
+    "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py",
+    "--scheme",
+    "npugraph_ex",
+    "--dtype",
+    "fp32",
+    "--phase",
+    "correctness",
+    "--device",
+    "2",
+    "--order",
+    "eager_first",
+    "--output",
+    "/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_256_20261020/correctness__npugraph_ex__fp32__eager_first/result.json"
+  ],
+  "阶段选择": "correctness",
+  "环境": {
+    "Python": "3.12.14",
+    "PyTorch": "2.14.0+cpu",
+    "TorchNPU": "2.14.0",
+    "torchvision": "0.29.0+cpu",
+    "NPU": "Ascend910B2",
+    "设备": 2,
+    "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+    "TASK_QUEUE_ENABLE": 1
+  },
+  "配置": {
+    "模型": "torchvision ResNet-50，随机初始化，1000类",
+    "参数量": 25557032,
+    "输入形状": [
+      32,
+      3,
+      256,
+      256
+    ],
+    "精度": "fp32",
+    "输入数量": 2,
+    "损失": "FP32 cross_entropy，随网络一起入图",
+    "优化器": "图外 SGD(lr=0.001,momentum=0.9,foreach=False)",
+    "fullgraph": true,
+    "dynamic": false,
+    "顺序": "eager_first",
+    "预热步数": 20,
+    "测量块数": 5,
+    "每块步数": 20,
+    "阶段测量步数": 50,
+    "随机种子": 20261020
+  },
+  "错误类型": "AssertionError",
+  "错误": "expected size 32==32, stride 4737024==262144 at dim=0; expected size 64==64, stride 74016==4096 at dim=1; expected size 9==64, stride 8224==64 at dim=2; expected size 8224==64, stride 1==1 at dim=3\nThis error most often comes from a incorrect fake (aka meta) kernel for a custom op.\nUse torch.library.opcheck to test your custom op.\nSee https://pytorch.org/docs/stable/library.html#torch.library.opcheck",
+  "堆栈": "Traceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py\", line 276, in <module>\n    main(arguments, outcome)\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py\", line 174, in main\n    candidate, cand_info = correctness(args.scheme)\n                           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py\", line 158, in correctness\n    losses.append(step(compiled, optimizer, scheme, index, inspect=True))\n                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py\", line 138, in step\n    loss.backward()\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_tensor.py\", line 623, in backward\n    torch.autograd.backward(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/autograd/__init__.py\", line 395, in backward\n    _engine_run_backward(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/autograd/graph.py\", line 1072, in _engine_run_backward\n    return Variable._execution_engine.run_backward(  # Calls into the C++ engine to run the backward pass\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/autograd/function.py\", line 374, in apply_boxed\n    return self._get_user_fn()(self, *args)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 3532, in backward\n    return CompiledFunction._bwd_fn(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/codegen.py:codegen(compiled_function_backward)\", line 16, in _compiled_backward\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/codegen.py:codegen(compiled_function_backward)\", line 10, in impl_fn\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 3613, in _backward_impl\n    return call_func_at_runtime_with_args(\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/utils.py\", line 161, in call_func_at_runtime_with_args\n    out = normalize_as_list(f(*args))\n                            ^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/dynamo/npugraph_ex/npu_fx_compiler.py\", line 551, in __call__\n    gm_result = self.run_kernel(*args, **kwargs)\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"<string>\", line 731, in kernel\nAssertionError: expected size 32==32, stride 4737024==262144 at dim=0; expected size 64==64, stride 74016==4096 at dim=1; expected size 9==64, stride 8224==64 at dim=2; expected size 8224==64, stride 1==1 at dim=3\nThis error most often comes from a incorrect fake (aka meta) kernel for a custom op.\nUse torch.library.opcheck to test your custom op.\nSee https://pytorch.org/docs/stable/library.html#torch.library.opcheck\n",
+  "总耗时秒": 36.72030627913773
+}

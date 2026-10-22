@@ -1,0 +1,244 @@
+{
+  "模型": "conv_bn_relu",
+  "后端": "inductor_dvm",
+  "精度": "amp_bf16",
+  "状态": "通过",
+  "阶段": "完成",
+  "环境": {
+    "Python": "3.12.14",
+    "PyTorch": "2.14.0+cpu",
+    "TorchNPU": "2.14.0",
+    "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+    "NPU": "Ascend910B2",
+    "设备": "4",
+    "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+    "TASK_QUEUE_ENABLE": "1",
+    "编译后端": [
+      "cudagraphs",
+      "inductor",
+      "npu",
+      "npugraph_ex",
+      "npugraphs",
+      "openxla",
+      "tvm"
+    ],
+    "版本": {
+      "triton": "3.6.0",
+      "triton-ascend": "3.6.0",
+      "torch-mlir": null
+    }
+  },
+  "输入形状": [
+    2,
+    3,
+    8,
+    8
+  ],
+  "参数量": 232,
+  "fullgraph": true,
+  "dynamic": false,
+  "优化器": "SGD(lr=0.01, foreach=False)",
+  "容差": {
+    "atol": 0.0001,
+    "rtol": 0.01
+  },
+  "每步输入形状": [
+    [
+      2,
+      3,
+      8,
+      10
+    ],
+    [
+      3,
+      3,
+      10,
+      12
+    ],
+    [
+      4,
+      3,
+      12,
+      14
+    ],
+    [
+      2,
+      3,
+      8,
+      10
+    ],
+    [
+      3,
+      3,
+      10,
+      12
+    ],
+    [
+      4,
+      3,
+      12,
+      14
+    ]
+  ],
+  "完成步数": 6,
+  "eager梯度函数": "ReluBackward0",
+  "逐步编译计数": [
+    {
+      "stats": {
+        "calls_captured": 4,
+        "unique_graphs": 1
+      },
+      "aot_autograd": {
+        "total": 1,
+        "autograd_cache_miss": 1,
+        "ok": 1,
+        "autograd_cache_saved": 1
+      },
+      "inductor": {
+        "fxgraph_cache_miss": 2,
+        "extern_calls": 4
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 8,
+        "unique_graphs": 2
+      },
+      "aot_autograd": {
+        "total": 2,
+        "autograd_cache_miss": 2,
+        "ok": 2,
+        "autograd_cache_saved": 2
+      },
+      "inductor": {
+        "fxgraph_cache_miss": 4,
+        "extern_calls": 8
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 12,
+        "unique_graphs": 3
+      },
+      "aot_autograd": {
+        "total": 3,
+        "autograd_cache_miss": 3,
+        "ok": 3,
+        "autograd_cache_saved": 3
+      },
+      "inductor": {
+        "fxgraph_cache_miss": 6,
+        "extern_calls": 12
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 12,
+        "unique_graphs": 3
+      },
+      "aot_autograd": {
+        "total": 3,
+        "autograd_cache_miss": 3,
+        "ok": 3,
+        "autograd_cache_saved": 3
+      },
+      "inductor": {
+        "fxgraph_cache_miss": 6,
+        "extern_calls": 12
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 12,
+        "unique_graphs": 3
+      },
+      "aot_autograd": {
+        "total": 3,
+        "autograd_cache_miss": 3,
+        "ok": 3,
+        "autograd_cache_saved": 3
+      },
+      "inductor": {
+        "fxgraph_cache_miss": 6,
+        "extern_calls": 12
+      }
+    },
+    {
+      "stats": {
+        "calls_captured": 12,
+        "unique_graphs": 3
+      },
+      "aot_autograd": {
+        "total": 3,
+        "autograd_cache_miss": 3,
+        "ok": 3,
+        "autograd_cache_saved": 3
+      },
+      "inductor": {
+        "fxgraph_cache_miss": 6,
+        "extern_calls": 12
+      }
+    }
+  ],
+  "编译梯度函数": "CompiledFunctionBackward",
+  "最大绝对误差": {
+    "输出": 1.1920928955078125e-07,
+    "loss": 0.0,
+    "梯度": 6.103515625e-05,
+    "状态": 6.109476089477539e-07
+  },
+  "超差项": [],
+  "更新参数数量": 3,
+  "eager每步毫秒": [
+    128.52986250072718,
+    2.774779684841633,
+    2.2518225014209747,
+    1.3305190950632095,
+    1.3377396389842033,
+    1.3642199337482452
+  ],
+  "候选每步毫秒": [
+    2864.161306992173,
+    1456.2301933765411,
+    1989.4337486475706,
+    2.987573854625225,
+    2.6207994669675827,
+    2.5747567415237427
+  ],
+  "eager损失": [
+    1.4841033220291138,
+    1.5142700672149658,
+    1.4734865427017212,
+    1.6077150106430054,
+    1.5261458158493042,
+    1.4946351051330566
+  ],
+  "候选损失": [
+    1.4841033220291138,
+    1.5142700672149658,
+    1.4734865427017212,
+    1.6077150106430054,
+    1.5261458158493042,
+    1.4946351051330566
+  ],
+  "Dynamo计数": {
+    "stats": {
+      "calls_captured": 12,
+      "unique_graphs": 3
+    },
+    "aot_autograd": {
+      "total": 3,
+      "autograd_cache_miss": 3,
+      "ok": 3,
+      "autograd_cache_saved": 3
+    },
+    "inductor": {
+      "fxgraph_cache_miss": 6,
+      "extern_calls": 12
+    }
+  },
+  "BN计数": {
+    "1.num_batches_tracked": 6
+  },
+  "总耗时秒": 25.875950106419623
+}

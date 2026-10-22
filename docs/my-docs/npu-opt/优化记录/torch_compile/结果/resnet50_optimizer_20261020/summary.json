@@ -1,0 +1,702 @@
+{
+  "场景": "torchvision ResNet-50 分类，batch=32，256×256，1000类，两组交替合成 NPU 输入和标签",
+  "环境": {
+    "Python": "3.12.14",
+    "PyTorch": "2.14.0+cpu",
+    "TorchNPU": "2.14.0",
+    "torchvision": "0.29.0+cpu",
+    "NPU": "Ascend910B2",
+    "设备": 0,
+    "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+    "TASK_QUEUE_ENABLE": 1
+  },
+  "边界": "网络和 FP32 CrossEntropy 联合编译；反向由 AOT 处理；标准 SGD.step 单独编译成更新图；zero_grad 和外层调度在 Python",
+  "参数": "SGD(lr=0.001,momentum=0.9,foreach=False)，固定形状；npugraphs 预分配零 momentum，dampening=0 保持更新语义",
+  "优化器fullgraph": false,
+  "图中断说明": "标准 SGD 的装饰器含显式 graph_break；更新张量区域仍被实际捕获，未强制宣称整步单一 fullgraph",
+  "正确性方法": "确定性算子；npugraphs 两精度连续 8 步对照全 eager 的损失、全部参数和 BN 状态、梯度、momentum；另外按区域统计 NPUGraph.replay 调用",
+  "性能方法": "NPU 0 串行，同 TASK_QUEUE_ENABLE=1；先测图外与先测入图两个顺序；每侧首步单列，预热20步，5块×20步边界同步墙钟计时，再另测50步 NPU Event；性能阶段未开确定性算子或回放计数包装",
+  "汇总方法": "两次测量中位数取算术均值；加速比取配对比值的几何均值。加速比大于1表示入图更快",
+  "正确性": {
+    "npugraphs_r50_correctness_bf16": {
+      "运行状态": "完成",
+      "对照状态": "通过",
+      "超差项数": 0,
+      "各类最大绝对误差": {
+        "状态": 0.0,
+        "梯度": 0.0,
+        "优化器": 0.0
+      },
+      "优化器图数": 1,
+      "优化器图节点数": [
+        483
+      ],
+      "各区域回放次数": {
+        "前向含损失": 7,
+        "反向": 7,
+        "优化器": 7
+      },
+      "梯度地址逐步相同": null,
+      "错误": null,
+      "文件": "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/npugraphs_r50_correctness_bf16.json"
+    },
+    "npugraphs_r50_correctness_fp32": {
+      "运行状态": "完成",
+      "对照状态": "通过",
+      "超差项数": 0,
+      "各类最大绝对误差": {
+        "状态": 0.0,
+        "梯度": 0.0,
+        "优化器": 0.0
+      },
+      "优化器图数": 1,
+      "优化器图节点数": [
+        483
+      ],
+      "各区域回放次数": {
+        "前向含损失": 7,
+        "反向": 7,
+        "优化器": 7
+      },
+      "梯度地址逐步相同": null,
+      "错误": null,
+      "文件": "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/npugraphs_r50_correctness_fp32.json"
+    },
+    "dvm_r50_correctness_bf16": {
+      "运行状态": "完成",
+      "对照状态": "数值超差",
+      "超差项数": 438,
+      "各类最大绝对误差": {
+        "状态": 0.20051002502441406,
+        "梯度": 8.53125,
+        "优化器": 12.3216552734375
+      },
+      "优化器图数": 1,
+      "优化器图节点数": [
+        483
+      ],
+      "各区域回放次数": {},
+      "梯度地址逐步相同": null,
+      "错误": null,
+      "文件": "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/dvm_r50_correctness_bf16.json"
+    },
+    "ex_r50_correctness_bf16": {
+      "运行状态": "失败",
+      "对照状态": null,
+      "超差项数": 0,
+      "各类最大绝对误差": {},
+      "优化器图数": 0,
+      "优化器图节点数": [],
+      "各区域回放次数": null,
+      "梯度地址逐步相同": null,
+      "错误": "expected size 32==32, stride 4737024==262144 at dim=0; expected size 64==64, stride 74016==4096 at dim=1; expected size 9==64, stride 8224==64 at dim=2; expected size 8224==64, stride 1==1 at dim=3\nThis error most often comes from a incorrect fake (aka meta) kernel for a custom op.\nUse torch.library.opcheck to test your custom op.\nSee https://pytorch.org/docs/stable/library.html#torch.library.opcheck",
+      "文件": "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/ex_r50_correctness_bf16.json"
+    },
+    "ex_optimizer_only_bf16": {
+      "运行状态": "完成",
+      "对照状态": "通过",
+      "超差项数": 0,
+      "各类最大绝对误差": {
+        "状态": 0.0,
+        "梯度": 0.0,
+        "优化器": 0.0
+      },
+      "优化器图数": 2,
+      "优化器图节点数": [
+        483,
+        483
+      ],
+      "各区域回放次数": null,
+      "梯度地址逐步相同": null,
+      "错误": null,
+      "文件": "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/ex_optimizer_only_bf16.json"
+    },
+    "dvm_optimizer_only_bf16": {
+      "运行状态": "失败",
+      "对照状态": null,
+      "超差项数": 0,
+      "各类最大绝对误差": {},
+      "优化器图数": 0,
+      "优化器图节点数": [],
+      "各区域回放次数": null,
+      "梯度地址逐步相同": null,
+      "错误": "In the deterministic mode of Inductor, we will avoid those\n        benchmarkings that would cause non-deterministic results. Only benchmarkings in the vetted\n        scenarios are allowed. Examples include autotuning for triton configs of pointwise kernels.\n\n        When you see this exception, you can do one of the following two things:\n        1. if the benchmarking you are doing does not introduce any non-determinism, you can just\n        add is_vetted_benchmarking=True to your benchmark_gpu call. That would solve the issue.\n\n        2. if the benchmarking you are doing indeed introduces non-determinism, you'll need to disable\n        such feature in deterministic mode or find an alternative implementation that is deterministic.\n        ",
+      "文件": "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/dvm_optimizer_only_bf16.json"
+    },
+    "npugraphs_static_grads_correctness_bf16": {
+      "运行状态": "完成",
+      "对照状态": "通过",
+      "超差项数": 0,
+      "各类最大绝对误差": {
+        "状态": 0.0,
+        "梯度": 0.0,
+        "优化器": 0.0
+      },
+      "优化器图数": 1,
+      "优化器图节点数": [
+        483
+      ],
+      "各区域回放次数": {
+        "前向含损失": 7,
+        "反向": 7,
+        "优化器": 7
+      },
+      "梯度地址逐步相同": false,
+      "错误": null,
+      "文件": "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/npugraphs_static_grads_correctness_bf16.json"
+    }
+  },
+  "性能": [
+    {
+      "后端": "npugraphs",
+      "模式": "直接编译SGD",
+      "精度": "amp_bf16",
+      "状态": "完成",
+      "图外整步毫秒": 41.117781423963606,
+      "入图整步毫秒": 41.871267720125616,
+      "图外优化器毫秒": 1.433129996061325,
+      "入图优化器毫秒": 2.175190031528473,
+      "配对整步加速比": 0.9820053909950374,
+      "耗时增加百分比": 1.8324348491334908,
+      "配对加速比样本": [
+        0.982084241784262,
+        0.9819265465366821
+      ],
+      "预热后Dynamo图数稳定": true,
+      "文件": [
+        "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/npugraphs_perf_amp_bf16_eager_first.json",
+        "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/npugraphs_perf_amp_bf16_candidate_first.json"
+      ]
+    },
+    {
+      "后端": "npugraphs",
+      "模式": "直接编译SGD",
+      "精度": "fp32",
+      "状态": "完成",
+      "图外整步毫秒": 60.23622383363545,
+      "入图整步毫秒": 61.024467344395816,
+      "图外优化器毫秒": 1.3473049998283386,
+      "入图优化器毫秒": 2.0900200605392456,
+      "配对整步加速比": 0.9870832546749236,
+      "耗时增加百分比": 1.308577089511087,
+      "配对加速比样本": [
+        0.9869986303013255,
+        0.9871678863041392
+      ],
+      "预热后Dynamo图数稳定": true,
+      "文件": [
+        "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/npugraphs_perf_fp32_eager_first.json",
+        "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/npugraphs_perf_fp32_candidate_first.json"
+      ]
+    }
+  ],
+  "队列2eager复核": {
+    "均值": 39.92170869372785,
+    "中位数": 39.92960420437157,
+    "最小": 39.87844795919955,
+    "最大": 39.94619445875287,
+    "CV": 0.0007115070990699025,
+    "样本": [
+      39.90933387540281,
+      39.92960420437157,
+      39.87844795919955,
+      39.94619445875287,
+      39.94496297091246
+    ]
+  },
+  "最小优化器探针": {
+    "npugraphs_direct": {
+      "状态": "失败",
+      "配置": {
+        "backend": "npugraphs",
+        "mode": "direct",
+        "fullgraph": false,
+        "device": 0,
+        "output": "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/probe/npugraphs_direct.json"
+      },
+      "逐步结果": null,
+      "捕获图数": 0,
+      "错误": "Error: accessing tensor output of NPUGraphs that has been overwritten by a subsequent run. Stack trace: File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/optim/sgd.py\", line 127, in step\n    sgd(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/optim/sgd.py\", line 306, in sgd\n    func(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/optim/sgd.py\", line 361, in _single_tensor_sgd\n    buf = grad.detach().clone()\n          ^^^^^^^^^^^^^^^^^^^^^. To prevent overwriting, clone the tensor outside of torch.compile() or call torch.compiler.npugraph_mark_step_begin() before each model invocation."
+    },
+    "npugraphs_preinit": {
+      "状态": "通过",
+      "配置": {
+        "backend": "npugraphs",
+        "mode": "direct",
+        "fullgraph": false,
+        "device": 0,
+        "preinit_momentum": true,
+        "output": "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/probe/npugraphs_preinit.json"
+      },
+      "逐步结果": [
+        {
+          "步": 1,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        },
+        {
+          "步": 2,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        },
+        {
+          "步": 3,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        },
+        {
+          "步": 4,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        },
+        {
+          "步": 5,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        },
+        {
+          "步": 6,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        },
+        {
+          "步": 7,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        },
+        {
+          "步": 8,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        }
+      ],
+      "捕获图数": 1,
+      "错误": null
+    },
+    "inductor_dvm_fixed": {
+      "状态": "通过",
+      "配置": {
+        "backend": "inductor_dvm",
+        "mode": "direct",
+        "fullgraph": false,
+        "device": 1,
+        "preinit_momentum": false,
+        "output": "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/probe/inductor_dvm_fixed.json"
+      },
+      "逐步结果": [
+        {
+          "步": 1,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        },
+        {
+          "步": 2,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 2.9802322387695312e-08,
+          "累计图数": 2
+        },
+        {
+          "步": 3,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 2
+        },
+        {
+          "步": 4,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 4.76837158203125e-07,
+          "累计图数": 2
+        },
+        {
+          "步": 5,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 9.5367431640625e-07,
+          "累计图数": 2
+        },
+        {
+          "步": 6,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 9.5367431640625e-07,
+          "累计图数": 2
+        },
+        {
+          "步": 7,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 9.5367431640625e-07,
+          "累计图数": 2
+        },
+        {
+          "步": 8,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 2
+        }
+      ],
+      "捕获图数": 2,
+      "错误": null
+    },
+    "npugraph_ex_direct": {
+      "状态": "通过",
+      "配置": {
+        "backend": "npugraph_ex",
+        "mode": "direct",
+        "fullgraph": false,
+        "device": 2,
+        "output": "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/probe/npugraph_ex_direct.json"
+      },
+      "逐步结果": [
+        {
+          "步": 1,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        },
+        {
+          "步": 2,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 2
+        },
+        {
+          "步": 3,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 2
+        },
+        {
+          "步": 4,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 2
+        },
+        {
+          "步": 5,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 2
+        },
+        {
+          "步": 6,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 2
+        },
+        {
+          "步": 7,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 2
+        },
+        {
+          "步": 8,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 2
+        }
+      ],
+      "捕获图数": 2,
+      "错误": null
+    },
+    "npugraphs_fullgraph": {
+      "状态": "失败",
+      "配置": {
+        "backend": "npugraphs",
+        "mode": "direct",
+        "fullgraph": true,
+        "device": 3,
+        "output": "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/probe/npugraphs_fullgraph.json"
+      },
+      "逐步结果": null,
+      "捕获图数": 0,
+      "错误": "Call to `torch._dynamo.graph_break()`\n  Explanation: User-inserted graph break. Message: None\n  Hint: Remove the `torch._dynamo.graph_break()` call.\n\n  Developer debug context: Called `torch._dynamo.graph_break()` with args `[]`, kwargs `{}`\n\n For more details about this graph break, please visit: https://meta-pytorch.github.io/compile-graph-break-site/gb/gb0025.html\n\nfrom user code:\n   File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/optim/optimizer.py\", line 549, in wrapper\n    out = func(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/optim/optimizer.py\", line 78, in _use_grad\n    torch._dynamo.graph_break()\n\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\n"
+    },
+    "npugraphs_unwrapped_preinit": {
+      "状态": "通过",
+      "配置": {
+        "backend": "npugraphs",
+        "mode": "inner",
+        "fullgraph": true,
+        "device": 4,
+        "preinit_momentum": true,
+        "output": "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/probe/npugraphs_unwrapped_preinit.json"
+      },
+      "逐步结果": [
+        {
+          "步": 1,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        },
+        {
+          "步": 2,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        },
+        {
+          "步": 3,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        },
+        {
+          "步": 4,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        },
+        {
+          "步": 5,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        },
+        {
+          "步": 6,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        },
+        {
+          "步": 7,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        },
+        {
+          "步": 8,
+          "参数最大绝对误差": 0.0,
+          "momentum最大绝对误差": 0.0,
+          "累计图数": 1
+        }
+      ],
+      "捕获图数": 1,
+      "错误": null
+    }
+  },
+  "复现命令": {
+    "ex_optimizer_only_bf16.json": [
+      "docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py",
+      "--scheme",
+      "npugraph_ex",
+      "--network-eager",
+      "--optimizer-mode",
+      "direct",
+      "--dtype",
+      "amp_bf16",
+      "--phase",
+      "correctness",
+      "--deterministic",
+      "--device",
+      "2",
+      "--output",
+      "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/ex_optimizer_only_bf16.json"
+    ],
+    "ex_r50_correctness_bf16.json": [
+      "docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py",
+      "--scheme",
+      "npugraph_ex",
+      "--optimizer-mode",
+      "direct",
+      "--dtype",
+      "amp_bf16",
+      "--phase",
+      "correctness",
+      "--deterministic",
+      "--device",
+      "2",
+      "--output",
+      "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/ex_r50_correctness_bf16.json"
+    ],
+    "dvm_r50_correctness_bf16.json": [
+      "docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py",
+      "--scheme",
+      "inductor_dvm",
+      "--optimizer-mode",
+      "direct",
+      "--preinit-momentum",
+      "--dtype",
+      "amp_bf16",
+      "--phase",
+      "correctness",
+      "--deterministic",
+      "--device",
+      "1",
+      "--output",
+      "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/dvm_r50_correctness_bf16.json"
+    ],
+    "npugraphs_r50_correctness_fp32.json": [
+      "docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py",
+      "--scheme",
+      "npugraphs",
+      "--optimizer-mode",
+      "direct",
+      "--preinit-momentum",
+      "--audit-replay",
+      "--dtype",
+      "fp32",
+      "--phase",
+      "correctness",
+      "--deterministic",
+      "--correctness-steps",
+      "8",
+      "--output",
+      "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/npugraphs_r50_correctness_fp32.json"
+    ],
+    "npugraphs_perf_fp32_eager_first.json": [
+      "docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py",
+      "--scheme",
+      "npugraphs",
+      "--optimizer-mode",
+      "direct",
+      "--preinit-momentum",
+      "--baseline",
+      "backend_outside",
+      "--dtype",
+      "fp32",
+      "--order",
+      "eager_first",
+      "--phase",
+      "performance",
+      "--output",
+      "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/npugraphs_perf_fp32_eager_first.json"
+    ],
+    "npugraphs_perf_fp32_candidate_first.json": [
+      "docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py",
+      "--scheme",
+      "npugraphs",
+      "--optimizer-mode",
+      "direct",
+      "--preinit-momentum",
+      "--baseline",
+      "backend_outside",
+      "--dtype",
+      "fp32",
+      "--order",
+      "candidate_first",
+      "--phase",
+      "performance",
+      "--output",
+      "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/npugraphs_perf_fp32_candidate_first.json"
+    ],
+    "eager_queue2_amp_bf16.json": [
+      "docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py",
+      "--scheme",
+      "eager",
+      "--dtype",
+      "amp_bf16",
+      "--task-queue",
+      "2",
+      "--preinit-momentum",
+      "--phase",
+      "performance",
+      "--output",
+      "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/eager_queue2_amp_bf16.json"
+    ],
+    "dvm_optimizer_only_bf16.json": [
+      "docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py",
+      "--scheme",
+      "inductor_dvm",
+      "--network-eager",
+      "--optimizer-mode",
+      "direct",
+      "--preinit-momentum",
+      "--dtype",
+      "amp_bf16",
+      "--phase",
+      "correctness",
+      "--deterministic",
+      "--device",
+      "3",
+      "--output",
+      "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/dvm_optimizer_only_bf16.json"
+    ],
+    "npugraphs_perf_amp_bf16_eager_first.json": [
+      "docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py",
+      "--scheme",
+      "npugraphs",
+      "--optimizer-mode",
+      "direct",
+      "--preinit-momentum",
+      "--baseline",
+      "backend_outside",
+      "--dtype",
+      "amp_bf16",
+      "--order",
+      "eager_first",
+      "--phase",
+      "performance",
+      "--output",
+      "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/npugraphs_perf_amp_bf16_eager_first.json"
+    ],
+    "npugraphs_perf_amp_bf16_candidate_first.json": [
+      "docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py",
+      "--scheme",
+      "npugraphs",
+      "--optimizer-mode",
+      "direct",
+      "--preinit-momentum",
+      "--baseline",
+      "backend_outside",
+      "--dtype",
+      "amp_bf16",
+      "--order",
+      "candidate_first",
+      "--phase",
+      "performance",
+      "--output",
+      "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/npugraphs_perf_amp_bf16_candidate_first.json"
+    ],
+    "npugraphs_static_grads_correctness_bf16.json": [
+      "docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py",
+      "--scheme",
+      "npugraphs",
+      "--optimizer-mode",
+      "direct",
+      "--preinit-momentum",
+      "--static-optimizer-grads",
+      "--audit-replay",
+      "--dtype",
+      "amp_bf16",
+      "--phase",
+      "correctness",
+      "--deterministic",
+      "--correctness-steps",
+      "8",
+      "--output",
+      "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/npugraphs_static_grads_correctness_bf16.json"
+    ],
+    "npugraphs_r50_correctness_bf16.json": [
+      "docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py",
+      "--scheme",
+      "npugraphs",
+      "--optimizer-mode",
+      "direct",
+      "--preinit-momentum",
+      "--audit-replay",
+      "--dtype",
+      "amp_bf16",
+      "--phase",
+      "correctness",
+      "--deterministic",
+      "--correctness-steps",
+      "8",
+      "--output",
+      "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/npugraphs_r50_correctness_bf16.json"
+    ]
+  },
+  "限制": [
+    "合成输入测试，不代表真实数据集收敛或训练精度结论",
+    "DVM 整网仍有数值超差；EX 整网在 MaxPool 反向失败。单独 SGD 探针通过不能推广到整个 R50",
+    "DVM + eager 网络的隔离实验还触发确定性模式禁止自动调优的异常，保留原始结果，不绕过检查宣称通过"
+  ]
+}

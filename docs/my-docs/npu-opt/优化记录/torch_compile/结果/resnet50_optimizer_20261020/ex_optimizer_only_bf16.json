@@ -1,0 +1,6463 @@
+{
+  "状态": "完成",
+  "阶段": "完成",
+  "后端": "npugraph_ex",
+  "精度": "amp_bf16",
+  "命令": [
+    "docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py",
+    "--scheme",
+    "npugraph_ex",
+    "--network-eager",
+    "--optimizer-mode",
+    "direct",
+    "--dtype",
+    "amp_bf16",
+    "--phase",
+    "correctness",
+    "--deterministic",
+    "--device",
+    "2",
+    "--output",
+    "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_optimizer_20261020/ex_optimizer_only_bf16.json"
+  ],
+  "阶段选择": "correctness",
+  "环境": {
+    "Python": "3.12.14",
+    "PyTorch": "2.14.0+cpu",
+    "TorchNPU": "2.14.0",
+    "torchvision": "0.29.0+cpu",
+    "NPU": "Ascend910B2",
+    "设备": 2,
+    "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+    "TASK_QUEUE_ENABLE": 1
+  },
+  "配置": {
+    "模型": "torchvision ResNet-50，随机初始化，1000类",
+    "参数量": 25557032,
+    "输入形状": [
+      32,
+      3,
+      256,
+      256
+    ],
+    "精度": "amp_bf16",
+    "输入数量": 2,
+    "损失": "FP32 cross_entropy，随网络一起入图",
+    "优化器": "SGD(lr=0.001,momentum=0.9,foreach=False)",
+    "优化器模式": "direct",
+    "性能基线": "eager",
+    "网络保持eager": true,
+    "预分配momentum": false,
+    "优化器边界": "独立优化器图；zero_grad 和 backward 调用在 Python 外层",
+    "fullgraph": true,
+    "dynamic": false,
+    "顺序": "eager_first",
+    "预热步数": 20,
+    "测量块数": 5,
+    "每块步数": 20,
+    "阶段测量步数": 50,
+    "随机种子": 20261020,
+    "确定性算子": true
+  },
+  "正确性": {
+    "状态": "通过",
+    "eager": {
+      "损失": [
+        7.115950107574463,
+        7.0286970138549805,
+        6.988332271575928,
+        6.926380157470703
+      ],
+      "包装毫秒": 0.042331404983997345,
+      "首次训练步毫秒": 991.0420766100287,
+      "Dynamo计数": {},
+      "优化器模式": "outside",
+      "优化器捕获图": [],
+      "BN计数": [
+        4
+      ]
+    },
+    "候选": {
+      "损失": [
+        7.115950107574463,
+        7.0286970138549805,
+        6.988332271575928,
+        6.926380157470703
+      ],
+      "包装毫秒": 569.4164838641882,
+      "首次训练步毫秒": 9806.3861457631,
+      "Dynamo计数": {
+        "frames": {
+          "total": 9,
+          "ok": 9
+        },
+        "graph_break": {
+          "Call to `torch._dynamo.graph_break()`\n  Explanation: User-inserted graph break. Message: None\n  Hint: Remove the `torch._dynamo.graph_break()` call.\n\n  Developer debug context: Called `torch._dynamo.graph_break()` with args `[]`, kwargs `{}`\n\n For more details about this graph break, please visit: https://meta-pytorch.github.io/compile-graph-break-site/gb/gb0025.html": 1
+        },
+        "resumes": {
+          "torch_dynamo_resume_in_wrapper_at_549": 1
+        },
+        "stats": {
+          "calls_captured": 966,
+          "unique_graphs": 2
+        },
+        "npugraph_ex": {
+          "captured_graph_1": 1,
+          "captured_graph_2": 1
+        }
+      },
+      "优化器模式": "direct",
+      "优化器捕获图": [
+        {
+          "节点数": 483,
+          "算子": [
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_",
+            "detach",
+            "clone",
+            "add_"
+          ]
+        },
+        {
+          "节点数": 483,
+          "算子": [
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_",
+            "mul_",
+            "add_",
+            "add_"
+          ]
+        }
+      ],
+      "BN计数": [
+        4
+      ]
+    },
+    "状态容差": {
+      "atol": 0.0001,
+      "rtol": 0.01
+    },
+    "损失容差": {
+      "atol": 0.001,
+      "rtol": 0.005
+    },
+    "超差项": [],
+    "详细差异": {
+      "状态": {
+        "network.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.fc.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.fc.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.0.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.0.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.0.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.downsample.0.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.downsample.1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.downsample.1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.0.downsample.1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.downsample.1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.downsample.1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.1.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.1.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.1.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.2.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.2.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.2.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.0.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.0.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.0.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.downsample.0.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.downsample.1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.downsample.1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.0.downsample.1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.downsample.1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.downsample.1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.1.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.1.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.1.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.2.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.2.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.2.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.3.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.3.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.3.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.0.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.0.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.0.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.downsample.0.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.downsample.1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.downsample.1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.0.downsample.1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.downsample.1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.downsample.1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.1.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.1.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.1.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.2.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.2.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.2.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.3.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.3.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.3.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.4.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.4.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.4.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.5.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.5.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.5.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.0.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.0.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.0.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.downsample.0.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.downsample.1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.downsample.1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.0.downsample.1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.downsample.1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.downsample.1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.1.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.1.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.1.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.2.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.2.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.2.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        }
+      },
+      "梯度": {
+        "network.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.fc.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.fc.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.downsample.0.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.downsample.1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.0.downsample.1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.1.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer1.2.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.downsample.0.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.downsample.1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.0.downsample.1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.1.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.2.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer2.3.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.downsample.0.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.downsample.1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.0.downsample.1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.1.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.2.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.3.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.4.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer3.5.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.downsample.0.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.downsample.1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.0.downsample.1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.1.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        },
+        "network.layer4.2.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0,
+          "max_rel": 0.0,
+          "rmse": 0.0
+        }
+      },
+      "优化器": {
+        "network.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.fc.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.fc.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.0.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.0.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.0.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.0.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.0.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.0.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.0.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.0.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.0.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.0.downsample.0.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.0.downsample.1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.0.downsample.1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.1.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.1.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.1.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.1.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.1.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.1.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.1.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.1.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.1.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.2.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.2.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.2.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.2.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.2.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.2.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.2.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.2.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer1.2.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.0.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.0.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.0.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.0.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.0.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.0.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.0.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.0.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.0.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.0.downsample.0.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.0.downsample.1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.0.downsample.1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.1.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.1.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.1.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.1.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.1.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.1.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.1.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.1.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.1.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.2.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.2.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.2.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.2.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.2.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.2.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.2.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.2.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.2.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.3.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.3.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.3.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.3.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.3.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.3.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.3.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.3.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer2.3.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.0.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.0.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.0.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.0.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.0.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.0.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.0.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.0.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.0.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.0.downsample.0.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.0.downsample.1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.0.downsample.1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.1.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.1.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.1.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.1.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.1.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.1.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.1.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.1.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.1.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.2.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.2.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.2.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.2.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.2.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.2.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.2.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.2.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.2.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.3.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.3.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.3.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.3.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.3.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.3.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.3.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.3.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.3.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.4.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.4.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.4.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.4.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.4.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.4.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.4.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.4.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.4.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.5.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.5.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.5.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.5.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.5.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.5.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.5.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.5.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer3.5.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.0.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.0.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.0.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.0.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.0.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.0.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.0.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.0.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.0.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.0.downsample.0.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.0.downsample.1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.0.downsample.1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.1.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.1.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.1.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.1.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.1.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.1.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.1.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.1.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.1.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.2.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.2.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.2.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.2.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.2.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.2.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.2.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.2.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        },
+        "network.layer4.2.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.0,
+            "max_rel": 0.0,
+            "rmse": 0.0
+          }
+        }
+      }
+    }
+  },
+  "总耗时秒": 42.14820698462427
+}

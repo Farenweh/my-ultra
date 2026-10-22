@@ -1,0 +1,102 @@
+{
+  "模型": "conv_bn_relu",
+  "后端": "inductor_dvm",
+  "精度": "fp32",
+  "状态": "失败",
+  "阶段": "编译训练:前向",
+  "环境": {
+    "Python": "3.12.14",
+    "PyTorch": "2.14.0+cpu",
+    "TorchNPU": "2.14.0",
+    "PyTorch提交": "08187d9e0fba026dc8217405802ab5381dc88d90",
+    "NPU": "Ascend910B2",
+    "设备": "1",
+    "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+    "TASK_QUEUE_ENABLE": "1",
+    "编译后端": [
+      "cudagraphs",
+      "inductor",
+      "npu",
+      "npugraph_ex",
+      "npugraphs",
+      "openxla",
+      "tvm"
+    ],
+    "版本": {
+      "triton": "3.6.0",
+      "triton-ascend": "3.6.0",
+      "torch-mlir": null
+    }
+  },
+  "输入形状": [
+    2,
+    3,
+    8,
+    8
+  ],
+  "参数量": 232,
+  "fullgraph": true,
+  "dynamic": true,
+  "优化器": "SGD(lr=0.01, foreach=False)",
+  "容差": {
+    "atol": 1e-05,
+    "rtol": 0.0001
+  },
+  "每步输入形状": [
+    [
+      2,
+      3,
+      8,
+      10
+    ],
+    [
+      3,
+      3,
+      10,
+      12
+    ],
+    [
+      4,
+      3,
+      12,
+      14
+    ],
+    [
+      2,
+      3,
+      8,
+      10
+    ],
+    [
+      3,
+      3,
+      10,
+      12
+    ],
+    [
+      4,
+      3,
+      12,
+      14
+    ]
+  ],
+  "完成步数": 0,
+  "eager梯度函数": "ReluBackward0",
+  "错误类型": "InductorError",
+  "错误": "LoweringException: TypeError: Expected a number but got IntTrueDiv:\n  target: aten.mul.Tensor\n  args[0]: TensorBox(\n    View(\n      StorageBox(\n        Pointwise(\n          'npu',\n          torch.float32,\n          def inner_fn(index):\n              _, i1, _, _ = index\n              tmp0 = ops.load(buf3, i1)\n              tmp1 = ops.index_expr(s33 * s69 * s87, torch.float32)\n              tmp2 = tmp0 / tmp1\n              return tmp2\n          ,\n          ranges=[1, 8, 1, 1],\n          origin_node=getitem,\n          origins=OrderedSet([var_mean])\n        )\n      ),\n      size=[8],\n      reindex=lambda i0: [0, i0, 0, 0],\n      origins=OrderedSet([squeeze_2, var_mean])\n    )\n  )\n  args[1]: IntTrueDiv(IntTrueDiv(8*s33*s69*s87, 8), (IntTrueDiv(8*s33*s69*s87, 8)) - 1.0)\n\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\n",
+  "堆栈": "Traceback (most recent call last):\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 172, in worker\n    actual, candidate_times = run(candidate, compiled, backend != \"raw_eager\")\n                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/my-ultra/docs/my-docs/npu-opt/优化记录/torch_compile/探针/minimal_compile_training.py\", line 132, in run\n    output = train_model(inputs)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 563, in __call__\n    return super().__call__(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 1783, in _wrapped_call_impl\n    return self._call_impl(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/nn/modules/module.py\", line 1794, in _call_impl\n    return forward_call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py\", line 1278, in compile_wrapper\n    raise e.remove_dynamo_frames() from None  # see TORCHDYNAMO_VERBOSE=1\n    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1192, in _compile_fx_inner\n    raise InductorError(e, currentframe()).with_traceback(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1169, in _compile_fx_inner\n    mb_compiled_graph = fx_codegen_and_compile(\n                        ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 2001, in fx_codegen_and_compile\n    return scheme.codegen_and_compile(gm, example_inputs, inputs_to_check, graph_kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/compile_fx.py\", line 1660, in codegen_and_compile\n    graph.run(*example_inputs)\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1135, in run\n    return super().run(*args)\n           ^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/interpreter.py\", line 197, in run\n    self.env[node] = self.run_node(node)\n                     ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 2062, in run_node\n    result = super().run_node(n)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/interpreter.py\", line 294, in run_node\n    return getattr(self, n.op)(n.target, args, kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1567, in call_function\n    raise LoweringException(\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/_inductor/graph.py\", line 1544, in call_function\n    out = lowerings[target](*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/ascend_npu_ir/ascend_npu_ir/npu/inductor_patch/lowering.py\", line 513, in wrapped\n    out = decomp_fn(*args, **kwargs)\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/ascend_npu_ir/ascend_npu_ir/npu/inductor_patch/lowering.py\", line 6269, in mul\n    return make_pointwise(fn)(a, b)\n           ^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/ascend_npu_ir/ascend_npu_ir/npu/inductor_patch/lowering.py\", line 706, in inner\n    input_graphs = fetch_graphs(inputs)\n                   ^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/ascend_npu_ir/ascend_npu_ir/npu/inductor_patch/lowering.py\", line 164, in fetch_graphs\n    return _fetch_graphs(inputs, MLIR_OPERATOR_MAPPING, use_npu_meta=False)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering_common.py\", line 349, in fetch_graphs\n    inp, skip = process_ir_constant(inp, operator_mapping)\n                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering_common.py\", line 305, in process_ir_constant\n    create_sym_inputs(traced_graph, [inp], operator_mapping)\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch_npu/_inductor/lowering_common.py\", line 290, in create_sym_inputs\n    new_node.meta[\"val\"] = V.graph.sizevars.shape_env.create_symintnode(s, hint=None)\n                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/experimental/recording.py\", line 298, in wrapper\n    return retlog(fn(*args, **kwargs))\n                  ^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/experimental/symbolic_shapes.py\", line 5418, in create_symintnode\n    out = SymInt(SymNode(sym, self, int, hint, fx_node=fx_node))\n                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/experimental/sym_node.py\", line 181, in __init__\n    hint = compute_hint()\n           ^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/torch/fx/experimental/sym_node.py\", line 162, in compute_hint\n    hint = self.pytype(hint) if not isinstance(hint, SymTypes) else hint\n           ^^^^^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/sympy/core/expr.py\", line 343, in __int__\n    r = self.round(2)\n        ^^^^^^^^^^^^^\n  File \"/root/work/filestorage/zhoufei/hermite/envs/torch/lib/python3.12/site-packages/sympy/core/expr.py\", line 3869, in round\n    raise TypeError(\ntorch._inductor.exc.InductorError: LoweringException: TypeError: Expected a number but got IntTrueDiv:\n  target: aten.mul.Tensor\n  args[0]: TensorBox(\n    View(\n      StorageBox(\n        Pointwise(\n          'npu',\n          torch.float32,\n          def inner_fn(index):\n              _, i1, _, _ = index\n              tmp0 = ops.load(buf3, i1)\n              tmp1 = ops.index_expr(s33 * s69 * s87, torch.float32)\n              tmp2 = tmp0 / tmp1\n              return tmp2\n          ,\n          ranges=[1, 8, 1, 1],\n          origin_node=getitem,\n          origins=OrderedSet([var_mean])\n        )\n      ),\n      size=[8],\n      reindex=lambda i0: [0, i0, 0, 0],\n      origins=OrderedSet([squeeze_2, var_mean])\n    )\n  )\n  args[1]: IntTrueDiv(IntTrueDiv(8*s33*s69*s87, 8), (IntTrueDiv(8*s33*s69*s87, 8)) - 1.0)\n\nSet TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS=\"+dynamo\"\n\n",
+  "Dynamo计数": {
+    "stats": {
+      "calls_captured": 4
+    },
+    "aot_autograd": {
+      "total": 1,
+      "autograd_cache_miss": 1,
+      "not_ok": 1
+    },
+    "inductor": {
+      "fxgraph_cache_miss": 1
+    }
+  },
+  "总耗时秒": 24.28228534106165
+}

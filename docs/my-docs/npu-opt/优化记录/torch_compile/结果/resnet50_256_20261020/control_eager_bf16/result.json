@@ -1,0 +1,5886 @@
+{
+  "状态": "完成",
+  "阶段": "完成",
+  "后端": "eager",
+  "精度": "amp_bf16",
+  "命令": [
+    "docs/my-docs/npu-opt/优化记录/torch_compile/基准/benchmark_resnet50_training.py",
+    "--scheme",
+    "eager",
+    "--phase",
+    "correctness",
+    "--dtype",
+    "amp_bf16",
+    "--device",
+    "7",
+    "--output",
+    "docs/my-docs/npu-opt/优化记录/torch_compile/结果/resnet50_256_20261020/control_eager_bf16/result.json"
+  ],
+  "阶段选择": "correctness",
+  "环境": {
+    "Python": "3.12.14",
+    "PyTorch": "2.14.0+cpu",
+    "TorchNPU": "2.14.0",
+    "torchvision": "0.29.0+cpu",
+    "NPU": "Ascend910B2",
+    "设备": 7,
+    "CANN路径": "/root/work/filestorage/zhoufei/hermite/CANN/cann-9.2.0",
+    "TASK_QUEUE_ENABLE": 1
+  },
+  "配置": {
+    "模型": "torchvision ResNet-50，随机初始化，1000类",
+    "参数量": 25557032,
+    "输入形状": [
+      32,
+      3,
+      256,
+      256
+    ],
+    "精度": "amp_bf16",
+    "输入数量": 2,
+    "损失": "FP32 cross_entropy，随网络一起入图",
+    "优化器": "图外 SGD(lr=0.001,momentum=0.9,foreach=False)",
+    "fullgraph": true,
+    "dynamic": false,
+    "顺序": "eager_first",
+    "预热步数": 20,
+    "测量块数": 5,
+    "每块步数": 20,
+    "阶段测量步数": 50,
+    "随机种子": 20261020
+  },
+  "正确性": {
+    "状态": "数值超差",
+    "eager": {
+      "损失": [
+        7.115949630737305,
+        7.031616687774658,
+        7.000099182128906,
+        6.927993297576904
+      ],
+      "包装毫秒": 0.04227086901664734,
+      "首次训练步毫秒": 865.3089851140976,
+      "Dynamo计数": {},
+      "BN计数": [
+        4
+      ]
+    },
+    "候选": {
+      "损失": [
+        7.115950107574463,
+        7.028360843658447,
+        6.969918727874756,
+        6.924826622009277
+      ],
+      "包装毫秒": 0.04080962389707565,
+      "首次训练步毫秒": 58.2536980509758,
+      "Dynamo计数": {},
+      "BN计数": [
+        4
+      ]
+    },
+    "状态容差": {
+      "atol": 0.0001,
+      "rtol": 0.01
+    },
+    "损失容差": {
+      "atol": 0.001,
+      "rtol": 0.005
+    },
+    "超差项": [
+      "状态/network.bn1.bias",
+      "状态/network.conv1.weight",
+      "状态/network.layer1.0.bn1.bias",
+      "状态/network.layer1.0.bn1.running_mean",
+      "状态/network.layer1.0.bn2.bias",
+      "状态/network.layer1.0.bn2.running_mean",
+      "状态/network.layer1.0.bn3.bias",
+      "状态/network.layer1.0.bn3.running_mean",
+      "状态/network.layer1.0.conv1.weight",
+      "状态/network.layer1.0.conv2.weight",
+      "状态/network.layer1.0.conv3.weight",
+      "状态/network.layer1.0.downsample.0.weight",
+      "状态/network.layer1.0.downsample.1.bias",
+      "状态/network.layer1.0.downsample.1.running_mean",
+      "状态/network.layer1.1.bn1.bias",
+      "状态/network.layer1.1.bn1.running_mean",
+      "状态/network.layer1.1.bn2.bias",
+      "状态/network.layer1.1.bn2.running_mean",
+      "状态/network.layer1.1.bn3.bias",
+      "状态/network.layer1.1.bn3.running_mean",
+      "状态/network.layer1.1.conv1.weight",
+      "状态/network.layer1.1.conv2.weight",
+      "状态/network.layer1.1.conv3.weight",
+      "状态/network.layer1.2.bn1.bias",
+      "状态/network.layer1.2.bn1.running_mean",
+      "状态/network.layer1.2.bn2.bias",
+      "状态/network.layer1.2.bn2.running_mean",
+      "状态/network.layer1.2.bn3.bias",
+      "状态/network.layer1.2.bn3.running_mean",
+      "状态/network.layer1.2.conv1.weight",
+      "状态/network.layer1.2.conv2.weight",
+      "状态/network.layer1.2.conv3.weight",
+      "状态/network.layer2.0.bn1.bias",
+      "状态/network.layer2.0.bn1.running_mean",
+      "状态/network.layer2.0.bn2.bias",
+      "状态/network.layer2.0.bn2.running_mean",
+      "状态/network.layer2.0.bn3.bias",
+      "状态/network.layer2.0.bn3.running_mean",
+      "状态/network.layer2.0.conv1.weight",
+      "状态/network.layer2.0.conv2.weight",
+      "状态/network.layer2.0.conv3.weight",
+      "状态/network.layer2.0.downsample.0.weight",
+      "状态/network.layer2.0.downsample.1.bias",
+      "状态/network.layer2.0.downsample.1.running_mean",
+      "状态/network.layer2.1.bn1.bias",
+      "状态/network.layer2.1.bn1.running_mean",
+      "状态/network.layer2.1.bn2.bias",
+      "状态/network.layer2.1.bn2.running_mean",
+      "状态/network.layer2.1.bn3.bias",
+      "状态/network.layer2.1.bn3.running_mean",
+      "状态/network.layer2.1.conv1.weight",
+      "状态/network.layer2.1.conv2.weight",
+      "状态/network.layer2.1.conv3.weight",
+      "状态/network.layer2.2.bn1.bias",
+      "状态/network.layer2.2.bn1.running_mean",
+      "状态/network.layer2.2.bn2.bias",
+      "状态/network.layer2.2.bn2.running_mean",
+      "状态/network.layer2.2.bn3.running_mean",
+      "状态/network.layer2.2.conv1.weight",
+      "状态/network.layer2.2.conv2.weight",
+      "状态/network.layer2.2.conv3.weight",
+      "状态/network.layer2.3.bn1.bias",
+      "状态/network.layer2.3.bn1.running_mean",
+      "状态/network.layer2.3.bn2.bias",
+      "状态/network.layer2.3.bn2.running_mean",
+      "状态/network.layer2.3.bn3.running_mean",
+      "状态/network.layer2.3.conv2.weight",
+      "状态/network.layer2.3.conv3.weight",
+      "状态/network.layer3.0.bn1.bias",
+      "状态/network.layer3.0.bn1.running_mean",
+      "状态/network.layer3.0.bn2.running_mean",
+      "状态/network.layer3.0.bn3.running_mean",
+      "状态/network.layer3.0.conv2.weight",
+      "状态/network.layer3.0.downsample.1.running_mean",
+      "状态/network.layer3.0.downsample.1.running_var",
+      "状态/network.layer3.1.bn1.running_mean",
+      "状态/network.layer3.1.bn1.running_var",
+      "状态/network.layer3.1.bn2.running_mean",
+      "状态/network.layer3.1.bn3.running_mean",
+      "状态/network.layer3.2.bn1.running_mean",
+      "状态/network.layer3.2.bn1.running_var",
+      "状态/network.layer3.2.bn2.running_mean",
+      "状态/network.layer3.2.bn3.running_mean",
+      "状态/network.layer3.3.bn1.running_mean",
+      "状态/network.layer3.3.bn1.running_var",
+      "状态/network.layer3.3.bn2.running_mean",
+      "状态/network.layer3.3.bn3.running_mean",
+      "状态/network.layer3.4.bn1.running_mean",
+      "状态/network.layer3.4.bn1.running_var",
+      "状态/network.layer3.4.bn2.running_mean",
+      "状态/network.layer3.4.bn3.running_mean",
+      "状态/network.layer3.5.bn1.running_mean",
+      "状态/network.layer3.5.bn1.running_var",
+      "状态/network.layer3.5.bn2.running_mean",
+      "状态/network.layer3.5.bn3.running_mean",
+      "状态/network.layer4.0.bn1.running_mean",
+      "状态/network.layer4.0.bn1.running_var",
+      "状态/network.layer4.0.bn2.running_mean",
+      "状态/network.layer4.0.bn2.running_var",
+      "状态/network.layer4.0.bn3.running_mean",
+      "状态/network.layer4.0.downsample.1.running_mean",
+      "状态/network.layer4.0.downsample.1.running_var",
+      "状态/network.layer4.1.bn1.running_mean",
+      "状态/network.layer4.1.bn1.running_var",
+      "状态/network.layer4.1.bn2.running_mean",
+      "状态/network.layer4.1.bn2.running_var",
+      "状态/network.layer4.1.bn3.running_mean",
+      "状态/network.layer4.2.bn1.running_mean",
+      "状态/network.layer4.2.bn1.running_var",
+      "状态/network.layer4.2.bn2.running_mean",
+      "状态/network.layer4.2.bn2.running_var",
+      "状态/network.layer4.2.bn3.running_mean",
+      "梯度/network.bn1.bias",
+      "梯度/network.bn1.weight",
+      "梯度/network.conv1.weight",
+      "梯度/network.fc.weight",
+      "梯度/network.layer1.0.bn1.bias",
+      "梯度/network.layer1.0.bn1.weight",
+      "梯度/network.layer1.0.bn2.bias",
+      "梯度/network.layer1.0.bn2.weight",
+      "梯度/network.layer1.0.bn3.bias",
+      "梯度/network.layer1.0.bn3.weight",
+      "梯度/network.layer1.0.conv1.weight",
+      "梯度/network.layer1.0.conv2.weight",
+      "梯度/network.layer1.0.conv3.weight",
+      "梯度/network.layer1.0.downsample.0.weight",
+      "梯度/network.layer1.0.downsample.1.bias",
+      "梯度/network.layer1.0.downsample.1.weight",
+      "梯度/network.layer1.1.bn1.bias",
+      "梯度/network.layer1.1.bn1.weight",
+      "梯度/network.layer1.1.bn2.bias",
+      "梯度/network.layer1.1.bn2.weight",
+      "梯度/network.layer1.1.bn3.bias",
+      "梯度/network.layer1.1.bn3.weight",
+      "梯度/network.layer1.1.conv1.weight",
+      "梯度/network.layer1.1.conv2.weight",
+      "梯度/network.layer1.1.conv3.weight",
+      "梯度/network.layer1.2.bn1.bias",
+      "梯度/network.layer1.2.bn1.weight",
+      "梯度/network.layer1.2.bn2.bias",
+      "梯度/network.layer1.2.bn2.weight",
+      "梯度/network.layer1.2.bn3.bias",
+      "梯度/network.layer1.2.bn3.weight",
+      "梯度/network.layer1.2.conv1.weight",
+      "梯度/network.layer1.2.conv2.weight",
+      "梯度/network.layer1.2.conv3.weight",
+      "梯度/network.layer2.0.bn1.bias",
+      "梯度/network.layer2.0.bn1.weight",
+      "梯度/network.layer2.0.bn2.bias",
+      "梯度/network.layer2.0.bn2.weight",
+      "梯度/network.layer2.0.bn3.bias",
+      "梯度/network.layer2.0.bn3.weight",
+      "梯度/network.layer2.0.conv1.weight",
+      "梯度/network.layer2.0.conv2.weight",
+      "梯度/network.layer2.0.conv3.weight",
+      "梯度/network.layer2.0.downsample.0.weight",
+      "梯度/network.layer2.0.downsample.1.bias",
+      "梯度/network.layer2.0.downsample.1.weight",
+      "梯度/network.layer2.1.bn1.bias",
+      "梯度/network.layer2.1.bn1.weight",
+      "梯度/network.layer2.1.bn2.bias",
+      "梯度/network.layer2.1.bn2.weight",
+      "梯度/network.layer2.1.bn3.bias",
+      "梯度/network.layer2.1.bn3.weight",
+      "梯度/network.layer2.1.conv1.weight",
+      "梯度/network.layer2.1.conv2.weight",
+      "梯度/network.layer2.1.conv3.weight",
+      "梯度/network.layer2.2.bn1.bias",
+      "梯度/network.layer2.2.bn1.weight",
+      "梯度/network.layer2.2.bn2.bias",
+      "梯度/network.layer2.2.bn2.weight",
+      "梯度/network.layer2.2.bn3.bias",
+      "梯度/network.layer2.2.bn3.weight",
+      "梯度/network.layer2.2.conv1.weight",
+      "梯度/network.layer2.2.conv2.weight",
+      "梯度/network.layer2.2.conv3.weight",
+      "梯度/network.layer2.3.bn1.bias",
+      "梯度/network.layer2.3.bn1.weight",
+      "梯度/network.layer2.3.bn2.bias",
+      "梯度/network.layer2.3.bn2.weight",
+      "梯度/network.layer2.3.bn3.bias",
+      "梯度/network.layer2.3.bn3.weight",
+      "梯度/network.layer2.3.conv1.weight",
+      "梯度/network.layer2.3.conv2.weight",
+      "梯度/network.layer2.3.conv3.weight",
+      "梯度/network.layer3.0.bn1.bias",
+      "梯度/network.layer3.0.bn1.weight",
+      "梯度/network.layer3.0.bn2.bias",
+      "梯度/network.layer3.0.bn2.weight",
+      "梯度/network.layer3.0.bn3.bias",
+      "梯度/network.layer3.0.bn3.weight",
+      "梯度/network.layer3.0.conv1.weight",
+      "梯度/network.layer3.0.conv2.weight",
+      "梯度/network.layer3.0.conv3.weight",
+      "梯度/network.layer3.0.downsample.0.weight",
+      "梯度/network.layer3.0.downsample.1.bias",
+      "梯度/network.layer3.0.downsample.1.weight",
+      "梯度/network.layer3.1.bn1.bias",
+      "梯度/network.layer3.1.bn1.weight",
+      "梯度/network.layer3.1.bn2.bias",
+      "梯度/network.layer3.1.bn2.weight",
+      "梯度/network.layer3.1.bn3.bias",
+      "梯度/network.layer3.1.bn3.weight",
+      "梯度/network.layer3.1.conv1.weight",
+      "梯度/network.layer3.1.conv2.weight",
+      "梯度/network.layer3.1.conv3.weight",
+      "梯度/network.layer3.2.bn1.bias",
+      "梯度/network.layer3.2.bn1.weight",
+      "梯度/network.layer3.2.bn2.bias",
+      "梯度/network.layer3.2.bn2.weight",
+      "梯度/network.layer3.2.bn3.bias",
+      "梯度/network.layer3.2.bn3.weight",
+      "梯度/network.layer3.2.conv1.weight",
+      "梯度/network.layer3.2.conv2.weight",
+      "梯度/network.layer3.2.conv3.weight",
+      "梯度/network.layer3.3.bn1.bias",
+      "梯度/network.layer3.3.bn1.weight",
+      "梯度/network.layer3.3.bn2.bias",
+      "梯度/network.layer3.3.bn2.weight",
+      "梯度/network.layer3.3.bn3.bias",
+      "梯度/network.layer3.3.bn3.weight",
+      "梯度/network.layer3.3.conv1.weight",
+      "梯度/network.layer3.3.conv2.weight",
+      "梯度/network.layer3.3.conv3.weight",
+      "梯度/network.layer3.4.bn1.bias",
+      "梯度/network.layer3.4.bn1.weight",
+      "梯度/network.layer3.4.bn2.bias",
+      "梯度/network.layer3.4.bn2.weight",
+      "梯度/network.layer3.4.bn3.bias",
+      "梯度/network.layer3.4.bn3.weight",
+      "梯度/network.layer3.4.conv1.weight",
+      "梯度/network.layer3.4.conv2.weight",
+      "梯度/network.layer3.4.conv3.weight",
+      "梯度/network.layer3.5.bn1.bias",
+      "梯度/network.layer3.5.bn1.weight",
+      "梯度/network.layer3.5.bn2.bias",
+      "梯度/network.layer3.5.bn2.weight",
+      "梯度/network.layer3.5.bn3.bias",
+      "梯度/network.layer3.5.bn3.weight",
+      "梯度/network.layer3.5.conv1.weight",
+      "梯度/network.layer3.5.conv2.weight",
+      "梯度/network.layer3.5.conv3.weight",
+      "梯度/network.layer4.0.bn1.bias",
+      "梯度/network.layer4.0.bn1.weight",
+      "梯度/network.layer4.0.bn2.bias",
+      "梯度/network.layer4.0.bn2.weight",
+      "梯度/network.layer4.0.bn3.bias",
+      "梯度/network.layer4.0.bn3.weight",
+      "梯度/network.layer4.0.conv1.weight",
+      "梯度/network.layer4.0.conv2.weight",
+      "梯度/network.layer4.0.conv3.weight",
+      "梯度/network.layer4.0.downsample.0.weight",
+      "梯度/network.layer4.0.downsample.1.bias",
+      "梯度/network.layer4.0.downsample.1.weight",
+      "梯度/network.layer4.1.bn1.bias",
+      "梯度/network.layer4.1.bn1.weight",
+      "梯度/network.layer4.1.bn2.bias",
+      "梯度/network.layer4.1.bn2.weight",
+      "梯度/network.layer4.1.bn3.bias",
+      "梯度/network.layer4.1.bn3.weight",
+      "梯度/network.layer4.1.conv1.weight",
+      "梯度/network.layer4.1.conv2.weight",
+      "梯度/network.layer4.1.conv3.weight",
+      "梯度/network.layer4.2.bn1.bias",
+      "梯度/network.layer4.2.bn1.weight",
+      "梯度/network.layer4.2.bn2.bias",
+      "梯度/network.layer4.2.bn2.weight",
+      "梯度/network.layer4.2.bn3.bias",
+      "梯度/network.layer4.2.bn3.weight",
+      "梯度/network.layer4.2.conv1.weight",
+      "梯度/network.layer4.2.conv2.weight",
+      "梯度/network.layer4.2.conv3.weight",
+      "优化器/network.bn1.bias/momentum_buffer",
+      "优化器/network.bn1.weight/momentum_buffer",
+      "优化器/network.conv1.weight/momentum_buffer",
+      "优化器/network.fc.weight/momentum_buffer",
+      "优化器/network.layer1.0.bn1.bias/momentum_buffer",
+      "优化器/network.layer1.0.bn1.weight/momentum_buffer",
+      "优化器/network.layer1.0.bn2.bias/momentum_buffer",
+      "优化器/network.layer1.0.bn2.weight/momentum_buffer",
+      "优化器/network.layer1.0.bn3.bias/momentum_buffer",
+      "优化器/network.layer1.0.bn3.weight/momentum_buffer",
+      "优化器/network.layer1.0.conv1.weight/momentum_buffer",
+      "优化器/network.layer1.0.conv2.weight/momentum_buffer",
+      "优化器/network.layer1.0.conv3.weight/momentum_buffer",
+      "优化器/network.layer1.0.downsample.0.weight/momentum_buffer",
+      "优化器/network.layer1.0.downsample.1.bias/momentum_buffer",
+      "优化器/network.layer1.0.downsample.1.weight/momentum_buffer",
+      "优化器/network.layer1.1.bn1.bias/momentum_buffer",
+      "优化器/network.layer1.1.bn1.weight/momentum_buffer",
+      "优化器/network.layer1.1.bn2.bias/momentum_buffer",
+      "优化器/network.layer1.1.bn2.weight/momentum_buffer",
+      "优化器/network.layer1.1.bn3.bias/momentum_buffer",
+      "优化器/network.layer1.1.bn3.weight/momentum_buffer",
+      "优化器/network.layer1.1.conv1.weight/momentum_buffer",
+      "优化器/network.layer1.1.conv2.weight/momentum_buffer",
+      "优化器/network.layer1.1.conv3.weight/momentum_buffer",
+      "优化器/network.layer1.2.bn1.bias/momentum_buffer",
+      "优化器/network.layer1.2.bn1.weight/momentum_buffer",
+      "优化器/network.layer1.2.bn2.bias/momentum_buffer",
+      "优化器/network.layer1.2.bn2.weight/momentum_buffer",
+      "优化器/network.layer1.2.bn3.bias/momentum_buffer",
+      "优化器/network.layer1.2.bn3.weight/momentum_buffer",
+      "优化器/network.layer1.2.conv1.weight/momentum_buffer",
+      "优化器/network.layer1.2.conv2.weight/momentum_buffer",
+      "优化器/network.layer1.2.conv3.weight/momentum_buffer",
+      "优化器/network.layer2.0.bn1.bias/momentum_buffer",
+      "优化器/network.layer2.0.bn1.weight/momentum_buffer",
+      "优化器/network.layer2.0.bn2.bias/momentum_buffer",
+      "优化器/network.layer2.0.bn2.weight/momentum_buffer",
+      "优化器/network.layer2.0.bn3.bias/momentum_buffer",
+      "优化器/network.layer2.0.bn3.weight/momentum_buffer",
+      "优化器/network.layer2.0.conv1.weight/momentum_buffer",
+      "优化器/network.layer2.0.conv2.weight/momentum_buffer",
+      "优化器/network.layer2.0.conv3.weight/momentum_buffer",
+      "优化器/network.layer2.0.downsample.0.weight/momentum_buffer",
+      "优化器/network.layer2.0.downsample.1.bias/momentum_buffer",
+      "优化器/network.layer2.0.downsample.1.weight/momentum_buffer",
+      "优化器/network.layer2.1.bn1.bias/momentum_buffer",
+      "优化器/network.layer2.1.bn1.weight/momentum_buffer",
+      "优化器/network.layer2.1.bn2.bias/momentum_buffer",
+      "优化器/network.layer2.1.bn2.weight/momentum_buffer",
+      "优化器/network.layer2.1.bn3.bias/momentum_buffer",
+      "优化器/network.layer2.1.bn3.weight/momentum_buffer",
+      "优化器/network.layer2.1.conv1.weight/momentum_buffer",
+      "优化器/network.layer2.1.conv2.weight/momentum_buffer",
+      "优化器/network.layer2.1.conv3.weight/momentum_buffer",
+      "优化器/network.layer2.2.bn1.bias/momentum_buffer",
+      "优化器/network.layer2.2.bn1.weight/momentum_buffer",
+      "优化器/network.layer2.2.bn2.bias/momentum_buffer",
+      "优化器/network.layer2.2.bn2.weight/momentum_buffer",
+      "优化器/network.layer2.2.bn3.bias/momentum_buffer",
+      "优化器/network.layer2.2.bn3.weight/momentum_buffer",
+      "优化器/network.layer2.2.conv1.weight/momentum_buffer",
+      "优化器/network.layer2.2.conv2.weight/momentum_buffer",
+      "优化器/network.layer2.2.conv3.weight/momentum_buffer",
+      "优化器/network.layer2.3.bn1.bias/momentum_buffer",
+      "优化器/network.layer2.3.bn1.weight/momentum_buffer",
+      "优化器/network.layer2.3.bn2.bias/momentum_buffer",
+      "优化器/network.layer2.3.bn2.weight/momentum_buffer",
+      "优化器/network.layer2.3.bn3.bias/momentum_buffer",
+      "优化器/network.layer2.3.bn3.weight/momentum_buffer",
+      "优化器/network.layer2.3.conv1.weight/momentum_buffer",
+      "优化器/network.layer2.3.conv2.weight/momentum_buffer",
+      "优化器/network.layer2.3.conv3.weight/momentum_buffer",
+      "优化器/network.layer3.0.bn1.bias/momentum_buffer",
+      "优化器/network.layer3.0.bn1.weight/momentum_buffer",
+      "优化器/network.layer3.0.bn2.bias/momentum_buffer",
+      "优化器/network.layer3.0.bn2.weight/momentum_buffer",
+      "优化器/network.layer3.0.bn3.bias/momentum_buffer",
+      "优化器/network.layer3.0.bn3.weight/momentum_buffer",
+      "优化器/network.layer3.0.conv1.weight/momentum_buffer",
+      "优化器/network.layer3.0.conv2.weight/momentum_buffer",
+      "优化器/network.layer3.0.conv3.weight/momentum_buffer",
+      "优化器/network.layer3.0.downsample.0.weight/momentum_buffer",
+      "优化器/network.layer3.0.downsample.1.bias/momentum_buffer",
+      "优化器/network.layer3.0.downsample.1.weight/momentum_buffer",
+      "优化器/network.layer3.1.bn1.bias/momentum_buffer",
+      "优化器/network.layer3.1.bn1.weight/momentum_buffer",
+      "优化器/network.layer3.1.bn2.bias/momentum_buffer",
+      "优化器/network.layer3.1.bn2.weight/momentum_buffer",
+      "优化器/network.layer3.1.bn3.bias/momentum_buffer",
+      "优化器/network.layer3.1.bn3.weight/momentum_buffer",
+      "优化器/network.layer3.1.conv1.weight/momentum_buffer",
+      "优化器/network.layer3.1.conv2.weight/momentum_buffer",
+      "优化器/network.layer3.1.conv3.weight/momentum_buffer",
+      "优化器/network.layer3.2.bn1.bias/momentum_buffer",
+      "优化器/network.layer3.2.bn1.weight/momentum_buffer",
+      "优化器/network.layer3.2.bn2.bias/momentum_buffer",
+      "优化器/network.layer3.2.bn2.weight/momentum_buffer",
+      "优化器/network.layer3.2.bn3.bias/momentum_buffer",
+      "优化器/network.layer3.2.bn3.weight/momentum_buffer",
+      "优化器/network.layer3.2.conv1.weight/momentum_buffer",
+      "优化器/network.layer3.2.conv2.weight/momentum_buffer",
+      "优化器/network.layer3.2.conv3.weight/momentum_buffer",
+      "优化器/network.layer3.3.bn1.bias/momentum_buffer",
+      "优化器/network.layer3.3.bn1.weight/momentum_buffer",
+      "优化器/network.layer3.3.bn2.bias/momentum_buffer",
+      "优化器/network.layer3.3.bn2.weight/momentum_buffer",
+      "优化器/network.layer3.3.bn3.bias/momentum_buffer",
+      "优化器/network.layer3.3.bn3.weight/momentum_buffer",
+      "优化器/network.layer3.3.conv1.weight/momentum_buffer",
+      "优化器/network.layer3.3.conv2.weight/momentum_buffer",
+      "优化器/network.layer3.3.conv3.weight/momentum_buffer",
+      "优化器/network.layer3.4.bn1.bias/momentum_buffer",
+      "优化器/network.layer3.4.bn1.weight/momentum_buffer",
+      "优化器/network.layer3.4.bn2.bias/momentum_buffer",
+      "优化器/network.layer3.4.bn2.weight/momentum_buffer",
+      "优化器/network.layer3.4.bn3.bias/momentum_buffer",
+      "优化器/network.layer3.4.bn3.weight/momentum_buffer",
+      "优化器/network.layer3.4.conv1.weight/momentum_buffer",
+      "优化器/network.layer3.4.conv2.weight/momentum_buffer",
+      "优化器/network.layer3.4.conv3.weight/momentum_buffer",
+      "优化器/network.layer3.5.bn1.bias/momentum_buffer",
+      "优化器/network.layer3.5.bn1.weight/momentum_buffer",
+      "优化器/network.layer3.5.bn2.bias/momentum_buffer",
+      "优化器/network.layer3.5.bn2.weight/momentum_buffer",
+      "优化器/network.layer3.5.bn3.bias/momentum_buffer",
+      "优化器/network.layer3.5.bn3.weight/momentum_buffer",
+      "优化器/network.layer3.5.conv1.weight/momentum_buffer",
+      "优化器/network.layer3.5.conv2.weight/momentum_buffer",
+      "优化器/network.layer3.5.conv3.weight/momentum_buffer",
+      "优化器/network.layer4.0.bn1.bias/momentum_buffer",
+      "优化器/network.layer4.0.bn1.weight/momentum_buffer",
+      "优化器/network.layer4.0.bn2.bias/momentum_buffer",
+      "优化器/network.layer4.0.bn2.weight/momentum_buffer",
+      "优化器/network.layer4.0.bn3.bias/momentum_buffer",
+      "优化器/network.layer4.0.bn3.weight/momentum_buffer",
+      "优化器/network.layer4.0.conv1.weight/momentum_buffer",
+      "优化器/network.layer4.0.conv2.weight/momentum_buffer",
+      "优化器/network.layer4.0.conv3.weight/momentum_buffer",
+      "优化器/network.layer4.0.downsample.0.weight/momentum_buffer",
+      "优化器/network.layer4.0.downsample.1.bias/momentum_buffer",
+      "优化器/network.layer4.0.downsample.1.weight/momentum_buffer",
+      "优化器/network.layer4.1.bn1.bias/momentum_buffer",
+      "优化器/network.layer4.1.bn1.weight/momentum_buffer",
+      "优化器/network.layer4.1.bn2.bias/momentum_buffer",
+      "优化器/network.layer4.1.bn2.weight/momentum_buffer",
+      "优化器/network.layer4.1.bn3.bias/momentum_buffer",
+      "优化器/network.layer4.1.bn3.weight/momentum_buffer",
+      "优化器/network.layer4.1.conv1.weight/momentum_buffer",
+      "优化器/network.layer4.1.conv2.weight/momentum_buffer",
+      "优化器/network.layer4.1.conv3.weight/momentum_buffer",
+      "优化器/network.layer4.2.bn1.bias/momentum_buffer",
+      "优化器/network.layer4.2.bn1.weight/momentum_buffer",
+      "优化器/network.layer4.2.bn2.bias/momentum_buffer",
+      "优化器/network.layer4.2.bn2.weight/momentum_buffer",
+      "优化器/network.layer4.2.bn3.bias/momentum_buffer",
+      "优化器/network.layer4.2.bn3.weight/momentum_buffer",
+      "优化器/network.layer4.2.conv1.weight/momentum_buffer",
+      "优化器/network.layer4.2.conv2.weight/momentum_buffer",
+      "优化器/network.layer4.2.conv3.weight/momentum_buffer"
+    ],
+    "详细差异": {
+      "状态": {
+        "network.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00023208194761537015,
+          "max_rel": 163.75201416015625,
+          "rmse": 9.63563725235872e-05
+        },
+        "network.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 2.038129241554998e-05,
+          "max_rel": 4.149891376495361,
+          "rmse": 6.719765224261209e-06
+        },
+        "network.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.00012105703353881836,
+          "max_rel": 0.00017698403098620474,
+          "rmse": 3.6978188290959224e-05
+        },
+        "network.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0025954246520996094,
+          "max_rel": 0.002595536643639207,
+          "rmse": 0.0010975842596963048
+        },
+        "network.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.025347091257572174,
+          "max_rel": 1932.95361328125,
+          "rmse": 0.006388464942574501
+        },
+        "network.fc.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 3.604218363761902e-07,
+          "max_rel": 0.0009420961723662913,
+          "rmse": 3.693564210038858e-08
+        },
+        "network.fc.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 5.120038986206055e-05,
+          "max_rel": 63.75471115112305,
+          "rmse": 2.793056410155259e-06
+        },
+        "network.layer1.0.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0019494311418384314,
+          "max_rel": 62.47783279418945,
+          "rmse": 0.0007920486968941987
+        },
+        "network.layer1.0.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.0.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0022977590560913086,
+          "max_rel": 0.0760464072227478,
+          "rmse": 0.001137942890636623
+        },
+        "network.layer1.0.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0034834742546081543,
+          "max_rel": 0.0036120465956628323,
+          "rmse": 0.0014378009364008904
+        },
+        "network.layer1.0.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0022484660148620605,
+          "max_rel": 0.002251812256872654,
+          "rmse": 0.0009175324230454862
+        },
+        "network.layer1.0.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0016278204275295138,
+          "max_rel": 294.52020263671875,
+          "rmse": 0.0005261364276520908
+        },
+        "network.layer1.0.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.0.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.002316698431968689,
+          "max_rel": 0.29748639464378357,
+          "rmse": 0.0009261600207537413
+        },
+        "network.layer1.0.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0018985867500305176,
+          "max_rel": 0.0020877644419670105,
+          "rmse": 0.0006649332935921848
+        },
+        "network.layer1.0.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0017928481101989746,
+          "max_rel": 0.0017951156478375196,
+          "rmse": 0.0005517670651897788
+        },
+        "network.layer1.0.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.000714275345671922,
+          "max_rel": 189.27931213378906,
+          "rmse": 0.0002535264065954834
+        },
+        "network.layer1.0.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.0.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0005800724029541016,
+          "max_rel": 1.7174434661865234,
+          "rmse": 0.0001620195689611137
+        },
+        "network.layer1.0.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0005004405975341797,
+          "max_rel": 0.00067424081498757,
+          "rmse": 0.00013242334534879774
+        },
+        "network.layer1.0.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0009239315986633301,
+          "max_rel": 0.0009244076209142804,
+          "rmse": 0.00031483557540923357
+        },
+        "network.layer1.0.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0031443946063518524,
+          "max_rel": 16.280517578125,
+          "rmse": 0.0006990464753471315
+        },
+        "network.layer1.0.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.002515822649002075,
+          "max_rel": 114.5528564453125,
+          "rmse": 0.0005764460074715316
+        },
+        "network.layer1.0.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.002026934176683426,
+          "max_rel": 163.08596801757812,
+          "rmse": 0.0004761810414493084
+        },
+        "network.layer1.0.downsample.0.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.001949136727489531,
+          "max_rel": 263.549560546875,
+          "rmse": 0.0004802701296284795
+        },
+        "network.layer1.0.downsample.1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.000714275345671922,
+          "max_rel": 189.27931213378906,
+          "rmse": 0.0002535264065954834
+        },
+        "network.layer1.0.downsample.1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.0.downsample.1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.002290446311235428,
+          "max_rel": 1.0018526315689087,
+          "rmse": 0.0008294713916257024
+        },
+        "network.layer1.0.downsample.1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.001134037971496582,
+          "max_rel": 0.0015275097684934735,
+          "rmse": 0.00031965304515324533
+        },
+        "network.layer1.0.downsample.1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0010700821876525879,
+          "max_rel": 0.0010707629844546318,
+          "rmse": 0.00033899754635058343
+        },
+        "network.layer1.1.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0011757457396015525,
+          "max_rel": 66.2913818359375,
+          "rmse": 0.0004404348728712648
+        },
+        "network.layer1.1.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.1.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0019287224858999252,
+          "max_rel": 0.08536946028470993,
+          "rmse": 0.000744892458897084
+        },
+        "network.layer1.1.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.014992952346801758,
+          "max_rel": 0.005471945274621248,
+          "rmse": 0.005531672388315201
+        },
+        "network.layer1.1.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0012173056602478027,
+          "max_rel": 0.0012174758594483137,
+          "rmse": 0.0005109699559397995
+        },
+        "network.layer1.1.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0010742228478193283,
+          "max_rel": 7.863959312438965,
+          "rmse": 0.00040403936873190105
+        },
+        "network.layer1.1.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.1.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.001329377293586731,
+          "max_rel": 0.10664131492376328,
+          "rmse": 0.0004949727444909513
+        },
+        "network.layer1.1.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.001069784164428711,
+          "max_rel": 0.001231802860274911,
+          "rmse": 0.00037346238968893886
+        },
+        "network.layer1.1.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.001148521900177002,
+          "max_rel": 0.001147991744801402,
+          "rmse": 0.0004648070316761732
+        },
+        "network.layer1.1.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0004947605775669217,
+          "max_rel": 50.14476776123047,
+          "rmse": 0.00013604335254058242
+        },
+        "network.layer1.1.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.1.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0003110170364379883,
+          "max_rel": 0.1326814591884613,
+          "rmse": 0.0001229667104780674
+        },
+        "network.layer1.1.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.00026530027389526367,
+          "max_rel": 0.0003628073027357459,
+          "rmse": 8.567306940676644e-05
+        },
+        "network.layer1.1.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.000591576099395752,
+          "max_rel": 0.0005913171335123479,
+          "rmse": 0.00019554406753741205
+        },
+        "network.layer1.1.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0012105554342269897,
+          "max_rel": 4.084294319152832,
+          "rmse": 0.00023521330149378628
+        },
+        "network.layer1.1.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.001567416824400425,
+          "max_rel": 4852.61376953125,
+          "rmse": 0.0003887176571879536
+        },
+        "network.layer1.1.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0015188343822956085,
+          "max_rel": 330.8816223144531,
+          "rmse": 0.00031930298428051174
+        },
+        "network.layer1.2.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0007505997200496495,
+          "max_rel": 57.41154861450195,
+          "rmse": 0.00030155447893776
+        },
+        "network.layer1.2.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.2.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0020315349102020264,
+          "max_rel": 0.035626087337732315,
+          "rmse": 0.0008030236349441111
+        },
+        "network.layer1.2.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.01011800765991211,
+          "max_rel": 0.0028382129967212677,
+          "rmse": 0.00418125232681632
+        },
+        "network.layer1.2.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0007476806640625,
+          "max_rel": 0.00074789795326069,
+          "rmse": 0.000309087336063385
+        },
+        "network.layer1.2.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0008299067267216742,
+          "max_rel": 1740.171875,
+          "rmse": 0.00026663424796424806
+        },
+        "network.layer1.2.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.2.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0010128021240234375,
+          "max_rel": 0.09590459614992142,
+          "rmse": 0.00042831580503843725
+        },
+        "network.layer1.2.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.000876307487487793,
+          "max_rel": 0.001002723234705627,
+          "rmse": 0.00030616699950769544
+        },
+        "network.layer1.2.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0006021261215209961,
+          "max_rel": 0.0006020778091624379,
+          "rmse": 0.00025639013620093465
+        },
+        "network.layer1.2.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00024958609719760716,
+          "max_rel": 192.82261657714844,
+          "rmse": 8.295974839711562e-05
+        },
+        "network.layer1.2.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer1.2.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0003024190664291382,
+          "max_rel": 0.08252318948507309,
+          "rmse": 9.63135389611125e-05
+        },
+        "network.layer1.2.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0002646446228027344,
+          "max_rel": 0.0003587683313526213,
+          "rmse": 7.324520265683532e-05
+        },
+        "network.layer1.2.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0004119873046875,
+          "max_rel": 0.00041215686360374093,
+          "rmse": 0.00013738145935349166
+        },
+        "network.layer1.2.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.000651240348815918,
+          "max_rel": 4.142214298248291,
+          "rmse": 0.00015671555593144149
+        },
+        "network.layer1.2.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0010935217142105103,
+          "max_rel": 118.17242431640625,
+          "rmse": 0.00026413804152980447
+        },
+        "network.layer1.2.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0010835379362106323,
+          "max_rel": 169.4903564453125,
+          "rmse": 0.00021817386732436717
+        },
+        "network.layer2.0.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0007200607797130942,
+          "max_rel": 27.63677215576172,
+          "rmse": 0.0001753227406879887
+        },
+        "network.layer2.0.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.0.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0018171072006225586,
+          "max_rel": 0.02220042608678341,
+          "rmse": 0.000632319541182369
+        },
+        "network.layer2.0.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.010233879089355469,
+          "max_rel": 0.003442205488681793,
+          "rmse": 0.0028719434048980474
+        },
+        "network.layer2.0.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0005768537521362305,
+          "max_rel": 0.0005770381540060043,
+          "rmse": 0.00020900032541248947
+        },
+        "network.layer2.0.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0003481130988802761,
+          "max_rel": 66.57887268066406,
+          "rmse": 0.00014390432625077665
+        },
+        "network.layer2.0.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.0.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0010520517826080322,
+          "max_rel": 1.6333019733428955,
+          "rmse": 0.0004276809049770236
+        },
+        "network.layer2.0.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0012485384941101074,
+          "max_rel": 0.0014096765080466866,
+          "rmse": 0.0005088265752419829
+        },
+        "network.layer2.0.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0005497932434082031,
+          "max_rel": 0.0005497295642271638,
+          "rmse": 0.0001681797148194164
+        },
+        "network.layer2.0.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00020075819338671863,
+          "max_rel": 1488.8062744140625,
+          "rmse": 6.0763915826100856e-05
+        },
+        "network.layer2.0.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.0.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00032703205943107605,
+          "max_rel": 0.5694709420204163,
+          "rmse": 9.852920629782602e-05
+        },
+        "network.layer2.0.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0005128383636474609,
+          "max_rel": 0.0006965174688957632,
+          "rmse": 0.0001411989505868405
+        },
+        "network.layer2.0.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0002663731575012207,
+          "max_rel": 0.0002663341292645782,
+          "rmse": 8.149984205374494e-05
+        },
+        "network.layer2.0.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0006449371576309204,
+          "max_rel": 59.345306396484375,
+          "rmse": 0.000123183403047733
+        },
+        "network.layer2.0.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0006420817226171494,
+          "max_rel": 711.5101318359375,
+          "rmse": 0.00014378783816937357
+        },
+        "network.layer2.0.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0005754176527261734,
+          "max_rel": 36.274879455566406,
+          "rmse": 0.0001187060188385658
+        },
+        "network.layer2.0.downsample.0.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00040840357542037964,
+          "max_rel": 134.5419464111328,
+          "rmse": 8.43010056996718e-05
+        },
+        "network.layer2.0.downsample.1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00020075819338671863,
+          "max_rel": 1488.8062744140625,
+          "rmse": 6.0763915826100856e-05
+        },
+        "network.layer2.0.downsample.1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.0.downsample.1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.001514136791229248,
+          "max_rel": 0.8131924271583557,
+          "rmse": 0.000503659131936729
+        },
+        "network.layer2.0.downsample.1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0033828020095825195,
+          "max_rel": 0.0026845938991755247,
+          "rmse": 0.0009934611152857542
+        },
+        "network.layer2.0.downsample.1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0002821683883666992,
+          "max_rel": 0.00028210433083586395,
+          "rmse": 8.188951323973015e-05
+        },
+        "network.layer2.1.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0003215104225091636,
+          "max_rel": 335.82391357421875,
+          "rmse": 0.00012211070861667395
+        },
+        "network.layer2.1.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.1.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0021437406539916992,
+          "max_rel": 0.07036592811346054,
+          "rmse": 0.0006144310464151204
+        },
+        "network.layer2.1.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.013579607009887695,
+          "max_rel": 0.004762837663292885,
+          "rmse": 0.004682352300733328
+        },
+        "network.layer2.1.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.00043326616287231445,
+          "max_rel": 0.00043324302532710135,
+          "rmse": 0.00012942661123815924
+        },
+        "network.layer2.1.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00023568401229567826,
+          "max_rel": 63.521461486816406,
+          "rmse": 0.0001056769397109747
+        },
+        "network.layer2.1.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.1.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0007789731025695801,
+          "max_rel": 2.5278894901275635,
+          "rmse": 0.0002781262155622244
+        },
+        "network.layer2.1.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.001362621784210205,
+          "max_rel": 0.0015409588813781738,
+          "rmse": 0.0005745996022596955
+        },
+        "network.layer2.1.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0003427863121032715,
+          "max_rel": 0.00034272318589501083,
+          "rmse": 0.00012332659389358014
+        },
+        "network.layer2.1.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00010095589095726609,
+          "max_rel": 46.07115173339844,
+          "rmse": 3.521193139022216e-05
+        },
+        "network.layer2.1.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.1.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0002896934747695923,
+          "max_rel": 0.07756287604570389,
+          "rmse": 9.652118023950607e-05
+        },
+        "network.layer2.1.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0006387829780578613,
+          "max_rel": 0.0008861349197104573,
+          "rmse": 0.0001746944326441735
+        },
+        "network.layer2.1.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.00014442205429077148,
+          "max_rel": 0.0001444021036149934,
+          "rmse": 4.8505415179533884e-05
+        },
+        "network.layer2.1.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0002714768052101135,
+          "max_rel": 38.67721939086914,
+          "rmse": 5.835782940266654e-05
+        },
+        "network.layer2.1.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0004961304366588593,
+          "max_rel": 107.10535430908203,
+          "rmse": 9.693310857983306e-05
+        },
+        "network.layer2.1.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00036995112895965576,
+          "max_rel": 26.889572143554688,
+          "rmse": 8.026800060179085e-05
+        },
+        "network.layer2.2.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00020187451445963234,
+          "max_rel": 104.61285400390625,
+          "rmse": 7.976670895004645e-05
+        },
+        "network.layer2.2.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.2.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.002228856086730957,
+          "max_rel": 0.11105260998010635,
+          "rmse": 0.0007600683602504432
+        },
+        "network.layer2.2.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.020396709442138672,
+          "max_rel": 0.006102874409407377,
+          "rmse": 0.007414805702865124
+        },
+        "network.layer2.2.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.000322878360748291,
+          "max_rel": 0.00032281785388477147,
+          "rmse": 9.784477151697502e-05
+        },
+        "network.layer2.2.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00016812264220789075,
+          "max_rel": 139.3453369140625,
+          "rmse": 6.691255111945793e-05
+        },
+        "network.layer2.2.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.2.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0004881732165813446,
+          "max_rel": 0.2819775640964508,
+          "rmse": 0.00019856159633491188
+        },
+        "network.layer2.2.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0023203492164611816,
+          "max_rel": 0.0026584563311189413,
+          "rmse": 0.0006854390376247466
+        },
+        "network.layer2.2.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0001977682113647461,
+          "max_rel": 0.00019778867135755718,
+          "rmse": 7.90746562415734e-05
+        },
+        "network.layer2.2.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 7.972001185407862e-05,
+          "max_rel": 71.78199005126953,
+          "rmse": 2.2465390429715626e-05
+        },
+        "network.layer2.2.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.2.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00027936697006225586,
+          "max_rel": 0.20632803440093994,
+          "rmse": 8.399236685363576e-05
+        },
+        "network.layer2.2.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0006448030471801758,
+          "max_rel": 0.0008852715254761279,
+          "rmse": 0.0001967550051631406
+        },
+        "network.layer2.2.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.00011336803436279297,
+          "max_rel": 0.00011336349416524172,
+          "rmse": 3.1530627893516794e-05
+        },
+        "network.layer2.2.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00018201768398284912,
+          "max_rel": 8.050241470336914,
+          "rmse": 3.971011392422952e-05
+        },
+        "network.layer2.2.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00029354169964790344,
+          "max_rel": 416.7939147949219,
+          "rmse": 6.590067641809583e-05
+        },
+        "network.layer2.2.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0002764761447906494,
+          "max_rel": 43.824283599853516,
+          "rmse": 5.44199938303791e-05
+        },
+        "network.layer2.3.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00017472964827902615,
+          "max_rel": 52.296783447265625,
+          "rmse": 5.706973388441838e-05
+        },
+        "network.layer2.3.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.3.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.002432018518447876,
+          "max_rel": 0.03283841162919998,
+          "rmse": 0.0008695489959791303
+        },
+        "network.layer2.3.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.033756256103515625,
+          "max_rel": 0.007364716846495867,
+          "rmse": 0.012196462601423264
+        },
+        "network.layer2.3.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.00017720460891723633,
+          "max_rel": 0.00017722709162626415,
+          "rmse": 6.479533476522192e-05
+        },
+        "network.layer2.3.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00013413889973890036,
+          "max_rel": 56.913414001464844,
+          "rmse": 4.352218093117699e-05
+        },
+        "network.layer2.3.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.3.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0006669461727142334,
+          "max_rel": 0.10547616332769394,
+          "rmse": 0.00020778785983566195
+        },
+        "network.layer2.3.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0022899508476257324,
+          "max_rel": 0.0025357319973409176,
+          "rmse": 0.0007772852550260723
+        },
+        "network.layer2.3.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.00016200542449951172,
+          "max_rel": 0.00016197534569073468,
+          "rmse": 5.7451532484265044e-05
+        },
+        "network.layer2.3.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 4.0765902667772025e-05,
+          "max_rel": 1421.9910888671875,
+          "rmse": 1.4378488231159281e-05
+        },
+        "network.layer2.3.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer2.3.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.000308135524392128,
+          "max_rel": 0.22945304214954376,
+          "rmse": 9.169236000161618e-05
+        },
+        "network.layer2.3.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0009825825691223145,
+          "max_rel": 0.001352223800495267,
+          "rmse": 0.0002142166340490803
+        },
+        "network.layer2.3.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 9.131431579589844e-05,
+          "max_rel": 9.132078412221745e-05,
+          "rmse": 2.54608803516021e-05
+        },
+        "network.layer2.3.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0001360177993774414,
+          "max_rel": 8.183953285217285,
+          "rmse": 2.842244430212304e-05
+        },
+        "network.layer2.3.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00024131499230861664,
+          "max_rel": 85.35735321044922,
+          "rmse": 4.754856854560785e-05
+        },
+        "network.layer2.3.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00019246339797973633,
+          "max_rel": 21.01959991455078,
+          "rmse": 3.962596383644268e-05
+        },
+        "network.layer3.0.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00010290911450283602,
+          "max_rel": 413.6863098144531,
+          "rmse": 3.459119034232572e-05
+        },
+        "network.layer3.0.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.0.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0031235218048095703,
+          "max_rel": 0.7094775438308716,
+          "rmse": 0.0008467875886708498
+        },
+        "network.layer3.0.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.025786876678466797,
+          "max_rel": 0.008449660614132881,
+          "rmse": 0.007740487810224295
+        },
+        "network.layer3.0.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.00012814998626708984,
+          "max_rel": 0.0001281617587665096,
+          "rmse": 3.7988527765264735e-05
+        },
+        "network.layer3.0.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 9.371926716994494e-05,
+          "max_rel": 329.9644470214844,
+          "rmse": 2.853347541531548e-05
+        },
+        "network.layer3.0.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.0.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0030239224433898926,
+          "max_rel": 0.8159447312355042,
+          "rmse": 0.0010278295958414674
+        },
+        "network.layer3.0.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.005690634250640869,
+          "max_rel": 0.006349536590278149,
+          "rmse": 0.0015830574557185173
+        },
+        "network.layer3.0.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 9.799003601074219e-05,
+          "max_rel": 9.798289829632267e-05,
+          "rmse": 3.395818930584937e-05
+        },
+        "network.layer3.0.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 4.290939978091046e-05,
+          "max_rel": 3915.13330078125,
+          "rmse": 1.204442378366366e-05
+        },
+        "network.layer3.0.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.0.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0006038732826709747,
+          "max_rel": 1.5510542392730713,
+          "rmse": 0.00015912734670564532
+        },
+        "network.layer3.0.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.001773238182067871,
+          "max_rel": 0.002444820711389184,
+          "rmse": 0.00045353799941949546
+        },
+        "network.layer3.0.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 6.437301635742188e-05,
+          "max_rel": 6.437107367673889e-05,
+          "rmse": 1.5524383343290538e-05
+        },
+        "network.layer3.0.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.00012257695198059082,
+          "max_rel": 31.594806671142578,
+          "rmse": 2.4455683160340413e-05
+        },
+        "network.layer3.0.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0001481710933148861,
+          "max_rel": 3215.186279296875,
+          "rmse": 2.85807836917229e-05
+        },
+        "network.layer3.0.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0001100336667150259,
+          "max_rel": 104.30465698242188,
+          "rmse": 2.364646570640616e-05
+        },
+        "network.layer3.0.downsample.0.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 8.789263665676117e-05,
+          "max_rel": 32.22895050048828,
+          "rmse": 1.6611766113783233e-05
+        },
+        "network.layer3.0.downsample.1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 4.290939978091046e-05,
+          "max_rel": 3915.13330078125,
+          "rmse": 1.204442378366366e-05
+        },
+        "network.layer3.0.downsample.1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.0.downsample.1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.005179092288017273,
+          "max_rel": 1.7170661687850952,
+          "rmse": 0.0015020520659163594
+        },
+        "network.layer3.0.downsample.1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.012563943862915039,
+          "max_rel": 0.010494868271052837,
+          "rmse": 0.004003383684903383
+        },
+        "network.layer3.0.downsample.1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 5.173683166503906e-05,
+          "max_rel": 5.1736955356318504e-05,
+          "rmse": 1.534047260065563e-05
+        },
+        "network.layer3.1.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 6.892479723319411e-05,
+          "max_rel": 66.66471862792969,
+          "rmse": 2.3240272639668547e-05
+        },
+        "network.layer3.1.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.1.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.004510188475251198,
+          "max_rel": 0.47687697410583496,
+          "rmse": 0.0016304808668792248
+        },
+        "network.layer3.1.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.04549455642700195,
+          "max_rel": 0.01716710440814495,
+          "rmse": 0.014596080407500267
+        },
+        "network.layer3.1.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 8.279085159301758e-05,
+          "max_rel": 8.279310713987797e-05,
+          "rmse": 2.682639933482278e-05
+        },
+        "network.layer3.1.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 6.321538967313245e-05,
+          "max_rel": 218.54806518554688,
+          "rmse": 2.030014366027899e-05
+        },
+        "network.layer3.1.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.1.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0012401342391967773,
+          "max_rel": 0.9289674162864685,
+          "rmse": 0.00044719126890413463
+        },
+        "network.layer3.1.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.004886209964752197,
+          "max_rel": 0.005623131990432739,
+          "rmse": 0.0017841916996985674
+        },
+        "network.layer3.1.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 7.450580596923828e-05,
+          "max_rel": 7.45052529964596e-05,
+          "rmse": 2.3977940145414323e-05
+        },
+        "network.layer3.1.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 2.5374532924615778e-05,
+          "max_rel": 726.308349609375,
+          "rmse": 7.266031389008276e-06
+        },
+        "network.layer3.1.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.1.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0005197376012802124,
+          "max_rel": 2.1741228103637695,
+          "rmse": 0.00016178643272724003
+        },
+        "network.layer3.1.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0016637444496154785,
+          "max_rel": 0.0023143915459513664,
+          "rmse": 0.000496184453368187
+        },
+        "network.layer3.1.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 3.2782554626464844e-05,
+          "max_rel": 3.278338772361167e-05,
+          "rmse": 1.0001031114370562e-05
+        },
+        "network.layer3.1.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 5.7384371757507324e-05,
+          "max_rel": 191.1842041015625,
+          "rmse": 1.1618079042818863e-05
+        },
+        "network.layer3.1.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 9.000604040920734e-05,
+          "max_rel": 131.4673614501953,
+          "rmse": 1.9359958969289437e-05
+        },
+        "network.layer3.1.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 7.931143045425415e-05,
+          "max_rel": 53.6032829284668,
+          "rmse": 1.5912331946310587e-05
+        },
+        "network.layer3.2.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 4.1314633563160896e-05,
+          "max_rel": 104.40408325195312,
+          "rmse": 1.4958241990825627e-05
+        },
+        "network.layer3.2.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.2.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00501057505607605,
+          "max_rel": 0.7545089721679688,
+          "rmse": 0.001907621044665575
+        },
+        "network.layer3.2.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.06174039840698242,
+          "max_rel": 0.01880326308310032,
+          "rmse": 0.020733671262860298
+        },
+        "network.layer3.2.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 4.953145980834961e-05,
+          "max_rel": 4.953278403263539e-05,
+          "rmse": 1.633630381547846e-05
+        },
+        "network.layer3.2.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 3.531294350977987e-05,
+          "max_rel": 273.8818359375,
+          "rmse": 1.3961599506728817e-05
+        },
+        "network.layer3.2.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.2.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0012528449296951294,
+          "max_rel": 0.2520962953567505,
+          "rmse": 0.0004703797458205372
+        },
+        "network.layer3.2.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.005698561668395996,
+          "max_rel": 0.006369811948388815,
+          "rmse": 0.0019216227810829878
+        },
+        "network.layer3.2.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 4.380941390991211e-05,
+          "max_rel": 4.3811443902086467e-05,
+          "rmse": 1.5930781955830753e-05
+        },
+        "network.layer3.2.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.6610145394224674e-05,
+          "max_rel": 1020.4683837890625,
+          "rmse": 4.5877377488068305e-06
+        },
+        "network.layer3.2.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.2.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0005930215120315552,
+          "max_rel": 2.2366626262664795,
+          "rmse": 0.0001643223367864266
+        },
+        "network.layer3.2.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0018692612648010254,
+          "max_rel": 0.0025947033427655697,
+          "rmse": 0.0004993696929886937
+        },
+        "network.layer3.2.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 2.4437904357910156e-05,
+          "max_rel": 2.4438058972009458e-05,
+          "rmse": 6.722871148667764e-06
+        },
+        "network.layer3.2.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 3.6597251892089844e-05,
+          "max_rel": 68.79993438720703,
+          "rmse": 7.871401066950057e-06
+        },
+        "network.layer3.2.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 6.636930629611015e-05,
+          "max_rel": 8498.3525390625,
+          "rmse": 1.3099549505568575e-05
+        },
+        "network.layer3.2.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 5.124881863594055e-05,
+          "max_rel": 612.435546875,
+          "rmse": 1.0782751814986113e-05
+        },
+        "network.layer3.3.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 4.142585748923011e-05,
+          "max_rel": 185.89540100097656,
+          "rmse": 1.1611686204560101e-05
+        },
+        "network.layer3.3.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.3.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.005957603454589844,
+          "max_rel": 1.8095096349716187,
+          "rmse": 0.0021139541640877724
+        },
+        "network.layer3.3.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.1062154769897461,
+          "max_rel": 0.02348502352833748,
+          "rmse": 0.033168528228998184
+        },
+        "network.layer3.3.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 4.565715789794922e-05,
+          "max_rel": 4.565583367366344e-05,
+          "rmse": 1.3434158972813748e-05
+        },
+        "network.layer3.3.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 2.3845037503633648e-05,
+          "max_rel": 12916.4736328125,
+          "rmse": 9.499950465396978e-06
+        },
+        "network.layer3.3.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.3.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0014186203479766846,
+          "max_rel": 0.4298087954521179,
+          "rmse": 0.00045578627032227814
+        },
+        "network.layer3.3.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.00544583797454834,
+          "max_rel": 0.0060776458121836185,
+          "rmse": 0.0019858081359416246
+        },
+        "network.layer3.3.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 2.944469451904297e-05,
+          "max_rel": 2.9444712708937004e-05,
+          "rmse": 1.0954440767818596e-05
+        },
+        "network.layer3.3.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.0663257853593677e-05,
+          "max_rel": 640.4119873046875,
+          "rmse": 3.054467470064992e-06
+        },
+        "network.layer3.3.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.3.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0005674035055562854,
+          "max_rel": 3.9264447689056396,
+          "rmse": 0.00016867172962520272
+        },
+        "network.layer3.3.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0017021894454956055,
+          "max_rel": 0.002362113445997238,
+          "rmse": 0.0005166862392798066
+        },
+        "network.layer3.3.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.7464160919189453e-05,
+          "max_rel": 1.7464099073549733e-05,
+          "rmse": 4.903014996671118e-06
+        },
+        "network.layer3.3.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 2.847239375114441e-05,
+          "max_rel": 4.9479289054870605,
+          "rmse": 5.647413672704715e-06
+        },
+        "network.layer3.3.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 5.046534352004528e-05,
+          "max_rel": 99.65237426757812,
+          "rmse": 9.323222911916673e-06
+        },
+        "network.layer3.3.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 3.630004357546568e-05,
+          "max_rel": 14.315712928771973,
+          "rmse": 7.70770748204086e-06
+        },
+        "network.layer3.4.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 3.540061879903078e-05,
+          "max_rel": 472.60931396484375,
+          "rmse": 9.247100933862384e-06
+        },
+        "network.layer3.4.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.4.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.008282661437988281,
+          "max_rel": 2.8028759956359863,
+          "rmse": 0.0027741582598537207
+        },
+        "network.layer3.4.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.12026500701904297,
+          "max_rel": 0.021298199892044067,
+          "rmse": 0.040615905076265335
+        },
+        "network.layer3.4.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 3.528594970703125e-05,
+          "max_rel": 3.5285542253404856e-05,
+          "rmse": 1.0748914064606652e-05
+        },
+        "network.layer3.4.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.724079811538104e-05,
+          "max_rel": 2775.048095703125,
+          "rmse": 6.406235115719028e-06
+        },
+        "network.layer3.4.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.4.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0014319755136966705,
+          "max_rel": 0.46396034955978394,
+          "rmse": 0.00046412390656769276
+        },
+        "network.layer3.4.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.005791962146759033,
+          "max_rel": 0.006516860798001289,
+          "rmse": 0.001827112166211009
+        },
+        "network.layer3.4.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 2.092123031616211e-05,
+          "max_rel": 2.0921110262861475e-05,
+          "rmse": 8.281105692731217e-06
+        },
+        "network.layer3.4.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 6.929411938472185e-06,
+          "max_rel": 3161.59228515625,
+          "rmse": 2.115383040290908e-06
+        },
+        "network.layer3.4.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.4.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0005494356155395508,
+          "max_rel": 1.1223576068878174,
+          "rmse": 0.00016670580953359604
+        },
+        "network.layer3.4.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0019176602363586426,
+          "max_rel": 0.00266041187569499,
+          "rmse": 0.0005269315443001688
+        },
+        "network.layer3.4.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.33514404296875e-05,
+          "max_rel": 1.3351380403037183e-05,
+          "rmse": 3.7395568597275997e-06
+        },
+        "network.layer3.4.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.9781291484832764e-05,
+          "max_rel": 48.61759948730469,
+          "rmse": 4.2065116758749355e-06
+        },
+        "network.layer3.4.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 3.6757439374923706e-05,
+          "max_rel": 153.20602416992188,
+          "rmse": 6.983233561186353e-06
+        },
+        "network.layer3.4.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 2.7938280254602432e-05,
+          "max_rel": 117.37519073486328,
+          "rmse": 5.733610578317894e-06
+        },
+        "network.layer3.5.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.9575643818825483e-05,
+          "max_rel": 106.21659851074219,
+          "rmse": 6.513633707072586e-06
+        },
+        "network.layer3.5.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.5.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.009054809808731079,
+          "max_rel": 0.3263035714626312,
+          "rmse": 0.0028264750726521015
+        },
+        "network.layer3.5.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.12567472457885742,
+          "max_rel": 0.021352941170334816,
+          "rmse": 0.04498954489827156
+        },
+        "network.layer3.5.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 2.0682811737060547e-05,
+          "max_rel": 2.0683031834778376e-05,
+          "rmse": 7.005453880992718e-06
+        },
+        "network.layer3.5.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.7240812667296268e-05,
+          "max_rel": 117.46455383300781,
+          "rmse": 5.263102138997056e-06
+        },
+        "network.layer3.5.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.5.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.001308400183916092,
+          "max_rel": 0.28351712226867676,
+          "rmse": 0.00047448245459236205
+        },
+        "network.layer3.5.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.006575047969818115,
+          "max_rel": 0.007293442264199257,
+          "rmse": 0.0019894461147487164
+        },
+        "network.layer3.5.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 2.2292137145996094e-05,
+          "max_rel": 2.2291807908914052e-05,
+          "rmse": 6.102254246798111e-06
+        },
+        "network.layer3.5.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 4.628276656148955e-06,
+          "max_rel": 151.1367645263672,
+          "rmse": 1.386306621498079e-06
+        },
+        "network.layer3.5.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer3.5.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0006085261702537537,
+          "max_rel": 79.63179779052734,
+          "rmse": 0.0001845365623012185
+        },
+        "network.layer3.5.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0019323229789733887,
+          "max_rel": 0.0027035207021981478,
+          "rmse": 0.0005314892623573542
+        },
+        "network.layer3.5.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 9.000301361083984e-06,
+          "max_rel": 9.000345926324371e-06,
+          "rmse": 2.8683857635769527e-06
+        },
+        "network.layer3.5.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.93081796169281e-05,
+          "max_rel": 8.398921966552734,
+          "rmse": 3.257104253862053e-06
+        },
+        "network.layer3.5.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 3.1717121601104736e-05,
+          "max_rel": 415.5083923339844,
+          "rmse": 5.380837137636263e-06
+        },
+        "network.layer3.5.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 2.1766871213912964e-05,
+          "max_rel": 6.459613800048828,
+          "rmse": 4.396389613248175e-06
+        },
+        "network.layer4.0.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.4621580703533255e-05,
+          "max_rel": 77.54906463623047,
+          "rmse": 4.367138444649754e-06
+        },
+        "network.layer4.0.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.0.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.009373486042022705,
+          "max_rel": 1.1476048231124878,
+          "rmse": 0.002334190532565117
+        },
+        "network.layer4.0.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0952000617980957,
+          "max_rel": 0.021429216489195824,
+          "rmse": 0.028417464345693588
+        },
+        "network.layer4.0.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.6391277313232422e-05,
+          "max_rel": 1.6391571989515796e-05,
+          "rmse": 5.1311271818121895e-06
+        },
+        "network.layer4.0.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.0431263945065439e-05,
+          "max_rel": 452.00244140625,
+          "rmse": 3.540970283211209e-06
+        },
+        "network.layer4.0.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.0.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.007671319879591465,
+          "max_rel": 2.9869391918182373,
+          "rmse": 0.002620081417262554
+        },
+        "network.layer4.0.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.01326531171798706,
+          "max_rel": 0.01478701550513506,
+          "rmse": 0.004130026791244745
+        },
+        "network.layer4.0.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.4662742614746094e-05,
+          "max_rel": 1.4662880857940763e-05,
+          "rmse": 4.140646524319891e-06
+        },
+        "network.layer4.0.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 6.539475634781411e-06,
+          "max_rel": 250.29019165039062,
+          "rmse": 1.5098753465281334e-06
+        },
+        "network.layer4.0.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.0.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0012226179242134094,
+          "max_rel": 6.052789211273193,
+          "rmse": 0.00034521290217526257
+        },
+        "network.layer4.0.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0040743350982666016,
+          "max_rel": 0.0056554521434009075,
+          "rmse": 0.0010504440870136023
+        },
+        "network.layer4.0.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 6.556510925292969e-06,
+          "max_rel": 6.556529115187004e-06,
+          "rmse": 1.9682381662278203e-06
+        },
+        "network.layer4.0.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.6264617443084717e-05,
+          "max_rel": 16.394508361816406,
+          "rmse": 3.1872070849203737e-06
+        },
+        "network.layer4.0.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.8844380974769592e-05,
+          "max_rel": 345.07550048828125,
+          "rmse": 3.71571059076814e-06
+        },
+        "network.layer4.0.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.4653662219643593e-05,
+          "max_rel": 336.7264709472656,
+          "rmse": 3.0161791073624045e-06
+        },
+        "network.layer4.0.downsample.0.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.1142343282699585e-05,
+          "max_rel": 97.13069915771484,
+          "rmse": 2.097995775329764e-06
+        },
+        "network.layer4.0.downsample.1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 6.539475634781411e-06,
+          "max_rel": 250.29019165039062,
+          "rmse": 1.5098753465281334e-06
+        },
+        "network.layer4.0.downsample.1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.0.downsample.1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.01953624188899994,
+          "max_rel": 5.446152210235596,
+          "rmse": 0.0050889733247458935
+        },
+        "network.layer4.0.downsample.1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0562748908996582,
+          "max_rel": 0.03875209763646126,
+          "rmse": 0.014972013421356678
+        },
+        "network.layer4.0.downsample.1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 6.258487701416016e-06,
+          "max_rel": 6.25851043878356e-06,
+          "rmse": 1.90992386706057e-06
+        },
+        "network.layer4.1.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 9.854016752797179e-06,
+          "max_rel": 79.6029052734375,
+          "rmse": 2.955509671664913e-06
+        },
+        "network.layer4.1.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.1.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.014342784881591797,
+          "max_rel": 5.954832077026367,
+          "rmse": 0.004163699224591255
+        },
+        "network.layer4.1.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.11599946022033691,
+          "max_rel": 0.04458212852478027,
+          "rmse": 0.03497002273797989
+        },
+        "network.layer4.1.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.049041748046875e-05,
+          "max_rel": 1.049041748046875e-05,
+          "rmse": 3.314633431727998e-06
+        },
+        "network.layer4.1.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 9.543450687488075e-06,
+          "max_rel": 834.5408935546875,
+          "rmse": 2.46290665018023e-06
+        },
+        "network.layer4.1.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.1.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.004510700702667236,
+          "max_rel": 4.945918083190918,
+          "rmse": 0.0013023329665884376
+        },
+        "network.layer4.1.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.013052701950073242,
+          "max_rel": 0.01522093452513218,
+          "rmse": 0.003867828520014882
+        },
+        "network.layer4.1.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 9.119510650634766e-06,
+          "max_rel": 9.119539754465222e-06,
+          "rmse": 2.8957524591533e-06
+        },
+        "network.layer4.1.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 3.751036274479702e-06,
+          "max_rel": 60.223968505859375,
+          "rmse": 8.602535217505647e-07
+        },
+        "network.layer4.1.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.1.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0011403560638427734,
+          "max_rel": 22.395465850830078,
+          "rmse": 0.0003460055449977517
+        },
+        "network.layer4.1.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.003949403762817383,
+          "max_rel": 0.005484806373715401,
+          "rmse": 0.0010658573592081666
+        },
+        "network.layer4.1.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 4.172325134277344e-06,
+          "max_rel": 4.172339231445221e-06,
+          "rmse": 1.1653215779006132e-06
+        },
+        "network.layer4.1.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 8.419156074523926e-06,
+          "max_rel": 17.055206298828125,
+          "rmse": 1.4826771348452894e-06
+        },
+        "network.layer4.1.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.3496726751327515e-05,
+          "max_rel": 6949.26708984375,
+          "rmse": 2.4569153538323008e-06
+        },
+        "network.layer4.1.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 1.0545831173658371e-05,
+          "max_rel": 1219.249755859375,
+          "rmse": 1.973258576981607e-06
+        },
+        "network.layer4.2.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 6.4540117818978615e-06,
+          "max_rel": 1486.0599365234375,
+          "rmse": 2.1418929918581853e-06
+        },
+        "network.layer4.2.bn1.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.2.bn1.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.012871265411376953,
+          "max_rel": 4.20275354385376,
+          "rmse": 0.004741820972412825
+        },
+        "network.layer4.2.bn1.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.20043444633483887,
+          "max_rel": 0.06192954257130623,
+          "rmse": 0.04794617369771004
+        },
+        "network.layer4.2.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 6.616115570068359e-06,
+          "max_rel": 6.616133305215044e-06,
+          "rmse": 2.1183966509852326e-06
+        },
+        "network.layer4.2.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 4.589208401739597e-06,
+          "max_rel": 2786.27734375,
+          "rmse": 1.5718754866611562e-06
+        },
+        "network.layer4.2.bn2.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.2.bn2.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00517939031124115,
+          "max_rel": 8.760128021240234,
+          "rmse": 0.001235951203852892
+        },
+        "network.layer4.2.bn2.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.015768826007843018,
+          "max_rel": 0.01795036718249321,
+          "rmse": 0.0040573058649897575
+        },
+        "network.layer4.2.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 5.4836273193359375e-06,
+          "max_rel": 5.483643690240569e-06,
+          "rmse": 1.7061605603885255e-06
+        },
+        "network.layer4.2.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 2.03684794541914e-06,
+          "max_rel": 69.19075012207031,
+          "rmse": 5.15173155690718e-07
+        },
+        "network.layer4.2.bn3.num_batches_tracked": {
+          "same_presence": true,
+          "exact": true,
+          "reference": 4,
+          "candidate": 4
+        },
+        "network.layer4.2.bn3.running_mean": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.001139722764492035,
+          "max_rel": 1.1264055967330933,
+          "rmse": 0.0003427032788749784
+        },
+        "network.layer4.2.bn3.running_var": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.004022479057312012,
+          "max_rel": 0.005645692348480225,
+          "rmse": 0.0010819084709510207
+        },
+        "network.layer4.2.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 3.0994415283203125e-06,
+          "max_rel": 3.0994292501418386e-06,
+          "rmse": 7.413093499053502e-07
+        },
+        "network.layer4.2.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 4.9620866775512695e-06,
+          "max_rel": 4.657657623291016,
+          "rmse": 9.892152093016193e-07
+        },
+        "network.layer4.2.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 9.243376553058624e-06,
+          "max_rel": 257.90777587890625,
+          "rmse": 1.6092186569949263e-06
+        },
+        "network.layer4.2.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 6.5695494413375854e-06,
+          "max_rel": 52.75545883178711,
+          "rmse": 1.2687706885117223e-06
+        }
+      },
+      "梯度": {
+        "network.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0904218852519989,
+          "max_rel": 122.61788177490234,
+          "rmse": 0.03376161679625511
+        },
+        "network.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.7547937631607056,
+          "max_rel": 10.3466215133667,
+          "rmse": 0.3009341359138489
+        },
+        "network.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 7.03125,
+          "max_rel": 4593.48486328125,
+          "rmse": 1.901183843612671
+        },
+        "network.fc.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": true,
+          "max_abs": 0.0001220703125,
+          "max_rel": 0.025316456332802773,
+          "rmse": 1.0765753359009977e-05
+        },
+        "network.fc.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0286865234375,
+          "max_rel": 1.4580153226852417,
+          "rmse": 0.0010795778362080455
+        },
+        "network.layer1.0.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.6341149210929871,
+          "max_rel": 47.606895446777344,
+          "rmse": 0.19716070592403412
+        },
+        "network.layer1.0.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.5927028656005859,
+          "max_rel": 495.7543029785156,
+          "rmse": 0.23388832807540894
+        },
+        "network.layer1.0.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.4233337938785553,
+          "max_rel": 32.8183708190918,
+          "rmse": 0.16594544053077698
+        },
+        "network.layer1.0.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.5041124820709229,
+          "max_rel": 77.23362731933594,
+          "rmse": 0.19864192605018616
+        },
+        "network.layer1.0.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.21087278425693512,
+          "max_rel": 150.6139678955078,
+          "rmse": 0.07653772085905075
+        },
+        "network.layer1.0.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.2987305223941803,
+          "max_rel": 804.2828369140625,
+          "rmse": 0.09663188457489014
+        },
+        "network.layer1.0.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.806640625,
+          "max_rel": 47740.5859375,
+          "rmse": 0.20297281444072723
+        },
+        "network.layer1.0.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.767578125,
+          "max_rel": 55596.14453125,
+          "rmse": 0.1720775067806244
+        },
+        "network.layer1.0.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.677734375,
+          "max_rel": 7928.74169921875,
+          "rmse": 0.1429760903120041
+        },
+        "network.layer1.0.downsample.0.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.666015625,
+          "max_rel": 60644.25390625,
+          "rmse": 0.1422734260559082
+        },
+        "network.layer1.0.downsample.1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.21087278425693512,
+          "max_rel": 150.6139678955078,
+          "rmse": 0.07653772085905075
+        },
+        "network.layer1.0.downsample.1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.2972449064254761,
+          "max_rel": 108.67982482910156,
+          "rmse": 0.0928371399641037
+        },
+        "network.layer1.1.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.2784510552883148,
+          "max_rel": 34.51307678222656,
+          "rmse": 0.140506312251091
+        },
+        "network.layer1.1.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.3571738004684448,
+          "max_rel": 27.928882598876953,
+          "rmse": 0.15319858491420746
+        },
+        "network.layer1.1.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.2915346622467041,
+          "max_rel": 169.02630615234375,
+          "rmse": 0.10393887758255005
+        },
+        "network.layer1.1.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.3675922751426697,
+          "max_rel": 79.26496887207031,
+          "rmse": 0.12714813649654388
+        },
+        "network.layer1.1.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.14112702012062073,
+          "max_rel": 359.1490783691406,
+          "rmse": 0.0454435795545578
+        },
+        "network.layer1.1.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.1625978946685791,
+          "max_rel": 87.3669662475586,
+          "rmse": 0.05999832972884178
+        },
+        "network.layer1.1.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.349609375,
+          "max_rel": 10758.6259765625,
+          "rmse": 0.07081521302461624
+        },
+        "network.layer1.1.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.494140625,
+          "max_rel": 28154.029296875,
+          "rmse": 0.11739979684352875
+        },
+        "network.layer1.1.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.4443359375,
+          "max_rel": 43078.609375,
+          "rmse": 0.09552605450153351
+        },
+        "network.layer1.2.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.19434046745300293,
+          "max_rel": 660.4954833984375,
+          "rmse": 0.09374561160802841
+        },
+        "network.layer1.2.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.3274903893470764,
+          "max_rel": 75.89500427246094,
+          "rmse": 0.11591416597366333
+        },
+        "network.layer1.2.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.20204700529575348,
+          "max_rel": 45.73012161254883,
+          "rmse": 0.07565190643072128
+        },
+        "network.layer1.2.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.25172507762908936,
+          "max_rel": 25.584932327270508,
+          "rmse": 0.08921937644481659
+        },
+        "network.layer1.2.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.06340828537940979,
+          "max_rel": 714.9857788085938,
+          "rmse": 0.02416890859603882
+        },
+        "network.layer1.2.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.11740589141845703,
+          "max_rel": 1157.207275390625,
+          "rmse": 0.03981376811861992
+        },
+        "network.layer1.2.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.19921875,
+          "max_rel": 19081.1015625,
+          "rmse": 0.04743247479200363
+        },
+        "network.layer1.2.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.3681640625,
+          "max_rel": 7366.6142578125,
+          "rmse": 0.07922416180372238
+        },
+        "network.layer1.2.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.275390625,
+          "max_rel": 20423.845703125,
+          "rmse": 0.06552208214998245
+        },
+        "network.layer2.0.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.15620610117912292,
+          "max_rel": 41.14487075805664,
+          "rmse": 0.0509159229695797
+        },
+        "network.layer2.0.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.14857879281044006,
+          "max_rel": 89.4650650024414,
+          "rmse": 0.056529123336076736
+        },
+        "network.layer2.0.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.11786486953496933,
+          "max_rel": 155.121826171875,
+          "rmse": 0.049342963844537735
+        },
+        "network.layer2.0.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.14771507680416107,
+          "max_rel": 69.78742980957031,
+          "rmse": 0.05430828034877777
+        },
+        "network.layer2.0.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.06545044481754303,
+          "max_rel": 239.49851989746094,
+          "rmse": 0.018637176603078842
+        },
+        "network.layer2.0.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.08140303194522858,
+          "max_rel": 121.13491821289062,
+          "rmse": 0.024023814126849174
+        },
+        "network.layer2.0.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.1591796875,
+          "max_rel": 6226.40283203125,
+          "rmse": 0.036958396434783936
+        },
+        "network.layer2.0.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.20458984375,
+          "max_rel": 606921.375,
+          "rmse": 0.04352079704403877
+        },
+        "network.layer2.0.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.1572265625,
+          "max_rel": 21027.283203125,
+          "rmse": 0.03606756404042244
+        },
+        "network.layer2.0.downsample.0.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.1171875,
+          "max_rel": 82036.8671875,
+          "rmse": 0.02530244179069996
+        },
+        "network.layer2.0.downsample.1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.06545044481754303,
+          "max_rel": 239.49851989746094,
+          "rmse": 0.018637176603078842
+        },
+        "network.layer2.0.downsample.1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.08203144371509552,
+          "max_rel": 1356.661376953125,
+          "rmse": 0.023677341639995575
+        },
+        "network.layer2.1.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.10769148916006088,
+          "max_rel": 158.3158416748047,
+          "rmse": 0.03226621821522713
+        },
+        "network.layer2.1.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.10007835924625397,
+          "max_rel": 57.909420013427734,
+          "rmse": 0.03836983069777489
+        },
+        "network.layer2.1.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.08232486993074417,
+          "max_rel": 2222.567626953125,
+          "rmse": 0.03067920356988907
+        },
+        "network.layer2.1.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.09071909636259079,
+          "max_rel": 291.7524108886719,
+          "rmse": 0.03463319316506386
+        },
+        "network.layer2.1.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.032935239374637604,
+          "max_rel": 125.95206451416016,
+          "rmse": 0.010431657545268536
+        },
+        "network.layer2.1.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.04263092577457428,
+          "max_rel": 1987.31982421875,
+          "rmse": 0.01416244450956583
+        },
+        "network.layer2.1.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.080078125,
+          "max_rel": 48363.41015625,
+          "rmse": 0.017584506422281265
+        },
+        "network.layer2.1.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.135009765625,
+          "max_rel": 91406.4765625,
+          "rmse": 0.029221879318356514
+        },
+        "network.layer2.1.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.111083984375,
+          "max_rel": 624315.625,
+          "rmse": 0.024346690624952316
+        },
+        "network.layer2.2.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.07113976776599884,
+          "max_rel": 29.52599334716797,
+          "rmse": 0.026535101234912872
+        },
+        "network.layer2.2.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.07016494125127792,
+          "max_rel": 263.62567138671875,
+          "rmse": 0.029933875426650047
+        },
+        "network.layer2.2.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.04375936836004257,
+          "max_rel": 78.65818786621094,
+          "rmse": 0.01843775250017643
+        },
+        "network.layer2.2.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.055055201053619385,
+          "max_rel": 89.57327270507812,
+          "rmse": 0.022481460124254227
+        },
+        "network.layer2.2.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.027348190546035767,
+          "max_rel": 1062.1578369140625,
+          "rmse": 0.006707419641315937
+        },
+        "network.layer2.2.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.033765941858291626,
+          "max_rel": 161.16204833984375,
+          "rmse": 0.010527716018259525
+        },
+        "network.layer2.2.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.053955078125,
+          "max_rel": 81847.4609375,
+          "rmse": 0.012090181931853294
+        },
+        "network.layer2.2.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.098876953125,
+          "max_rel": 39097.18359375,
+          "rmse": 0.019949890673160553
+        },
+        "network.layer2.2.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0751953125,
+          "max_rel": 21605.84765625,
+          "rmse": 0.016436027362942696
+        },
+        "network.layer2.3.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.046020738780498505,
+          "max_rel": 196.67288208007812,
+          "rmse": 0.017077524214982986
+        },
+        "network.layer2.3.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.05659105256199837,
+          "max_rel": 327.89837646484375,
+          "rmse": 0.019917888566851616
+        },
+        "network.layer2.3.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.04128825664520264,
+          "max_rel": 203.85528564453125,
+          "rmse": 0.014705970883369446
+        },
+        "network.layer2.3.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.050565749406814575,
+          "max_rel": 49.705291748046875,
+          "rmse": 0.018212273716926575
+        },
+        "network.layer2.3.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.013556629419326782,
+          "max_rel": 151.00454711914062,
+          "rmse": 0.004451815038919449
+        },
+        "network.layer2.3.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.020360413938760757,
+          "max_rel": 231.2686309814453,
+          "rmse": 0.007293067406862974
+        },
+        "network.layer2.3.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.03875732421875,
+          "max_rel": 167585.921875,
+          "rmse": 0.008643402718007565
+        },
+        "network.layer2.3.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.065673828125,
+          "max_rel": 568649.875,
+          "rmse": 0.014413177967071533
+        },
+        "network.layer2.3.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.05908203125,
+          "max_rel": 42786.96875,
+          "rmse": 0.011953547596931458
+        },
+        "network.layer3.0.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.02707502245903015,
+          "max_rel": 312.25384521484375,
+          "rmse": 0.010213537141680717
+        },
+        "network.layer3.0.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.040100451558828354,
+          "max_rel": 55.092926025390625,
+          "rmse": 0.012288735248148441
+        },
+        "network.layer3.0.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.02400658279657364,
+          "max_rel": 2263.331298828125,
+          "rmse": 0.007707540411502123
+        },
+        "network.layer3.0.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.026529710739850998,
+          "max_rel": 201.51309204101562,
+          "rmse": 0.009704085066914558
+        },
+        "network.layer3.0.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.011827267706394196,
+          "max_rel": 740.7275390625,
+          "rmse": 0.0036871791817247868
+        },
+        "network.layer3.0.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.01710992306470871,
+          "max_rel": 1472.8848876953125,
+          "rmse": 0.0048972852528095245
+        },
+        "network.layer3.0.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.03466796875,
+          "max_rel": 17270.62109375,
+          "rmse": 0.007407731376588345
+        },
+        "network.layer3.0.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.04461669921875,
+          "max_rel": 234149.046875,
+          "rmse": 0.008670832961797714
+        },
+        "network.layer3.0.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0411376953125,
+          "max_rel": 101499.875,
+          "rmse": 0.007167444564402103
+        },
+        "network.layer3.0.downsample.0.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.02587890625,
+          "max_rel": 324229.75,
+          "rmse": 0.005054282955825329
+        },
+        "network.layer3.0.downsample.1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.011827267706394196,
+          "max_rel": 740.7275390625,
+          "rmse": 0.0036871791817247868
+        },
+        "network.layer3.0.downsample.1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.015428217127919197,
+          "max_rel": 1572.9820556640625,
+          "rmse": 0.004836183041334152
+        },
+        "network.layer3.1.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.01924748718738556,
+          "max_rel": 246.31298828125,
+          "rmse": 0.007065226323902607
+        },
+        "network.layer3.1.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.02361728809773922,
+          "max_rel": 204.35218811035156,
+          "rmse": 0.008573628030717373
+        },
+        "network.layer3.1.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.019431615248322487,
+          "max_rel": 3524.703125,
+          "rmse": 0.005845285020768642
+        },
+        "network.layer3.1.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.02271518111228943,
+          "max_rel": 197.53155517578125,
+          "rmse": 0.006793743930757046
+        },
+        "network.layer3.1.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.007421976886689663,
+          "max_rel": 3299.612548828125,
+          "rmse": 0.0021349259186536074
+        },
+        "network.layer3.1.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.009667829610407352,
+          "max_rel": 676.8357543945312,
+          "rmse": 0.0029440531507134438
+        },
+        "network.layer3.1.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.016845703125,
+          "max_rel": 220821.8125,
+          "rmse": 0.0035236594267189503
+        },
+        "network.layer3.1.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.03253173828125,
+          "max_rel": 653949.625,
+          "rmse": 0.005892566870898008
+        },
+        "network.layer3.1.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0223388671875,
+          "max_rel": 59169.9921875,
+          "rmse": 0.004879684187471867
+        },
+        "network.layer3.2.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.013314101845026016,
+          "max_rel": 178.88931274414062,
+          "rmse": 0.0051110610365867615
+        },
+        "network.layer3.2.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.015053844079375267,
+          "max_rel": 66.35794830322266,
+          "rmse": 0.0056673320941627026
+        },
+        "network.layer3.2.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.012815638445317745,
+          "max_rel": 136.67843627929688,
+          "rmse": 0.003985376097261906
+        },
+        "network.layer3.2.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.013704344630241394,
+          "max_rel": 301.5842590332031,
+          "rmse": 0.004607818555086851
+        },
+        "network.layer3.2.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.004985463805496693,
+          "max_rel": 230.55258178710938,
+          "rmse": 0.0014076007064431906
+        },
+        "network.layer3.2.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.006691499147564173,
+          "max_rel": 228.8090057373047,
+          "rmse": 0.0020704572089016438
+        },
+        "network.layer3.2.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.011962890625,
+          "max_rel": 361385.21875,
+          "rmse": 0.0024064024910330772
+        },
+        "network.layer3.2.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.019989013671875,
+          "max_rel": 50053.21875,
+          "rmse": 0.0040188622660934925
+        },
+        "network.layer3.2.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.01605224609375,
+          "max_rel": 75104.296875,
+          "rmse": 0.00331871397793293
+        },
+        "network.layer3.3.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0117550203576684,
+          "max_rel": 1168.2646484375,
+          "rmse": 0.0034325907472521067
+        },
+        "network.layer3.3.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.013827929273247719,
+          "max_rel": 2559.177734375,
+          "rmse": 0.004101375583559275
+        },
+        "network.layer3.3.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.009393655695021152,
+          "max_rel": 43.96965789794922,
+          "rmse": 0.0027885420713573694
+        },
+        "network.layer3.3.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.011361870914697647,
+          "max_rel": 345.3165283203125,
+          "rmse": 0.0032505642157047987
+        },
+        "network.layer3.3.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.002894457895308733,
+          "max_rel": 620.4183349609375,
+          "rmse": 0.0009327742736786604
+        },
+        "network.layer3.3.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0053998325020074844,
+          "max_rel": 1570.08935546875,
+          "rmse": 0.0014984208391979337
+        },
+        "network.layer3.3.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0088043212890625,
+          "max_rel": 9961471.0,
+          "rmse": 0.0017276005819439888
+        },
+        "network.layer3.3.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.01483154296875,
+          "max_rel": 332720.21875,
+          "rmse": 0.002880697837099433
+        },
+        "network.layer3.3.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.014251708984375,
+          "max_rel": 272383.0,
+          "rmse": 0.002394637558609247
+        },
+        "network.layer3.4.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.006113898474723101,
+          "max_rel": 97.69548797607422,
+          "rmse": 0.002368141897022724
+        },
+        "network.layer3.4.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.008931539952754974,
+          "max_rel": 126.35761260986328,
+          "rmse": 0.0030901343561708927
+        },
+        "network.layer3.4.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.006585223600268364,
+          "max_rel": 106.31045532226562,
+          "rmse": 0.0020254028495401144
+        },
+        "network.layer3.4.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.008298504166305065,
+          "max_rel": 974.2677612304688,
+          "rmse": 0.002488074591383338
+        },
+        "network.layer3.4.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0019405623897910118,
+          "max_rel": 376.7132568359375,
+          "rmse": 0.0006743118283338845
+        },
+        "network.layer3.4.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0038476651534438133,
+          "max_rel": 1171.939697265625,
+          "rmse": 0.0011513300705701113
+        },
+        "network.layer3.4.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0062103271484375,
+          "max_rel": 33203.90625,
+          "rmse": 0.0012979902094230056
+        },
+        "network.layer3.4.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.01190185546875,
+          "max_rel": 2892039.25,
+          "rmse": 0.0021653766743838787
+        },
+        "network.layer3.4.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0081634521484375,
+          "max_rel": 434827.1875,
+          "rmse": 0.001786465640179813
+        },
+        "network.layer3.5.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.004899709485471249,
+          "max_rel": 5920.79248046875,
+          "rmse": 0.0019916719757020473
+        },
+        "network.layer3.5.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.006877101957798004,
+          "max_rel": 674.4552612304688,
+          "rmse": 0.0022619704250246286
+        },
+        "network.layer3.5.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00494381133466959,
+          "max_rel": 744.7562255859375,
+          "rmse": 0.0015746488934382796
+        },
+        "network.layer3.5.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.006085437256842852,
+          "max_rel": 639.293212890625,
+          "rmse": 0.0017855777405202389
+        },
+        "network.layer3.5.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0015342403203248978,
+          "max_rel": 445.35498046875,
+          "rmse": 0.00044749578228220344
+        },
+        "network.layer3.5.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00365552119910717,
+          "max_rel": 10117.4501953125,
+          "rmse": 0.0009258961654268205
+        },
+        "network.layer3.5.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0048370361328125,
+          "max_rel": 854662.25,
+          "rmse": 0.001011821092106402
+        },
+        "network.layer3.5.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.008148193359375,
+          "max_rel": 747111.375,
+          "rmse": 0.0016855471767485142
+        },
+        "network.layer3.5.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.007049560546875,
+          "max_rel": 74011.484375,
+          "rmse": 0.0013934989692643285
+        },
+        "network.layer4.0.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.004165694583207369,
+          "max_rel": 2222.7998046875,
+          "rmse": 0.0014019268564879894
+        },
+        "network.layer4.0.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.004728221334517002,
+          "max_rel": 730.2998046875,
+          "rmse": 0.0016052871942520142
+        },
+        "network.layer4.0.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0031869267113506794,
+          "max_rel": 635.44580078125,
+          "rmse": 0.0011182096786797047
+        },
+        "network.layer4.0.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.004462306387722492,
+          "max_rel": 171.7562255859375,
+          "rmse": 0.0013852228876203299
+        },
+        "network.layer4.0.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0019354854011908174,
+          "max_rel": 498.1971435546875,
+          "rmse": 0.0005053544882684946
+        },
+        "network.layer4.0.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0022499095648527145,
+          "max_rel": 931.4716186523438,
+          "rmse": 0.0006491554668173194
+        },
+        "network.layer4.0.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0048675537109375,
+          "max_rel": 406324.1875,
+          "rmse": 0.001009548781439662
+        },
+        "network.layer4.0.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0062103271484375,
+          "max_rel": 4653055.0,
+          "rmse": 0.0011912101181223989
+        },
+        "network.layer4.0.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0054931640625,
+          "max_rel": 8344918.5,
+          "rmse": 0.000977984513156116
+        },
+        "network.layer4.0.downsample.0.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.003814697265625,
+          "max_rel": 2346187.75,
+          "rmse": 0.0006868088385090232
+        },
+        "network.layer4.0.downsample.1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0019354854011908174,
+          "max_rel": 498.1971435546875,
+          "rmse": 0.0005053544882684946
+        },
+        "network.layer4.0.downsample.1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0020156099926680326,
+          "max_rel": 259.406982421875,
+          "rmse": 0.0006391913047991693
+        },
+        "network.layer4.1.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00420445017516613,
+          "max_rel": 11683.0,
+          "rmse": 0.0010818979935720563
+        },
+        "network.layer4.1.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.003621760057285428,
+          "max_rel": 130.03988647460938,
+          "rmse": 0.001203205669298768
+        },
+        "network.layer4.1.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0026645264588296413,
+          "max_rel": 237.06690979003906,
+          "rmse": 0.0007959994254633784
+        },
+        "network.layer4.1.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.003560643643140793,
+          "max_rel": 312.364013671875,
+          "rmse": 0.000984673504717648
+        },
+        "network.layer4.1.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0011329266708344221,
+          "max_rel": 751.07421875,
+          "rmse": 0.00028697270317934453
+        },
+        "network.layer4.1.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0013635024661198258,
+          "max_rel": 880.78125,
+          "rmse": 0.0004046685644425452
+        },
+        "network.layer4.1.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.002227783203125,
+          "max_rel": 583708.3125,
+          "rmse": 0.0004781021270900965
+        },
+        "network.layer4.1.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.004314422607421875,
+          "max_rel": 2326527.0,
+          "rmse": 0.0008071823394857347
+        },
+        "network.layer4.1.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.00395965576171875,
+          "max_rel": 498074.59375,
+          "rmse": 0.0006627748953178525
+        },
+        "network.layer4.2.bn1.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0025085173547267914,
+          "max_rel": 1058.2701416015625,
+          "rmse": 0.0007068433915264904
+        },
+        "network.layer4.2.bn1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.002700118813663721,
+          "max_rel": 486.6954040527344,
+          "rmse": 0.0007370122475549579
+        },
+        "network.layer4.2.bn2.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0024640385527163744,
+          "max_rel": 182.58982849121094,
+          "rmse": 0.000543594709597528
+        },
+        "network.layer4.2.bn2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.002457389608025551,
+          "max_rel": 20322.861328125,
+          "rmse": 0.000598614162299782
+        },
+        "network.layer4.2.bn3.bias": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0005798940546810627,
+          "max_rel": 215.8795166015625,
+          "rmse": 0.00017293001292273402
+        },
+        "network.layer4.2.bn3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0010386980138719082,
+          "max_rel": 412.4216003417969,
+          "rmse": 0.0002718003233894706
+        },
+        "network.layer4.2.conv1.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.0017547607421875,
+          "max_rel": 3850241.0,
+          "rmse": 0.00032765400828793645
+        },
+        "network.layer4.2.conv2.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.003173828125,
+          "max_rel": 3349617.0,
+          "rmse": 0.0005491524352692068
+        },
+        "network.layer4.2.conv3.weight": {
+          "same_presence": true,
+          "finite": true,
+          "close": false,
+          "max_abs": 0.002597808837890625,
+          "max_rel": 339040.59375,
+          "rmse": 0.0004523141833487898
+        }
+      },
+      "优化器": {
+        "network.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.11893974989652634,
+            "max_rel": 127.04993438720703,
+            "rmse": 0.048356130719184875
+          }
+        },
+        "network.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 1.2373714447021484,
+            "max_rel": 32.410404205322266,
+            "rmse": 0.49199241399765015
+          }
+        },
+        "network.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 11.788690567016602,
+            "max_rel": 2963.707275390625,
+            "rmse": 2.9578020572662354
+          }
+        },
+        "network.fc.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": true,
+            "max_abs": 0.00013580173254013062,
+            "max_rel": 0.010844666510820389,
+            "rmse": 1.7562590073794127e-05
+          }
+        },
+        "network.fc.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.02886711061000824,
+            "max_rel": 0.8429399728775024,
+            "rmse": 0.0015180089976638556
+          }
+        },
+        "network.layer1.0.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 1.0308008193969727,
+            "max_rel": 12.283705711364746,
+            "rmse": 0.35212844610214233
+          }
+        },
+        "network.layer1.0.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 1.0058696269989014,
+            "max_rel": 135.40040588378906,
+            "rmse": 0.4139817953109741
+          }
+        },
+        "network.layer1.0.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.6974891424179077,
+            "max_rel": 86.5463638305664,
+            "rmse": 0.25731658935546875
+          }
+        },
+        "network.layer1.0.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.7704772353172302,
+            "max_rel": 75.67437744140625,
+            "rmse": 0.26197052001953125
+          }
+        },
+        "network.layer1.0.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.33626967668533325,
+            "max_rel": 300.430419921875,
+            "rmse": 0.1214292123913765
+          }
+        },
+        "network.layer1.0.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.4720093309879303,
+            "max_rel": 75.67262268066406,
+            "rmse": 0.14990396797657013
+          }
+        },
+        "network.layer1.0.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 1.4605189561843872,
+            "max_rel": 8086.46044921875,
+            "rmse": 0.31842130422592163
+          }
+        },
+        "network.layer1.0.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 1.0999315977096558,
+            "max_rel": 37486.87109375,
+            "rmse": 0.2672559916973114
+          }
+        },
+        "network.layer1.0.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.9532104134559631,
+            "max_rel": 17587.970703125,
+            "rmse": 0.22068999707698822
+          }
+        },
+        "network.layer1.0.downsample.0.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.9409611821174622,
+            "max_rel": 7539.76611328125,
+            "rmse": 0.2214866727590561
+          }
+        },
+        "network.layer1.0.downsample.1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.33626967668533325,
+            "max_rel": 300.430419921875,
+            "rmse": 0.1214292123913765
+          }
+        },
+        "network.layer1.0.downsample.1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.4965791702270508,
+            "max_rel": 368.52410888671875,
+            "rmse": 0.1515473872423172
+          }
+        },
+        "network.layer1.1.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.5687918663024902,
+            "max_rel": 29.29833984375,
+            "rmse": 0.18378792703151703
+          }
+        },
+        "network.layer1.1.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.38361886143684387,
+            "max_rel": 27.046796798706055,
+            "rmse": 0.20428021252155304
+          }
+        },
+        "network.layer1.1.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.43636059761047363,
+            "max_rel": 25.576045989990234,
+            "rmse": 0.1848287135362625
+          }
+        },
+        "network.layer1.1.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.49859869480133057,
+            "max_rel": 148.2532958984375,
+            "rmse": 0.20383916795253754
+          }
+        },
+        "network.layer1.1.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.20382730662822723,
+            "max_rel": 166.17138671875,
+            "rmse": 0.06535367667675018
+          }
+        },
+        "network.layer1.1.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.26934704184532166,
+            "max_rel": 722.6878662109375,
+            "rmse": 0.08966495841741562
+          }
+        },
+        "network.layer1.1.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.5232148170471191,
+            "max_rel": 5751.4287109375,
+            "rmse": 0.10893599689006805
+          }
+        },
+        "network.layer1.1.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.8323701024055481,
+            "max_rel": 5758.37451171875,
+            "rmse": 0.18028360605239868
+          }
+        },
+        "network.layer1.1.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.6131205558776855,
+            "max_rel": 30222.599609375,
+            "rmse": 0.1485578715801239
+          }
+        },
+        "network.layer1.2.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.34737223386764526,
+            "max_rel": 217.58746337890625,
+            "rmse": 0.1359642595052719
+          }
+        },
+        "network.layer1.2.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.3841770589351654,
+            "max_rel": 30.149444580078125,
+            "rmse": 0.15249794721603394
+          }
+        },
+        "network.layer1.2.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.40288466215133667,
+            "max_rel": 54.93564987182617,
+            "rmse": 0.12103881686925888
+          }
+        },
+        "network.layer1.2.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.30730924010276794,
+            "max_rel": 445.8909606933594,
+            "rmse": 0.12071223556995392
+          }
+        },
+        "network.layer1.2.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.10769258439540863,
+            "max_rel": 529.46142578125,
+            "rmse": 0.0376509465277195
+          }
+        },
+        "network.layer1.2.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.18205000460147858,
+            "max_rel": 96.40482330322266,
+            "rmse": 0.06237076595425606
+          }
+        },
+        "network.layer1.2.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.3092173933982849,
+            "max_rel": 7597.4111328125,
+            "rmse": 0.07328251749277115
+          }
+        },
+        "network.layer1.2.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.5316472053527832,
+            "max_rel": 19600.48828125,
+            "rmse": 0.12256040424108505
+          }
+        },
+        "network.layer1.2.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.4368564188480377,
+            "max_rel": 10892.45703125,
+            "rmse": 0.10158996284008026
+          }
+        },
+        "network.layer2.0.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.3328590989112854,
+            "max_rel": 40.175498962402344,
+            "rmse": 0.08106151223182678
+          }
+        },
+        "network.layer2.0.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.24229690432548523,
+            "max_rel": 251.69662475585938,
+            "rmse": 0.0935397818684578
+          }
+        },
+        "network.layer2.0.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.171718567609787,
+            "max_rel": 851.9496459960938,
+            "rmse": 0.06669154018163681
+          }
+        },
+        "network.layer2.0.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.21735593676567078,
+            "max_rel": 596.4140014648438,
+            "rmse": 0.07912525534629822
+          }
+        },
+        "network.layer2.0.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.09353864938020706,
+            "max_rel": 206.03573608398438,
+            "rmse": 0.028776539489626884
+          }
+        },
+        "network.layer2.0.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.11466897279024124,
+            "max_rel": 2763.47900390625,
+            "rmse": 0.038271352648735046
+          }
+        },
+        "network.layer2.0.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.2885828912258148,
+            "max_rel": 46900.59375,
+            "rmse": 0.05708635598421097
+          }
+        },
+        "network.layer2.0.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.31998252868652344,
+            "max_rel": 309503.21875,
+            "rmse": 0.06688525527715683
+          }
+        },
+        "network.layer2.0.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.2633485198020935,
+            "max_rel": 82078.3046875,
+            "rmse": 0.0553002692759037
+          }
+        },
+        "network.layer2.0.downsample.0.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.19097900390625,
+            "max_rel": 659644.75,
+            "rmse": 0.03917669877409935
+          }
+        },
+        "network.layer2.0.downsample.1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.09353864938020706,
+            "max_rel": 206.03573608398438,
+            "rmse": 0.028776539489626884
+          }
+        },
+        "network.layer2.0.downsample.1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.1363312005996704,
+            "max_rel": 53.056922912597656,
+            "rmse": 0.038089171051979065
+          }
+        },
+        "network.layer2.1.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.16708675026893616,
+            "max_rel": 1879.359375,
+            "rmse": 0.058712102472782135
+          }
+        },
+        "network.layer2.1.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.16333046555519104,
+            "max_rel": 75.34446716308594,
+            "rmse": 0.060821954160928726
+          }
+        },
+        "network.layer2.1.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.12079150229692459,
+            "max_rel": 239.86415100097656,
+            "rmse": 0.04973236098885536
+          }
+        },
+        "network.layer2.1.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.18840691447257996,
+            "max_rel": 55.30480194091797,
+            "rmse": 0.058840394020080566
+          }
+        },
+        "network.layer2.1.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0544927641749382,
+            "max_rel": 1474.5960693359375,
+            "rmse": 0.015899658203125
+          }
+        },
+        "network.layer2.1.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.06345202028751373,
+            "max_rel": 528.7432861328125,
+            "rmse": 0.022193435579538345
+          }
+        },
+        "network.layer2.1.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.12361019849777222,
+            "max_rel": 361208.0,
+            "rmse": 0.027130194008350372
+          }
+        },
+        "network.layer2.1.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.2148621678352356,
+            "max_rel": 154074.140625,
+            "rmse": 0.045226145535707474
+          }
+        },
+        "network.layer2.1.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.15930968523025513,
+            "max_rel": 12752.453125,
+            "rmse": 0.037450291216373444
+          }
+        },
+        "network.layer2.2.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.09945272654294968,
+            "max_rel": 39.12818145751953,
+            "rmse": 0.03706992417573929
+          }
+        },
+        "network.layer2.2.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.13235628604888916,
+            "max_rel": 91.4841537475586,
+            "rmse": 0.04424962401390076
+          }
+        },
+        "network.layer2.2.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.07666007429361343,
+            "max_rel": 2123.6826171875,
+            "rmse": 0.030809471383690834
+          }
+        },
+        "network.layer2.2.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.08644745498895645,
+            "max_rel": 172.80657958984375,
+            "rmse": 0.03507307544350624
+          }
+        },
+        "network.layer2.2.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.02850780449807644,
+            "max_rel": 142.0790252685547,
+            "rmse": 0.010448675602674484
+          }
+        },
+        "network.layer2.2.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.05744753032922745,
+            "max_rel": 88.99118041992188,
+            "rmse": 0.014866945333778858
+          }
+        },
+        "network.layer2.2.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0797276571393013,
+            "max_rel": 70280.2265625,
+            "rmse": 0.018484696745872498
+          }
+        },
+        "network.layer2.2.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.14183196425437927,
+            "max_rel": 4663573504.0,
+            "rmse": 0.030690407380461693
+          }
+        },
+        "network.layer2.2.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.12089025974273682,
+            "max_rel": 13269653504.0,
+            "rmse": 0.025325583294034004
+          }
+        },
+        "network.layer2.3.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0749487429857254,
+            "max_rel": 200.08120727539062,
+            "rmse": 0.025698181241750717
+          }
+        },
+        "network.layer2.3.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.09297491610050201,
+            "max_rel": 89.71446228027344,
+            "rmse": 0.02856430597603321
+          }
+        },
+        "network.layer2.3.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.05458429828286171,
+            "max_rel": 50.17136001586914,
+            "rmse": 0.02103189192712307
+          }
+        },
+        "network.layer2.3.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.06390112638473511,
+            "max_rel": 187.50425720214844,
+            "rmse": 0.026428375393152237
+          }
+        },
+        "network.layer2.3.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.020205579698085785,
+            "max_rel": 9383.7197265625,
+            "rmse": 0.006792761385440826
+          }
+        },
+        "network.layer2.3.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.04351555183529854,
+            "max_rel": 548.064453125,
+            "rmse": 0.011509004049003124
+          }
+        },
+        "network.layer2.3.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.06097668409347534,
+            "max_rel": 668943.5625,
+            "rmse": 0.013289502821862698
+          }
+        },
+        "network.layer2.3.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.10563237965106964,
+            "max_rel": 208693.53125,
+            "rmse": 0.0222109854221344
+          }
+        },
+        "network.layer2.3.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.09487222135066986,
+            "max_rel": 14542.6953125,
+            "rmse": 0.018513187766075134
+          }
+        },
+        "network.layer3.0.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.044600602239370346,
+            "max_rel": 161.58514404296875,
+            "rmse": 0.01633484475314617
+          }
+        },
+        "network.layer3.0.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.04330432787537575,
+            "max_rel": 413.29437255859375,
+            "rmse": 0.017685357481241226
+          }
+        },
+        "network.layer3.0.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.03879128396511078,
+            "max_rel": 102.15909576416016,
+            "rmse": 0.012930727563798428
+          }
+        },
+        "network.layer3.0.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.047053441405296326,
+            "max_rel": 50.403541564941406,
+            "rmse": 0.01545490138232708
+          }
+        },
+        "network.layer3.0.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.018794698640704155,
+            "max_rel": 4811.31982421875,
+            "rmse": 0.005629809107631445
+          }
+        },
+        "network.layer3.0.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.026866232976317406,
+            "max_rel": 1415.20849609375,
+            "rmse": 0.007366489619016647
+          }
+        },
+        "network.layer3.0.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.056113891303539276,
+            "max_rel": 32187.0078125,
+            "rmse": 0.011431971564888954
+          }
+        },
+        "network.layer3.0.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.07495361566543579,
+            "max_rel": 4538270.0,
+            "rmse": 0.013359208591282368
+          }
+        },
+        "network.layer3.0.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.05313842371106148,
+            "max_rel": 688105.0,
+            "rmse": 0.011062908917665482
+          }
+        },
+        "network.layer3.0.downsample.0.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.03675781190395355,
+            "max_rel": 1527714.5,
+            "rmse": 0.007783787790685892
+          }
+        },
+        "network.layer3.0.downsample.1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.018794698640704155,
+            "max_rel": 4811.31982421875,
+            "rmse": 0.005629809107631445
+          }
+        },
+        "network.layer3.0.downsample.1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.02357972413301468,
+            "max_rel": 447.99224853515625,
+            "rmse": 0.00723355682566762
+          }
+        },
+        "network.layer3.1.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.033932920545339584,
+            "max_rel": 140.90892028808594,
+            "rmse": 0.010581017471849918
+          }
+        },
+        "network.layer3.1.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.03459132835268974,
+            "max_rel": 111.24727630615234,
+            "rmse": 0.012822581455111504
+          }
+        },
+        "network.layer3.1.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.030615147203207016,
+            "max_rel": 2187.09619140625,
+            "rmse": 0.009491599164903164
+          }
+        },
+        "network.layer3.1.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0347093902528286,
+            "max_rel": 48.18500518798828,
+            "rmse": 0.011184865608811378
+          }
+        },
+        "network.layer3.1.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.011343291029334068,
+            "max_rel": 440.1543884277344,
+            "rmse": 0.0033493596129119396
+          }
+        },
+        "network.layer3.1.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.014460678212344646,
+            "max_rel": 674.7595825195312,
+            "rmse": 0.004607653710991144
+          }
+        },
+        "network.layer3.1.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.02642774023115635,
+            "max_rel": 1901322.125,
+            "rmse": 0.005436127074062824
+          }
+        },
+        "network.layer3.1.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.04146382957696915,
+            "max_rel": 135227.015625,
+            "rmse": 0.009059331379830837
+          }
+        },
+        "network.layer3.1.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.03507629781961441,
+            "max_rel": 313074.0625,
+            "rmse": 0.00747107295319438
+          }
+        },
+        "network.layer3.2.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.022556373849511147,
+            "max_rel": 95.72628784179688,
+            "rmse": 0.007056540343910456
+          }
+        },
+        "network.layer3.2.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.02379201538860798,
+            "max_rel": 205.4556884765625,
+            "rmse": 0.008026469498872757
+          }
+        },
+        "network.layer3.2.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.017716363072395325,
+            "max_rel": 116.54244995117188,
+            "rmse": 0.006532966159284115
+          }
+        },
+        "network.layer3.2.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.020844902843236923,
+            "max_rel": 190.98294067382812,
+            "rmse": 0.007462116423994303
+          }
+        },
+        "network.layer3.2.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.00916203111410141,
+            "max_rel": 564.0851440429688,
+            "rmse": 0.0021491646766662598
+          }
+        },
+        "network.layer3.2.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.011107845231890678,
+            "max_rel": 325.1398620605469,
+            "rmse": 0.003137272549793124
+          }
+        },
+        "network.layer3.2.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.018416568636894226,
+            "max_rel": 1563209344.0,
+            "rmse": 0.003695252351462841
+          }
+        },
+        "network.layer3.2.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.032209448516368866,
+            "max_rel": 2844619776.0,
+            "rmse": 0.006155937910079956
+          }
+        },
+        "network.layer3.2.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.025503814220428467,
+            "max_rel": 819914.375,
+            "rmse": 0.0050807069055736065
+          }
+        },
+        "network.layer3.3.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.02154085971415043,
+            "max_rel": 211.6119842529297,
+            "rmse": 0.005325431935489178
+          }
+        },
+        "network.layer3.3.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.02418120577931404,
+            "max_rel": 1446.742919921875,
+            "rmse": 0.006404268555343151
+          }
+        },
+        "network.layer3.3.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.012683339416980743,
+            "max_rel": 208.8915557861328,
+            "rmse": 0.004321775399148464
+          }
+        },
+        "network.layer3.3.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.013053501024842262,
+            "max_rel": 179.86248779296875,
+            "rmse": 0.004940780345350504
+          }
+        },
+        "network.layer3.3.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.005036172457039356,
+            "max_rel": 3225.625,
+            "rmse": 0.001429821364581585
+          }
+        },
+        "network.layer3.3.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.007723808288574219,
+            "max_rel": 872.43798828125,
+            "rmse": 0.002339010825380683
+          }
+        },
+        "network.layer3.3.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.012577804736793041,
+            "max_rel": 54174.12109375,
+            "rmse": 0.0026601911522448063
+          }
+        },
+        "network.layer3.3.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.02081373706459999,
+            "max_rel": 141067.390625,
+            "rmse": 0.004401966463774443
+          }
+        },
+        "network.layer3.3.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.017145533114671707,
+            "max_rel": 139302.453125,
+            "rmse": 0.0036467951722443104
+          }
+        },
+        "network.layer3.4.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.01344306766986847,
+            "max_rel": 278.1435852050781,
+            "rmse": 0.004135854542255402
+          }
+        },
+        "network.layer3.4.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.01540676224976778,
+            "max_rel": 501.6973571777344,
+            "rmse": 0.005009256768971682
+          }
+        },
+        "network.layer3.4.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.008020865730941296,
+            "max_rel": 481.4345397949219,
+            "rmse": 0.0030761705711483955
+          }
+        },
+        "network.layer3.4.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.010153993964195251,
+            "max_rel": 57.026390075683594,
+            "rmse": 0.0038809888064861298
+          }
+        },
+        "network.layer3.4.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0031420961022377014,
+            "max_rel": 493.7751159667969,
+            "rmse": 0.0009943158365786076
+          }
+        },
+        "network.layer3.4.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.005876354873180389,
+            "max_rel": 5374.41796875,
+            "rmse": 0.0017654647817835212
+          }
+        },
+        "network.layer3.4.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.009373588487505913,
+            "max_rel": 243787.578125,
+            "rmse": 0.0019854640122503042
+          }
+        },
+        "network.layer3.4.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.01682884991168976,
+            "max_rel": 342527.53125,
+            "rmse": 0.0033073488157242537
+          }
+        },
+        "network.layer3.4.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0122878048568964,
+            "max_rel": 84874.125,
+            "rmse": 0.0027226991951465607
+          }
+        },
+        "network.layer3.5.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.010216765105724335,
+            "max_rel": 81.6007308959961,
+            "rmse": 0.003080438356846571
+          }
+        },
+        "network.layer3.5.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.008828522637486458,
+            "max_rel": 121.52535247802734,
+            "rmse": 0.0033459768164902925
+          }
+        },
+        "network.layer3.5.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.007138070650398731,
+            "max_rel": 365.51019287109375,
+            "rmse": 0.0024452630896121264
+          }
+        },
+        "network.layer3.5.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.009440260007977486,
+            "max_rel": 58.2983512878418,
+            "rmse": 0.0027868724428117275
+          }
+        },
+        "network.layer3.5.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.002393340226262808,
+            "max_rel": 1266.7318115234375,
+            "rmse": 0.0006567023228853941
+          }
+        },
+        "network.layer3.5.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.004926218651235104,
+            "max_rel": 1394.7666015625,
+            "rmse": 0.0013763118768110871
+          }
+        },
+        "network.layer3.5.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.008782203309237957,
+            "max_rel": 493349.96875,
+            "rmse": 0.0015429870691150427
+          }
+        },
+        "network.layer3.5.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.014635561034083366,
+            "max_rel": 3577312.0,
+            "rmse": 0.002563321962952614
+          }
+        },
+        "network.layer3.5.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.010314254090189934,
+            "max_rel": 220864.625,
+            "rmse": 0.0021071245428174734
+          }
+        },
+        "network.layer4.0.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.006826483178883791,
+            "max_rel": 941.8998413085938,
+            "rmse": 0.002076792297884822
+          }
+        },
+        "network.layer4.0.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.008317802101373672,
+            "max_rel": 504.2655944824219,
+            "rmse": 0.0024183886125683784
+          }
+        },
+        "network.layer4.0.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.005166796036064625,
+            "max_rel": 2308.192626953125,
+            "rmse": 0.001705489936284721
+          }
+        },
+        "network.layer4.0.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.005654164589941502,
+            "max_rel": 282.8153991699219,
+            "rmse": 0.0019944976083934307
+          }
+        },
+        "network.layer4.0.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0033376719802618027,
+            "max_rel": 1109.010009765625,
+            "rmse": 0.0007386279758065939
+          }
+        },
+        "network.layer4.0.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.003239430021494627,
+            "max_rel": 1486.474853515625,
+            "rmse": 0.0009676339104771614
+          }
+        },
+        "network.layer4.0.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0075107174925506115,
+            "max_rel": 880950784.0,
+            "rmse": 0.0015266593545675278
+          }
+        },
+        "network.layer4.0.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.009467200376093388,
+            "max_rel": 1049839.5,
+            "rmse": 0.0017928504385054111
+          }
+        },
+        "network.layer4.0.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.00792829692363739,
+            "max_rel": 216960912.0,
+            "rmse": 0.0014651562087237835
+          }
+        },
+        "network.layer4.0.downsample.0.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.005233306437730789,
+            "max_rel": 635061.3125,
+            "rmse": 0.001023738645017147
+          }
+        },
+        "network.layer4.0.downsample.1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0033376719802618027,
+            "max_rel": 1109.010009765625,
+            "rmse": 0.0007386279758065939
+          }
+        },
+        "network.layer4.0.downsample.1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.003481368999928236,
+            "max_rel": 2185.742431640625,
+            "rmse": 0.0009400665294378996
+          }
+        },
+        "network.layer4.1.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0045661525800824165,
+            "max_rel": 72.28144836425781,
+            "rmse": 0.0015402734279632568
+          }
+        },
+        "network.layer4.1.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.00558216730132699,
+            "max_rel": 249.92401123046875,
+            "rmse": 0.0016660651890560985
+          }
+        },
+        "network.layer4.1.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.003935214597731829,
+            "max_rel": 87.60044860839844,
+            "rmse": 0.0012085788184776902
+          }
+        },
+        "network.layer4.1.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.00447719544172287,
+            "max_rel": 483.7257995605469,
+            "rmse": 0.0014405568363144994
+          }
+        },
+        "network.layer4.1.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0016678250394761562,
+            "max_rel": 343.6815185546875,
+            "rmse": 0.00042733128066174686
+          }
+        },
+        "network.layer4.1.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0021538615692406893,
+            "max_rel": 3501.020263671875,
+            "rmse": 0.0005890953470952809
+          }
+        },
+        "network.layer4.1.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.003678292268887162,
+            "max_rel": 1757382.5,
+            "rmse": 0.0007180841639637947
+          }
+        },
+        "network.layer4.1.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.006628608331084251,
+            "max_rel": 1376398848.0,
+            "rmse": 0.0012017126427963376
+          }
+        },
+        "network.layer4.1.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.005169877782464027,
+            "max_rel": 281934752.0,
+            "rmse": 0.000979289528913796
+          }
+        },
+        "network.layer4.2.bn1.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0031055971048772335,
+            "max_rel": 278.30780029296875,
+            "rmse": 0.0010522645898163319
+          }
+        },
+        "network.layer4.2.bn1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.003139984328299761,
+            "max_rel": 586.32421875,
+            "rmse": 0.0010678863618522882
+          }
+        },
+        "network.layer4.2.bn2.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0032142866402864456,
+            "max_rel": 608.0493774414062,
+            "rmse": 0.0007873156573623419
+          }
+        },
+        "network.layer4.2.bn2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0024290878791362047,
+            "max_rel": 1579.7198486328125,
+            "rmse": 0.0008748673717491329
+          }
+        },
+        "network.layer4.2.bn3.bias": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0009050802327692509,
+            "max_rel": 56.466705322265625,
+            "rmse": 0.00025753796217031777
+          }
+        },
+        "network.layer4.2.bn3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0013910611160099506,
+            "max_rel": 893.5151977539062,
+            "rmse": 0.0003852696099784225
+          }
+        },
+        "network.layer4.2.conv1.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.0026370049454271793,
+            "max_rel": 207537.765625,
+            "rmse": 0.0004873350262641907
+          }
+        },
+        "network.layer4.2.conv2.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.004325594753026962,
+            "max_rel": 1070163.125,
+            "rmse": 0.0008074009674601257
+          }
+        },
+        "network.layer4.2.conv3.weight": {
+          "momentum_buffer": {
+            "same_presence": true,
+            "finite": true,
+            "close": false,
+            "max_abs": 0.003377532819285989,
+            "max_rel": 272545.21875,
+            "rmse": 0.0006541829789057374
+          }
+        }
+      }
+    }
+  },
+  "总耗时秒": 21.161448748782277
+}
